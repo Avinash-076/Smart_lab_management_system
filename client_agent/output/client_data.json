@@ -6,16 +6,16 @@
         "os_version": "10.0.26100",
         "machine": "AMD64",
         "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
-        "ip_address": "10.26.31.73",
+        "ip_address": "127.0.0.1",
         "mac_address": "c0:09:25:63:e6:13"
     },
     "hardware": {
-        "cpu_usage": 2.5,
+        "cpu_usage": 8.9,
         "ram_total_gb": 15.4,
-        "ram_used_gb": 9.86,
-        "ram_percent": 64.0,
+        "ram_used_gb": 8.81,
+        "ram_percent": 57.2,
         "disk_total_gb": 237.71,
-        "disk_used_gb": 103.09,
+        "disk_used_gb": 103.08,
         "disk_percent": 43.4,
         "boot_time": "2026-09-11 12:43:31"
     },
@@ -199,7 +199,7 @@
         "hostname": "DESKTOP-47719NF",
         "ip_address": "169.254.86.100",
         "mac_address": "c0:09:25:63:e6:13",
-        "bytes_sent": 6087587,
-        "bytes_received": 51752113
+        "bytes_sent": 6818752,
+        "bytes_received": 52944036
     }
 }

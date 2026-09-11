@@ -25,6 +25,7 @@ function LoginForm({ onLogin }) {
   const [error, setError] = useState("");
 
 
+  
   const handleSubmit = (event) => {
 
     event.preventDefault();
@@ -46,10 +47,9 @@ function LoginForm({ onLogin }) {
 
     onLogin({
       username: username.trim(),
-      role
+      password
     });
   };
-
 
   return (
     <div className="login-container">
