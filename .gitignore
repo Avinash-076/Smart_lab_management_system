@@ -1,0 +1,37 @@
+# Node.js dependencies
+node_modules/
+
+# Python caches and compiled files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment directories
+venv/
+.env
+
+# VSCode settings
+.vscode/
+
+# macOS and Windows system files
+.DS_Store
+Thumbs.db
+
+# SQLite database files
+*.sqlite3
+slms.db
+
+# Log files
+*.log
+
+# Build directories
+build/
+dist/
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# npm debug logs
+npm-debug.log
