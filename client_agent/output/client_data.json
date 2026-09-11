@@ -1,815 +1,205 @@
 {
     "system": {
-        "computer_name": "LAPTOP-QVMIRLVI",
-        "username": "daya",
+        "computer_name": "DESKTOP-47719NF",
+        "username": "kolla vamsi krishna",
         "operating_system": "Windows",
-        "os_version": "10.0.26200",
+        "os_version": "10.0.26100",
         "machine": "AMD64",
-        "processor": "Intel64 Family 6 Model 170 Stepping 4, GenuineIntel",
-        "ip_address": "192.168.1.6",
-        "mac_address": "a8:64:f1:1c:77:1b"
+        "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
+        "ip_address": "10.26.31.73",
+        "mac_address": "c0:09:25:63:e6:13"
     },
     "hardware": {
-        "cpu_usage": 5.7,
-        "ram_total_gb": 15.43,
-        "ram_used_gb": 12.95,
-        "ram_percent": 83.9,
-        "disk_total_gb": 200.0,
-        "disk_used_gb": 119.72,
-        "disk_percent": 59.9,
-        "boot_time": "2026-08-22 14:51:57"
+        "cpu_usage": 2.5,
+        "ram_total_gb": 15.4,
+        "ram_used_gb": 9.86,
+        "ram_percent": 64.0,
+        "disk_total_gb": 237.71,
+        "disk_used_gb": 103.09,
+        "disk_percent": 43.4,
+        "boot_time": "2026-09-11 12:43:31"
     },
     "software": [
         {
-            "name": "7-Zip 26.02 (x64)",
-            "version": "26.02"
+            "name": "Acer Configuration Manager",
+            "version": "2.9.25180",
+            "publisher": "Acer",
+            "install_date": "2026-05-14"
         },
         {
-            "name": "Adobe Acrobat (64-bit)",
-            "version": "26.001.21789"
+            "name": "Acer Jumpstart",
+            "version": "3.5.22220.20",
+            "publisher": "Acer",
+            "install_date": "2026-05-14"
         },
         {
-            "name": "Adobe Genuine Service",
-            "version": "10.1.0.33"
+            "name": "Acer Jumpstart Agent",
+            "version": "1.6.26187.0",
+            "publisher": "Acer",
+            "install_date": "2026-07-08"
         },
         {
-            "name": "Adobe Refresh Manager",
-            "version": "1.8.0"
-        },
-        {
-            "name": "Anaconda3 2024.10-1 (Python 3.12.7 64-bit)",
-            "version": "2024.10-1"
+            "name": "AcerWarrantyRegistration",
+            "version": "2.1.0",
+            "publisher": "TALENTPACE",
+            "install_date": "2025-11-09"
         },
         {
             "name": "Android Studio",
-            "version": "2025.1"
-        },
-        {
-            "name": "Application Verifier x64 External Package (DesktopEditions)",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Application Verifier x64 External Package (OnecoreUAP)",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "ASUS Ambient HAL",
-            "version": "6.1.0.0"
-        },
-        {
-            "name": "ASUS Dial Control Panel Toolkit",
-            "version": "2.1.48.0"
-        },
-        {
-            "name": "ASUS Framework Service",
-            "version": "4.2.4.3"
-        },
-        {
-            "name": "ASUS Update Helper",
-            "version": "1.3.107.159"
-        },
-        {
-            "name": "Blackmagic RAW Common Components",
-            "version": "5.1"
-        },
-        {
-            "name": "Blender",
-            "version": "4.4.0"
-        },
-        {
-            "name": "Brave",
-            "version": "151.1.93.138"
-        },
-        {
-            "name": "Camera (NVIDIA Broadcast)",
-            "version": "2.1.0"
-        },
-        {
-            "name": "CASH Solution 3",
-            "version": "3.2.8"
-        },
-        {
-            "name": "CMake",
-            "version": "4.2.0"
-        },
-        {
-            "name": "Composer - PHP Dependency Manager (All users)",
-            "version": "Unknown"
+            "version": "2026.1",
+            "publisher": "Google LLC",
+            "install_date": "Unknown"
         },
         {
             "name": "Copilot",
-            "version": "152.0.4191.34"
+            "version": "153.0.4234.32",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-09-11"
         },
         {
-            "name": "Core FTP LE (x64)",
-            "version": "Unknown"
+            "name": "Data Protect",
+            "version": "21.1.903",
+            "publisher": "Acer",
+            "install_date": "2025-12-07"
         },
         {
-            "name": "DaVinci Resolve",
-            "version": "21.0.00048"
-        },
-        {
-            "name": "DaVinci Resolve Control Panels",
-            "version": "2.3.4.0"
-        },
-        {
-            "name": "DiagnosticsHub_CollectionService",
-            "version": "18.5.37003"
-        },
-        {
-            "name": "Docker Desktop",
-            "version": "4.41.2"
-        },
-        {
-            "name": "Fairlight Audio Accelerator Utility",
-            "version": "1.0.15"
-        },
-        {
-            "name": "FileZilla 3.70.6",
-            "version": "3.70.6"
-        },
-        {
-            "name": "GameSDK Service",
-            "version": "1.0.5.0"
+            "name": "ExpressVPN",
+            "version": "3.1.26022.2",
+            "publisher": "Acer",
+            "install_date": "2026-05-14"
         },
         {
             "name": "Git",
-            "version": "2.50.1"
-        },
-        {
-            "name": "GlideX Service Installer",
-            "version": "3.8.7.0"
+            "version": "2.55.0.5",
+            "publisher": "The Git Development Community",
+            "install_date": "2026-09-10"
         },
         {
             "name": "Google Chrome",
-            "version": "151.0.7922.170"
+            "version": "152.0.7977.83",
+            "publisher": "Google LLC",
+            "install_date": "2026-09-09"
         },
         {
-            "name": "icecap_collection_neutral",
-            "version": "18.6.11706"
+            "name": "Google Play Games beta",
+            "version": "23.5.1015.22",
+            "publisher": "Google LLC",
+            "install_date": "Unknown"
         },
         {
-            "name": "icecap_collection_x64",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "Java(TM) SE Development Kit 23.0.2 (64-bit)",
-            "version": "23.0.2.0"
-        },
-        {
-            "name": "Kits Configuration Installer",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Microsoft .NET Host - 6.0.16 (x64)",
-            "version": "48.67.58427"
-        },
-        {
-            "name": "Microsoft .NET Host - 8.0.13 (x64)",
-            "version": "64.52.27977"
-        },
-        {
-            "name": "Microsoft .NET Host FX Resolver - 6.0.16 (x64)",
-            "version": "48.67.58427"
-        },
-        {
-            "name": "Microsoft .NET Host FX Resolver - 8.0.13 (x64)",
-            "version": "64.52.27977"
-        },
-        {
-            "name": "Microsoft .NET Runtime - 6.0.16 (x64)",
-            "version": "48.67.58427"
-        },
-        {
-            "name": "Microsoft .NET Runtime - 6.0.16 (x64)",
-            "version": "6.0.16.32323"
-        },
-        {
-            "name": "Microsoft .NET Runtime - 8.0.13 (x64)",
-            "version": "64.52.27977"
-        },
-        {
-            "name": "Microsoft .NET Runtime - 8.0.13 (x64)",
-            "version": "8.0.13.34516"
+            "name": "McAfee",
+            "version": "1.40.161.1",
+            "publisher": "McAfee, LLC",
+            "install_date": "Unknown"
         },
         {
             "name": "Microsoft 365 - en-us",
-            "version": "16.0.20326.20100"
+            "version": "16.0.20326.20132",
+            "publisher": "Microsoft Corporation",
+            "install_date": "Unknown"
         },
         {
             "name": "Microsoft Edge",
-            "version": "151.0.4129.101"
+            "version": "152.0.4191.66",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-09-09"
         },
         {
             "name": "Microsoft Edge WebView2 Runtime",
-            "version": "151.0.4129.101"
-        },
-        {
-            "name": "Microsoft GameInput",
-            "version": "3.3.221.0"
+            "version": "152.0.4191.66",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-09-09"
         },
         {
             "name": "Microsoft OneNote - en-us",
-            "version": "16.0.20326.20100"
+            "version": "16.0.20326.20132",
+            "publisher": "Microsoft Corporation",
+            "install_date": "Unknown"
         },
         {
-            "name": "Microsoft Teams Meeting Add-in for Microsoft Office",
-            "version": "1.25.24601"
+            "name": "Microsoft Visual C++ 2013 Redistributable (x86) - 12.0.21005",
+            "version": "12.0.21005.1",
+            "publisher": "Microsoft Corporation",
+            "install_date": "Unknown"
         },
         {
-            "name": "Microsoft Update Health Tools",
-            "version": "5.72.0.0"
+            "name": "Microsoft Visual C++ 2013 x86 Additional Runtime - 12.0.21005",
+            "version": "12.0.21005",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2025-11-09"
         },
         {
-            "name": "Microsoft Visual C++ 2005 Redistributable (x64)",
-            "version": "8.0.56336"
+            "name": "Microsoft Visual C++ 2013 x86 Minimum Runtime - 12.0.21005",
+            "version": "12.0.21005",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2025-11-09"
         },
         {
-            "name": "Microsoft Visual C++ 2013 Redistributable (x64) - 12.0.40664",
-            "version": "12.0.40664.0"
+            "name": "Microsoft Visual C++ 2022 X64 Additional Runtime - 14.50.35719",
+            "version": "14.50.35719",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-08-23"
         },
         {
-            "name": "Microsoft Visual C++ 2013 Redistributable (x86) - 12.0.40664",
-            "version": "12.0.40664.0"
+            "name": "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.50.35719",
+            "version": "14.50.35719",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-08-23"
         },
         {
-            "name": "Microsoft Visual C++ 2013 x64 Additional Runtime - 12.0.40664",
-            "version": "12.0.40664"
+            "name": "Microsoft Visual C++ 2022 X86 Additional Runtime - 14.50.35719",
+            "version": "14.50.35719",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-08-23"
         },
         {
-            "name": "Microsoft Visual C++ 2013 x64 Minimum Runtime - 12.0.40664",
-            "version": "12.0.40664"
+            "name": "Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.50.35719",
+            "version": "14.50.35719",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-08-23"
         },
         {
-            "name": "Microsoft Visual C++ 2013 x86 Additional Runtime - 12.0.40664",
-            "version": "12.0.40664"
+            "name": "Microsoft Visual C++ v14 Redistributable (x64) - 14.50.35719",
+            "version": "14.50.35719.0",
+            "publisher": "Microsoft Corporation",
+            "install_date": "Unknown"
         },
         {
-            "name": "Microsoft Visual C++ 2013 x86 Minimum Runtime - 12.0.40664",
-            "version": "12.0.40664"
+            "name": "Microsoft Visual C++ v14 Redistributable (x86) - 14.50.35719",
+            "version": "14.50.35719.0",
+            "publisher": "Microsoft Corporation",
+            "install_date": "Unknown"
         },
         {
-            "name": "Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.51.36231",
-            "version": "14.51.36231.0"
-        },
-        {
-            "name": "Microsoft Visual C++ 2015-2022 Redistributable (x86) - 14.51.36231",
-            "version": "14.51.36231.0"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X64 Additional Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X64 Debug Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X86 Additional Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X86 Debug Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.51.36231",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Microsoft Visual Studio Installer",
-            "version": "4.6.58.48107"
-        },
-        {
-            "name": "Microsoft Visual Studio Setup Configuration",
-            "version": "4.6.52.44637"
-        },
-        {
-            "name": "Microsoft Visual Studio Setup WMI Provider",
-            "version": "4.6.52.44637"
-        },
-        {
-            "name": "MongoDB 8.2.0 2008R2Plus SSL (64 bit)",
-            "version": "8.2.0"
-        },
-        {
-            "name": "MongoDB Shell",
-            "version": "2.5.8"
-        },
-        {
-            "name": "MSI Development Tools",
-            "version": "10.1.28000.1839"
+            "name": "Microsoft Windows Application Compatibility Fix Database",
+            "version": "Unknown",
+            "publisher": "Unknown",
+            "install_date": "Unknown"
         },
         {
             "name": "Node.js",
-            "version": "22.17.0"
-        },
-        {
-            "name": "NVIDIA AIUser Container",
-            "version": "1.48"
-        },
-        {
-            "name": "NVIDIA App 11.0.8.299",
-            "version": "11.0.8.299"
-        },
-        {
-            "name": "NVIDIA App driver settings",
-            "version": "1.0"
-        },
-        {
-            "name": "NVIDIA Backend",
-            "version": "11.0.8.299"
-        },
-        {
-            "name": "NVIDIA Broadcast 2.1.0",
-            "version": "2.1.0"
-        },
-        {
-            "name": "NVIDIA Broadcast Voice Driver 1.0.1.42",
-            "version": "1.0.1.42"
-        },
-        {
-            "name": "NVIDIA Container",
-            "version": "1.48"
-        },
-        {
-            "name": "NVIDIA FrameView SDK 1.8.12612.38276700",
-            "version": "1.8.12612.38276700"
-        },
-        {
-            "name": "NVIDIA Graphics Driver 610.47",
-            "version": "610.47"
-        },
-        {
-            "name": "NVIDIA HD Audio Driver 1.4.5.7",
-            "version": "1.4.5.7"
-        },
-        {
-            "name": "NVIDIA Install Application",
-            "version": "2.1002.463.0"
-        },
-        {
-            "name": "NVIDIA LocalSystem Container",
-            "version": "1.48"
-        },
-        {
-            "name": "NVIDIA MessageBus 3 for NvApp",
-            "version": "3.21"
-        },
-        {
-            "name": "NVIDIA NvDLISR",
-            "version": "1.0"
-        },
-        {
-            "name": "NVIDIA PhysX System Software 9.23.1019",
-            "version": "9.23.1019"
-        },
-        {
-            "name": "NVIDIA Platform Controllers and Framework",
-            "version": "610.29"
-        },
-        {
-            "name": "NVIDIA Session Container",
-            "version": "1.48"
-        },
-        {
-            "name": "NVIDIA ShadowPlay 11.0.8.0",
-            "version": "11.0.8.0"
-        },
-        {
-            "name": "NVIDIA Telemetry Client",
-            "version": "19.6.6.0"
-        },
-        {
-            "name": "NVIDIA User Container",
-            "version": "1.48"
-        },
-        {
-            "name": "NVIDIA Virtual Audio 4.65.0.12",
-            "version": "4.65.0.12"
-        },
-        {
-            "name": "NVIDIA Watchdog Plugin for NvContainer",
-            "version": "1.48"
-        },
-        {
-            "name": "OBS Studio",
-            "version": "32.1.2"
+            "version": "24.18.0",
+            "publisher": "Node.js Foundation",
+            "install_date": "2026-07-10"
         },
         {
             "name": "Office 16 Click-to-Run Extensibility Component",
-            "version": "16.0.20326.20072"
-        },
-        {
-            "name": "Oracle VirtualBox 7.1.6",
-            "version": "7.1.6"
-        },
-        {
-            "name": "OTA Dependencies",
-            "version": "0.9.0.5"
-        },
-        {
-            "name": "PyCharm Community Edition 2024.3.2",
-            "version": "243.23654.177"
-        },
-        {
-            "name": "Python 3.13.5 Add to Path (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Core Interpreter (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Development Libraries (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Documentation (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Executables (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 pip Bootstrap (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Standard Library (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Tcl/Tk Support (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python 3.13.5 Test Suite (64-bit)",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Python Launcher",
-            "version": "3.13.5150.0"
-        },
-        {
-            "name": "Question Paper Generator version 1.0",
-            "version": "1.0"
-        },
-        {
-            "name": "Quick Share",
-            "version": "1.0.2600.1"
-        },
-        {
-            "name": "SDK ARM64 Additions",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "SDK ARM64 Redistributables",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "UAV Drivers",
-            "version": "1.3.12"
-        },
-        {
-            "name": "Universal CRT Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Universal CRT Headers Libraries and Sources",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Universal CRT Redistributable",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Universal CRT Tools x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Universal CRT Tools x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Universal General MIDI DLS Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "vcpp_crt.redist.clickonce",
-            "version": "14.51.36231"
-        },
-        {
-            "name": "Visual Studio Community 2026",
-            "version": "18.6.1"
-        },
-        {
-            "name": "vs_CoreEditorFonts",
-            "version": "17.7.40001"
-        },
-        {
-            "name": "vs_filehandler_amd64",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_filehandler_x86",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_FileTracker_Singleton",
-            "version": "18.6.11709"
-        },
-        {
-            "name": "vs_githubprotocolhandlermsi",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_minshellmsires",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_minshellsharedmsi",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_minshellx64msi",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "vs_vswebprotocolselectormsi",
-            "version": "18.6.11706"
-        },
-        {
-            "name": "WD PROXKey",
-            "version": "6.0.5"
-        },
-        {
-            "name": "WinAppDeploy",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows App Certification Kit Native Components",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows App Certification Kit SupportedApiList x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows App Certification Kit x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows App Certification Kit x64 (OnecoreUAP)",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Desktop Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Desktop Extension SDK Contracts",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Driver Package - CubePilot Pty Ltd (usbser) Ports  (04/05/2022 2.0.0.11)",
-            "version": "04/05/2022 2.0.0.11"
-        },
-        {
-            "name": "Windows Driver Package - Hex Technology Limited (usbser) Ports  (12/26/2019 2.0.0.11)",
-            "version": "12/26/2019 2.0.0.11"
-        },
-        {
-            "name": "Windows Driver Package - Holybro (usbser) Ports  (12/26/2019 2.0.0.10)",
-            "version": "12/26/2019 2.0.0.10"
-        },
-        {
-            "name": "Windows Driver Package - NXP Semiconductors (usbser) Ports  (01/01/2015 2.0.0.9)",
-            "version": "01/01/2015 2.0.0.9"
-        },
-        {
-            "name": "Windows Driver Package - STMicroelectronics (WinUSB) USBDevice  (05/07/2018 1.1.0)",
-            "version": "05/07/2018 1.1.0"
-        },
-        {
-            "name": "Windows Driver Package - u-blox AG (ubloxusb) Ports  (07/03/2013 1.2.0.8)",
-            "version": "07/03/2013 1.2.0.8"
-        },
-        {
-            "name": "Windows IoT Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows IoT Extension SDK Contracts",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Mobile Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Mobile Extension SDK Contracts",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK AddOn",
-            "version": "10.1.0.0"
-        },
-        {
-            "name": "Windows SDK ARM64 Desktop Tools",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Headers arm64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Headers x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Headers x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Libs arm64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Libs x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Libs x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Tools arm64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Tools x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Desktop Tools x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK DirectX x64 Remote",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK DirectX x86 Remote",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK EULA",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Facade Windows WinMD Versioned",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Contracts",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps DirectX x86 Remote",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Headers",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Headers OnecoreUap",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Libs",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Metadata",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Apps Tools",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK for Windows Store Managed Apps Libs",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Modern Non-Versioned Developer Tools",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Modern Versioned Developer Tools",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK OnecoreUap Headers arm64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK OnecoreUap Headers x64",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK OnecoreUap Headers x86",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Redistributables",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows SDK Signing Tools",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Software Development Kit - Windows 10.0.28000.1839",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Subsystem for Linux",
-            "version": "2.4.13.0"
-        },
-        {
-            "name": "Windows Team Extension SDK",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "Windows Team Extension SDK Contracts",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRAR 7.13 (64-bit)",
-            "version": "7.13.0"
-        },
-        {
-            "name": "WinRT Intellisense Desktop - en-us",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense Desktop - Other Languages",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense IoT - en-us",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense IoT - Other Languages",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense Mobile - en-us",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense PPI - en-us",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense PPI - Other Languages",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense UAP - en-us",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "WinRT Intellisense UAP - Other Languages",
-            "version": "10.1.28000.1839"
-        },
-        {
-            "name": "XAMPP",
-            "version": "8.2.12-0"
+            "version": "16.0.20326.20072",
+            "publisher": "Microsoft Corporation",
+            "install_date": "2026-08-23"
+        },
+        {
+            "name": "WebAdvisor by McAfee",
+            "version": "4.1.2.111",
+            "publisher": "McAfee, LLC",
+            "install_date": "Unknown"
         }
     ],
     "network": {
-        "hostname": "LAPTOP-QVMIRLVI",
-        "ip_address": "169.254.213.53",
-        "mac_address": "a8:64:f1:1c:77:1b",
-        "bytes_sent": 7451812,
-        "bytes_received": 3023590
+        "hostname": "DESKTOP-47719NF",
+        "ip_address": "169.254.86.100",
+        "mac_address": "c0:09:25:63:e6:13",
+        "bytes_sent": 6087587,
+        "bytes_received": 51752113
     }
 }
