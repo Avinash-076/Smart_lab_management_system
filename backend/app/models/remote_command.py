@@ -18,7 +18,7 @@ class CommandType(str, enum.Enum):
     message = "message"
     lock = "lock"
     restart = "restart"
-    shutdown = "shutdonw"
+    shutdown = "shutdown"
 
 
 class CommandStatus(str, enum.Enum):
