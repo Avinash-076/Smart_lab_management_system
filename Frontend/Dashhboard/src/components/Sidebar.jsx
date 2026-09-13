@@ -1,6 +1,6 @@
 import Icon from "./Icon";
 
-function Sidebar({ active, navigate }) {
+function Sidebar({ active, navigate, logout}) {
   const navItems = [
     ["home", "Dashboard", "dashboard"],
     ["computer", "Computer List", "computers"],
@@ -47,7 +47,7 @@ function Sidebar({ active, navigate }) {
 
         <button
           className="nav-item"
-          onClick={() => navigate("logout")}
+          onClick={logout}
         >
           <Icon type="logout" size={22} />
           <span>Logout</span>

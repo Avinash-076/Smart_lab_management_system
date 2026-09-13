@@ -1,44 +1,4 @@
 /* ==========================================
-   GLOBAL
-========================================== */
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-
-html,
-body,
-#root {
-  min-height: 100%;
-}
-
-
-body {
-  min-width: 320px;
-
-  font-family:
-    Inter,
-    "Segoe UI",
-    Arial,
-    sans-serif;
-
-  background: #f4f7fc;
-
-  color: #17243c;
-}
-
-
-button,
-input,
-select {
-  font-family: inherit;
-}
-
-
-/* ==========================================
    LOGIN PAGE
 ========================================== */
 
@@ -362,7 +322,9 @@ select {
 }
 
 
-/* Monitor stand */
+/* ==========================================
+   MONITOR STAND
+========================================== */
 
 .monitor-stand {
   position: absolute;
@@ -399,7 +361,9 @@ select {
 }
 
 
-/* CPU */
+/* ==========================================
+   CPU
+========================================== */
 
 .cpu-case {
   position: absolute;
@@ -456,7 +420,9 @@ select {
 }
 
 
-/* Floating circles */
+/* ==========================================
+   FLOATING CIRCLES
+========================================== */
 
 .floating-circle {
   position: absolute;
@@ -1114,81 +1080,6 @@ select {
   background: rgba(255, 255, 255, 0.9);
 
   font-size: 15px;
-}
-
-
-/* ==========================================
-   TEMPORARY DASHBOARD
-========================================== */
-
-.dashboard-page {
-  width: 100%;
-  min-height: 100vh;
-
-  display: flex;
-
-  align-items: center;
-  justify-content: center;
-
-  background: #f4f7fc;
-}
-
-
-.dashboard-card {
-  width: 500px;
-
-  padding: 50px;
-
-  text-align: center;
-
-  border-radius: 20px;
-
-  background: white;
-
-  box-shadow:
-    0 15px 50px rgba(0, 0, 0, 0.08);
-}
-
-
-.dashboard-logo {
-  margin-bottom: 20px;
-
-  font-size: 40px;
-
-  font-weight: 800;
-
-  color: #1269e7;
-}
-
-
-.dashboard-card h1 {
-  color: #152849;
-}
-
-
-.dashboard-card p {
-  margin-top: 10px;
-
-  color: #687389;
-}
-
-
-.logout-button {
-  margin-top: 30px;
-
-  padding: 12px 30px;
-
-  border: none;
-
-  border-radius: 7px;
-
-  color: white;
-
-  background: #1269e7;
-
-  font-size: 16px;
-
-  cursor: pointer;
 }
 
 

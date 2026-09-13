@@ -6,18 +6,18 @@
         "os_version": "10.0.26100",
         "machine": "AMD64",
         "processor": "AMD64 Family 25 Model 80 Stepping 0, AuthenticAMD",
-        "ip_address": "127.0.0.1",
+        "ip_address": "192.168.0.7",
         "mac_address": "c0:09:25:63:e6:13"
     },
     "hardware": {
-        "cpu_usage": 8.9,
+        "cpu_usage": 11.0,
         "ram_total_gb": 15.4,
-        "ram_used_gb": 8.81,
-        "ram_percent": 57.2,
+        "ram_used_gb": 9.34,
+        "ram_percent": 60.6,
         "disk_total_gb": 237.71,
-        "disk_used_gb": 103.08,
-        "disk_percent": 43.4,
-        "boot_time": "2026-09-11 12:43:31"
+        "disk_used_gb": 105.39,
+        "disk_percent": 44.3,
+        "boot_time": "2026-09-12 16:48:47"
     },
     "software": [
         {
@@ -94,15 +94,15 @@
         },
         {
             "name": "Microsoft 365 - en-us",
-            "version": "16.0.20326.20132",
+            "version": "16.0.20326.20144",
             "publisher": "Microsoft Corporation",
             "install_date": "Unknown"
         },
         {
             "name": "Microsoft Edge",
-            "version": "152.0.4191.66",
+            "version": "153.0.4234.32",
             "publisher": "Microsoft Corporation",
-            "install_date": "2026-09-09"
+            "install_date": "2026-09-13"
         },
         {
             "name": "Microsoft Edge WebView2 Runtime",
@@ -112,7 +112,7 @@
         },
         {
             "name": "Microsoft OneNote - en-us",
-            "version": "16.0.20326.20132",
+            "version": "16.0.20326.20144",
             "publisher": "Microsoft Corporation",
             "install_date": "Unknown"
         },
@@ -199,7 +199,7 @@
         "hostname": "DESKTOP-47719NF",
         "ip_address": "169.254.86.100",
         "mac_address": "c0:09:25:63:e6:13",
-        "bytes_sent": 6818752,
-        "bytes_received": 52944036
+        "bytes_sent": 57900119,
+        "bytes_received": 59202902
     }
 }

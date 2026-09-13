@@ -2,7 +2,7 @@ import Brand from "../components/Brand";
 import FeatureCard from "../components/FeatureCard";
 import LoginForm from "../components/LoginForm";
 import SystemIllustration from "../components/SystemIllustration";
-
+import "./Login.css";
 
 function LoginPage({ onLogin }) {
 
