@@ -1,12 +1,12 @@
 [project]
 name = "client-agent"
-version = "0.1.0"
-description = "Add your description here"
+version = "1.0.0"
+description = "SLMS Windows Client Agent"
 readme = "README.md"
 requires-python = ">=3.13"
+
 dependencies = [
     "keyring>=25.7.0",
-    "logger>=1.4",
     "psutil>=7.2.2",
     "requests>=2.34.2",
     "websocket-client>=1.8.0",

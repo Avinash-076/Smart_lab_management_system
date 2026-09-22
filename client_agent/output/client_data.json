@@ -10,196 +10,21 @@
         "mac_address": "ea:85:91:09:ca:ea"
     },
     "hardware": {
-        "cpu_usage": 5.5,
+        "cpu_usage": 15.6,
+        "cpu_count": 12,
         "ram_total_gb": 15.4,
-        "ram_used_gb": 9.18,
-        "ram_percent": 59.6,
+        "ram_used_gb": 9.43,
+        "ram_percent": 61.2,
         "disk_total_gb": 237.71,
-        "disk_used_gb": 104.7,
+        "disk_used_gb": 104.71,
         "disk_percent": 44.0,
         "boot_time": "2026-09-22 18:16:21"
     },
-    "software": [
-        {
-            "name": "Acer Configuration Manager",
-            "version": "2.9.25180",
-            "publisher": "Acer",
-            "install_date": "2026-05-14"
-        },
-        {
-            "name": "Acer Jumpstart",
-            "version": "3.5.22220.20",
-            "publisher": "Acer",
-            "install_date": "2026-05-14"
-        },
-        {
-            "name": "Acer Jumpstart Agent",
-            "version": "1.6.26187.0",
-            "publisher": "Acer",
-            "install_date": "2026-07-08"
-        },
-        {
-            "name": "AcerWarrantyRegistration",
-            "version": "2.1.0",
-            "publisher": "TALENTPACE",
-            "install_date": "2025-11-09"
-        },
-        {
-            "name": "Android Studio",
-            "version": "2026.1",
-            "publisher": "Google LLC",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Copilot",
-            "version": "153.0.4234.48",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-09-22"
-        },
-        {
-            "name": "Data Protect",
-            "version": "21.1.903",
-            "publisher": "Acer",
-            "install_date": "2025-12-07"
-        },
-        {
-            "name": "ExpressVPN",
-            "version": "3.1.26022.2",
-            "publisher": "Acer",
-            "install_date": "2026-05-14"
-        },
-        {
-            "name": "Git",
-            "version": "2.55.0.5",
-            "publisher": "The Git Development Community",
-            "install_date": "2026-09-10"
-        },
-        {
-            "name": "Google Chrome",
-            "version": "153.0.8010.53",
-            "publisher": "Google LLC",
-            "install_date": "2026-09-22"
-        },
-        {
-            "name": "Google Play Games beta",
-            "version": "23.5.1015.22",
-            "publisher": "Google LLC",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "McAfee",
-            "version": "1.40.161.1",
-            "publisher": "McAfee, LLC",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft 365 - en-us",
-            "version": "16.0.20326.20144",
-            "publisher": "Microsoft Corporation",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft Edge",
-            "version": "153.0.4234.48",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-09-22"
-        },
-        {
-            "name": "Microsoft Edge WebView2 Runtime",
-            "version": "153.0.4234.48",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-09-22"
-        },
-        {
-            "name": "Microsoft OneNote - en-us",
-            "version": "16.0.20326.20144",
-            "publisher": "Microsoft Corporation",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft Visual C++ 2013 Redistributable (x86) - 12.0.21005",
-            "version": "12.0.21005.1",
-            "publisher": "Microsoft Corporation",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft Visual C++ 2013 x86 Additional Runtime - 12.0.21005",
-            "version": "12.0.21005",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2025-11-09"
-        },
-        {
-            "name": "Microsoft Visual C++ 2013 x86 Minimum Runtime - 12.0.21005",
-            "version": "12.0.21005",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2025-11-09"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X64 Additional Runtime - 14.50.35719",
-            "version": "14.50.35719",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-08-23"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X64 Minimum Runtime - 14.50.35719",
-            "version": "14.50.35719",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-08-23"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X86 Additional Runtime - 14.50.35719",
-            "version": "14.50.35719",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-08-23"
-        },
-        {
-            "name": "Microsoft Visual C++ 2022 X86 Minimum Runtime - 14.50.35719",
-            "version": "14.50.35719",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-08-23"
-        },
-        {
-            "name": "Microsoft Visual C++ v14 Redistributable (x64) - 14.50.35719",
-            "version": "14.50.35719.0",
-            "publisher": "Microsoft Corporation",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft Visual C++ v14 Redistributable (x86) - 14.50.35719",
-            "version": "14.50.35719.0",
-            "publisher": "Microsoft Corporation",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Microsoft Windows Application Compatibility Fix Database",
-            "version": "Unknown",
-            "publisher": "Unknown",
-            "install_date": "Unknown"
-        },
-        {
-            "name": "Node.js",
-            "version": "24.18.0",
-            "publisher": "Node.js Foundation",
-            "install_date": "2026-07-10"
-        },
-        {
-            "name": "Office 16 Click-to-Run Extensibility Component",
-            "version": "16.0.20326.20072",
-            "publisher": "Microsoft Corporation",
-            "install_date": "2026-08-23"
-        },
-        {
-            "name": "WebAdvisor by McAfee",
-            "version": "4.1.2.120",
-            "publisher": "McAfee, LLC",
-            "install_date": "Unknown"
-        }
-    ],
     "network": {
         "hostname": "DESKTOP-47719NF",
         "ip_address": "169.254.86.100",
         "mac_address": "ea:85:91:09:ca:ea",
-        "bytes_sent": 47689167,
-        "bytes_received": 2572495543
+        "bytes_sent": 56703206,
+        "bytes_received": 2588308883
     }
 }

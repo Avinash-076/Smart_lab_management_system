@@ -1,15 +1,37 @@
 import requests
 import keyring
 
-SERVER_URL = "http://127.0.0.1:8000/api"
-SERVER_NAME = "SLMS"
+from config import API_BASE_URL, SERVER_NAME
+
 
 def get_access_token() -> str:
-    agent_id = keyring.get_password(SERVER_NAME, "agent_id")
-    client_secret = keyring.get_password(SERVER_NAME, "client_secret")
+    """
+    Authenticate the registered client agent and return
+    a fresh access token.
+    """
+
+    agent_id = keyring.get_password(
+        SERVER_NAME,
+        "agent_id"
+    )
+
+    client_secret = keyring.get_password(
+        SERVER_NAME,
+        "client_secret"
+    )
+
+    if not agent_id:
+        raise RuntimeError(
+            "Agent ID not found. The client is not enrolled."
+        )
+
+    if not client_secret:
+        raise RuntimeError(
+            "Client secret not found. The client is not enrolled."
+        )
 
     response = requests.post(
-        f"{SERVER_URL}/agent/auth",
+        f"{API_BASE_URL}/api/agent/auth",
         json={
             "agent_id": agent_id,
             "client_secret": client_secret
@@ -18,4 +40,14 @@ def get_access_token() -> str:
     )
 
     response.raise_for_status()
-    return response.json()["access_token"]
+
+    data = response.json()
+
+    access_token = data.get("access_token")
+
+    if not access_token:
+        raise RuntimeError(
+            "Server did not return an access token."
+        )
+
+    return access_token

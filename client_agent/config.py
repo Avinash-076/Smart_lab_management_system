@@ -1,45 +1,111 @@
 # ==========================================
 # Smart Lab Management System
-# Configuration File
+# Client Agent Configuration
 # ==========================================
 
 import os
 
-# Client Information
-CLIENT_NAME = "SLMS Client"
-VERSION = "1.0"
-
-# Monitoring
-MONITOR_INTERVAL = 20  # Seconds
-
 from paths import LOG_FOLDER, OUTPUT_FOLDER
-import os
 
-LOG_FILE = os.path.join(LOG_FOLDER, "client.log")
 
-# Display Options
-SHOW_SOFTWARE_LIST = True
-SHOW_PROCESS_LIST = True
+# ------------------------------------------
+# Application
+# ------------------------------------------
 
-# Export Options
-EXPORT_JSON = True
+CLIENT_NAME = "SLMS Client Agent"
+VERSION = "1.0.0"
 
-# Monitoring Modules
+
+# ------------------------------------------
+# Backend Server
+# ------------------------------------------
+#
+# Development:
+#   http://127.0.0.1:8000
+#
+# LAN:
+#   http://HOST-PC-IP:8000
+#
+# Example:
+#   http://192.168.1.100:8000
+#
+
+API_BASE_URL = os.getenv(
+    "SLMS_API_URL",
+    "http://127.0.0.1:8000"
+).rstrip("/")
+
+
+# ------------------------------------------
+# Monitoring
+# ------------------------------------------
+
+MONITOR_INTERVAL = 20
+
 ENABLE_SYSTEM_INFO = True
 ENABLE_HARDWARE_INFO = True
-ENABLE_SOFTWARE_INFO = True
-ENABLE_PROCESS_INFO = False
 ENABLE_NETWORK_INFO = True
 
-# Console
+# Heavy operations should NOT run every 20 seconds.
+ENABLE_SOFTWARE_INFO = False
+ENABLE_PROCESS_INFO = False
+
+
+# ------------------------------------------
+# Display / Debug
+# ------------------------------------------
+
+SHOW_CONSOLE = True
 CLEAR_SCREEN = False
 
-# Application Mode
-SHOW_CONSOLE = True
+SHOW_SOFTWARE_LIST = False
+SHOW_PROCESS_LIST = False
 
-API_BASE_URL = ""
-REGISTER_ENDPOINT = "/api/client/register"
-DATA_ENDPOINT = "/api/"
+
+# ------------------------------------------
+# Local JSON Export
+# ------------------------------------------
+
+EXPORT_JSON = True
+
+
+# ------------------------------------------
+# Paths
+# ------------------------------------------
+
+LOG_FILE = os.path.join(
+    LOG_FOLDER,
+    "client.log"
+)
+
+OUTPUT_FILE = os.path.join(
+    OUTPUT_FOLDER,
+    "client_data.json"
+)
+
+
+# ------------------------------------------
+# WebSocket
+# ------------------------------------------
+
+WS_BASE_URL = os.getenv(
+    "SLMS_WS_URL",
+    "ws://127.0.0.1:8000/ws/client"
+).rstrip("/")
+
+
+# ------------------------------------------
+# Authentication
+# ------------------------------------------
+
+SERVER_NAME = "SLMS"
+
+
+# ------------------------------------------
+# Legacy configuration
+# ------------------------------------------
+
+REGISTER_ENDPOINT = "/api/agent/register"
+DATA_ENDPOINT = "/api/metrics"
 
 AGENT_CREDENTIAL_ENV = "SLMS_AGENT_CREDENTIAL"
-WS_BASE_URL = "ws://127.0.0.1:8000/ws/client"

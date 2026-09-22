@@ -2,15 +2,50 @@ import requests
 import keyring
 
 from modules.system_info import get_system_info
+from config import API_BASE_URL, SERVER_NAME
 
-SERVER_URL = "http://127.0.0.1:8000/api"
-SERVICE_NAME = "SLMS"
 
 def is_enrolled() -> bool:
-    return keyring.get_password(SERVICE_NAME, "client_secret") is not None
+    """
+    Check whether this computer already has
+    SLMS credentials stored in Windows Keyring.
+    """
+
+    agent_id = keyring.get_password(
+        SERVER_NAME,
+        "agent_id"
+    )
+
+    client_secret = keyring.get_password(
+        SERVER_NAME,
+        "client_secret"
+    )
+
+    computer_id = keyring.get_password(
+        SERVER_NAME,
+        "computer_id"
+    )
+
+    return bool(
+        agent_id
+        and client_secret
+        and computer_id
+    )
+
 
 def enroll():
-    enrollment_key = input("Enter Enrollment Key: ").strip()
+    """
+    Register this computer using an SLMS enrollment key.
+    """
+
+    enrollment_key = input(
+        "\nEnter SLMS Enrollment Key: "
+    ).strip()
+
+    if not enrollment_key:
+        raise ValueError(
+            "Enrollment key cannot be empty."
+        )
 
     sys_info = get_system_info()
 
@@ -19,23 +54,58 @@ def enroll():
         "ip_address": sys_info["ip_address"],
         "mac_address": sys_info["mac_address"],
         "os_name": sys_info["operating_system"],
-        "os_version": sys_info["os_version"]
+        "os_version": sys_info["os_version"],
     }
 
     response = requests.post(
-        f"{SERVER_URL}/agent/register",
+        f"{API_BASE_URL}/api/agent/register",
         json={
             "enrollment_key": enrollment_key,
             "device": device,
         },
-        timeout = 10
+        timeout=10,
     )
 
     response.raise_for_status()
+
     data = response.json()
 
-    keyring.set_password(SERVICE_NAME, "agent_id", data["agent_id"])
-    keyring.set_password(SERVICE_NAME, "client_secret", data["client_secret"])
-    keyring.set_password(SERVICE_NAME, "computer_id", str(data["computer_id"]))
+    agent_id = data.get("agent_id")
+    client_secret = data.get("client_secret")
+    computer_id = data.get("computer_id")
 
-    print("Registration successful")
+    if not agent_id:
+        raise RuntimeError(
+            "Registration response does not contain agent_id."
+        )
+
+    if not client_secret:
+        raise RuntimeError(
+            "Registration response does not contain client_secret."
+        )
+
+    if computer_id is None:
+        raise RuntimeError(
+            "Registration response does not contain computer_id."
+        )
+
+    keyring.set_password(
+        SERVER_NAME,
+        "agent_id",
+        str(agent_id)
+    )
+
+    keyring.set_password(
+        SERVER_NAME,
+        "client_secret",
+        str(client_secret)
+    )
+
+    keyring.set_password(
+        SERVER_NAME,
+        "computer_id",
+        str(computer_id)
+    )
+
+    print("\nRegistration successful.")
+    print(f"Computer ID: {computer_id}")
