@@ -84,6 +84,45 @@ def get_command_history(
 
 
 @router.post(
+    "/{command_id}/cancel",
+    response_model=CommandResponse,
+)
+def cancel_command(
+    command_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("ISSUE_COMMAND")),
+):
+    command = command_service.get_command_by_id(
+        db=db,
+        command_id=command_id,
+    )
+
+    if command is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Command not found",
+        )
+
+    try:
+        return command_service.cancel_command(
+            db=db,
+            command=command,
+        )
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel command",
+        )
+
+
+@router.post(
     "/{command_id}/result",
     response_model=CommandResultResponse,
     status_code=status.HTTP_201_CREATED,
@@ -94,7 +133,10 @@ def submit_command_result(
     result_data: CommandResultSubmit,
     agent_credential: AgentCredential = Depends(get_current_agent),
 ):
-    command = command_service.get_command_by_id(db, command_id)
+    command = command_service.get_command_by_id(
+        db,
+        command_id,
+    )
 
     if command is None or command.computer_id != agent_credential.computer_id:
         raise HTTPException(
@@ -103,12 +145,16 @@ def submit_command_result(
         )
 
     try:
-        return command_service.submit_result(db, command, result_data)
+        return command_service.submit_result(
+            db,
+            command,
+            result_data,
+        )
 
-    except ValueError:
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Result already submitted",
+            detail=str(e),
         )
 
     except SQLAlchemyError:

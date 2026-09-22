@@ -6,46 +6,28 @@ from config import API_BASE_URL, SERVER_NAME
 
 
 def is_enrolled() -> bool:
+    agent_id = keyring.get_password(SERVER_NAME, "agent_id")
+    client_secret = keyring.get_password(SERVER_NAME, "client_secret")
+    computer_id = keyring.get_password(SERVER_NAME, "computer_id")
+
+    return bool(agent_id and client_secret and computer_id)
+
+
+def enroll(enrollment_key: str, server_url: str | None = None):
     """
-    Check whether this computer already has
-    SLMS credentials stored in Windows Keyring.
-    """
+    Register this computer with the SLMS backend.
 
-    agent_id = keyring.get_password(
-        SERVER_NAME,
-        "agent_id"
-    )
-
-    client_secret = keyring.get_password(
-        SERVER_NAME,
-        "client_secret"
-    )
-
-    computer_id = keyring.get_password(
-        SERVER_NAME,
-        "computer_id"
-    )
-
-    return bool(
-        agent_id
-        and client_secret
-        and computer_id
-    )
-
-
-def enroll():
-    """
-    Register this computer using an SLMS enrollment key.
+    The agent_id, client_secret and computer_id returned by
+    the server are stored securely in Windows Keyring.
     """
 
-    enrollment_key = input(
-        "\nEnter SLMS Enrollment Key: "
-    ).strip()
+    enrollment_key = enrollment_key.strip()
 
     if not enrollment_key:
-        raise ValueError(
-            "Enrollment key cannot be empty."
-        )
+        raise ValueError("Enrollment key cannot be empty.")
+
+    # Use the URL entered in the GUI if provided.
+    base_url = (server_url or API_BASE_URL).rstrip("/")
 
     sys_info = get_system_info()
 
@@ -58,7 +40,7 @@ def enroll():
     }
 
     response = requests.post(
-        f"{API_BASE_URL}/api/agent/register",
+        f"{base_url}/api/agent/register",
         json={
             "enrollment_key": enrollment_key,
             "device": device,
@@ -89,23 +71,26 @@ def enroll():
             "Registration response does not contain computer_id."
         )
 
+    # Store credentials in Windows Keyring.
     keyring.set_password(
         SERVER_NAME,
         "agent_id",
-        str(agent_id)
+        str(agent_id),
     )
 
     keyring.set_password(
         SERVER_NAME,
         "client_secret",
-        str(client_secret)
+        str(client_secret),
     )
 
     keyring.set_password(
         SERVER_NAME,
         "computer_id",
-        str(computer_id)
+        str(computer_id),
     )
 
-    print("\nRegistration successful.")
-    print(f"Computer ID: {computer_id}")
+    return {
+        "agent_id": agent_id,
+        "computer_id": computer_id,
+    }

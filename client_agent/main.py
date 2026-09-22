@@ -18,7 +18,8 @@ from core.exporter import export_to_json
 from core.logger import logger
 
 from server.auth import get_access_token
-from server.enroll import enroll, is_enrolled
+from server.enroll import is_enrolled
+from gui.enrollment_window import show_enrollment_window
 from server.sender import send_metrics
 from server.communication import AgentWebSocketClient
 
@@ -33,39 +34,21 @@ class TokenHolder:
 
 
 def ensure_registered():
-
     if is_enrolled():
-
-        logger.info(
-            "Existing SLMS registration found."
-        )
-
+        logger.info("Existing SLMS registration found.")
         return
 
-    logger.info(
-        "No registration found."
-    )
+    logger.info("No SLMS registration found.")
+    logger.info("Opening enrollment window.")
 
-    logger.info(
-        "Starting enrollment."
-    )
+    show_enrollment_window()
 
-    try:
-
-        enroll()
-
-        logger.info(
-            "Enrollment completed successfully."
+    if not is_enrolled():
+        raise RuntimeError(
+            "SLMS enrollment was not completed."
         )
 
-    except Exception as e:
-
-        logger.exception(
-            f"Enrollment failed: {e}"
-        )
-
-        raise
-
+    logger.info("Enrollment completed successfully.")
 
 def get_computer_id():
 

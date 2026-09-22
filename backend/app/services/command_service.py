@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models.remote_command import RemoteCommand
 from app.models.command_result import CommandResult
-from app.schemas.command_schema import CommandCreate, CommandResponse
+from app.schemas.command_schema import CommandCreate
 from app.websocket.connection_manager import manager
 
 
@@ -25,7 +25,7 @@ async def create_and_dispatch_command(
         issued_by=issued_by,
     )
 
-    try: 
+    try:
         db.add(command)
         db.commit()
         db.refresh(command)
@@ -40,8 +40,8 @@ async def create_and_dispatch_command(
             "type": "command",
             "command_id": command.id,
             "command_type": command.command_type,
-            "payload": command.payload
-        }
+            "payload": command.payload,
+        },
     )
 
     if delivered:
@@ -53,19 +53,19 @@ async def create_and_dispatch_command(
 
 
 def get_commands_for_computer(
-    db: Session, 
-    computer_id: int, 
-    limit: int = 100, 
-    offset: int = 0
+    db: Session,
+    computer_id: int,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[RemoteCommand]:
 
     return list(
         db.scalars(
-            select(RemoteCommand).where(
-                RemoteCommand.computer_id == computer_id
-            ).order_by(
-                RemoteCommand.created_at.desc()
-            ).limit(limit).offset(offset)
+            select(RemoteCommand)
+            .where(RemoteCommand.computer_id == computer_id)
+            .order_by(RemoteCommand.created_at.desc())
+            .limit(limit)
+            .offset(offset)
         ).all()
     )
 
@@ -74,6 +74,7 @@ def get_command_by_id(
     db: Session,
     command_id: int,
 ) -> RemoteCommand | None:
+
     return db.scalar(
         select(RemoteCommand).where(
             RemoteCommand.id == command_id
@@ -81,24 +82,55 @@ def get_command_by_id(
     )
 
 
+def cancel_command(
+    db: Session,
+    command: RemoteCommand,
+) -> RemoteCommand:
+
+    if command.status != CommandStatus.pending:
+        raise ValueError(
+            f"Command cannot be cancelled because its current status is "
+            f"'{command.status.value}'."
+        )
+
+    command.status = CommandStatus.cancelled
+
+    try:
+        db.commit()
+        db.refresh(command)
+
+    except SQLAlchemyError as e:
+        db.rollback()
+        raise ValueError(f"Failed to cancel command: {e}")
+
+    return command
+
+
 def submit_result(
     db: Session,
     command: RemoteCommand,
-    result_data: CommandResultSubmit
+    result_data: CommandResultSubmit,
 ) -> CommandResult:
 
     if command.result is not None:
         raise ValueError("Command result already submitted")
-    
+
+    if command.status == CommandStatus.cancelled:
+        raise ValueError("Cancelled command cannot receive a result")
+
     result = CommandResult(
         command_id=command.id,
         success=result_data.success,
         message=result_data.message,
     )
-    
-    command.status = CommandStatus.executed if result_data.success else CommandStatus.failed
 
-    try: 
+    command.status = (
+        CommandStatus.executed
+        if result_data.success
+        else CommandStatus.failed
+    )
+
+    try:
         db.add(result)
         db.commit()
         db.refresh(result)
@@ -106,5 +138,5 @@ def submit_result(
     except (IntegrityError, SQLAlchemyError) as e:
         db.rollback()
         raise ValueError(f"Failed to submit result: {e}")
-    
+
     return result
