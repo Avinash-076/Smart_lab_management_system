@@ -31,28 +31,73 @@ const navItems = [
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // Current active page
   const [active, setActive] = useState("dashboard");
+
+  // Selected computer for Computer Details page
+  const [selectedComputer, setSelectedComputer] =
+    useState(null);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
+
   const [search, setSearch] = useState("");
+
   const [bellOpen, setBellOpen] = useState(false);
+
   const [profileOpen, setProfileOpen] = useState(false);
+
   const [filterOpen, setFilterOpen] = useState(false);
+
+  /* =====================================================
+     LOGIN
+  ===================================================== */
 
   const handleLogin = (userData) => {
     console.log("Logged in user:", userData);
+
     setIsLoggedIn(true);
   };
 
+  /* =====================================================
+     LOGOUT
+  ===================================================== */
+
   const handleLogout = () => {
     setIsLoggedIn(false);
+
+    // Clear selected computer when logging out
+    setSelectedComputer(null);
   };
+
+  /* =====================================================
+     NAVIGATION
+  ===================================================== */
 
   const navigate = (id) => {
     setActive(id);
+
     setBellOpen(false);
+
     setProfileOpen(false);
+
     setFilterOpen(false);
   };
+
+  /* =====================================================
+     OPEN COMPUTER DETAILS
+  ===================================================== */
+
+  const openComputerDetails = (computer) => {
+    // Store the computer that was clicked
+    setSelectedComputer(computer);
+
+    // Navigate to Computer Details page
+    navigate("details");
+  };
+
+  /* =====================================================
+     RENDER ACTIVE PAGE
+  ===================================================== */
 
   const renderPage = () => {
     switch (active) {
@@ -60,10 +105,19 @@ function App() {
         return <Dashboard />;
 
       case "computers":
-        return <ComputerList />;
+        return (
+          <ComputerList
+            onViewComputer={openComputerDetails}
+          />
+        );
 
       case "details":
-        return <ComputerDetails />;
+        return (
+          <ComputerDetails
+            computer={selectedComputer}
+            onBack={() => navigate("computers")}
+          />
+        );
 
       case "software":
         return <SoftwareInventory />;
@@ -88,14 +142,30 @@ function App() {
     }
   };
 
-  // Show Login Page first
+  /* =====================================================
+     LOGIN PAGE
+  ===================================================== */
+
   if (!isLoggedIn) {
-    return <LoginPage onLogin={handleLogin} />;
+    return (
+      <LoginPage
+        onLogin={handleLogin}
+      />
+    );
   }
 
-  // Show Dashboard after login
+  /* =====================================================
+     MAIN APPLICATION
+  ===================================================== */
+
   return (
-    <div className={`app ${sidebarOpen ? "" : "sidebar-collapsed"}`}>
+    <div
+      className={`app ${
+        sidebarOpen
+          ? ""
+          : "sidebar-collapsed"
+      }`}
+    >
       <Sidebar
         active={active}
         navigate={navigate}
@@ -103,6 +173,7 @@ function App() {
       />
 
       <main className="main">
+
         <Header
           active={active}
           navItems={navItems}
@@ -119,6 +190,7 @@ function App() {
         />
 
         {renderPage()}
+
       </main>
     </div>
   );
