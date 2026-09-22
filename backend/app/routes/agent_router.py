@@ -1,16 +1,37 @@
-from fastapi import APIRouter, Depends, status, HTTPException
 from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status,
+)
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.auth import (
+    create_agent_access_token,
+)
 from app.database import get_db
-from app.auth import get_current_agent
-from app.schemas.agent_schema import AgentRegisterRequest, AgentRegisterResponse, AgentAuthRequest, AgentAuthResponse
+from app.schemas.agent_schema import (
+    AgentAuthRequest,
+    AgentAuthResponse,
+    AgentRegisterRequest,
+    AgentRegisterResponse,
+)
 from app.services import agent_service
-from app.auth import require_permission, create_agent_access_token
 
-DbSession = Annotated[Session, Depends(get_db)]
 
-router = APIRouter(prefix="/agent", tags=["Agents"])
+DbSession = Annotated[
+    Session,
+    Depends(get_db),
+]
+
+
+router = APIRouter(
+    prefix="/agent",
+    tags=["Agents"],
+)
 
 
 @router.post(
@@ -22,22 +43,57 @@ def register_agent(
     payload: AgentRegisterRequest,
     db: DbSession,
 ):
-    try: 
-        result = agent_service.register_with_enrollment_key(db, payload.enrollment_key, payload.device)
+    try:
+
+        result = (
+            agent_service.register_with_enrollment_key(
+                db=db,
+                enrollment_key=payload.enrollment_key,
+                device=payload.device,
+            )
+        )
 
     except ValueError as e:
+
+        detail = str(e)
+
+        if detail == "hostname_conflict":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "A computer with this hostname "
+                    "already exists"
+                ),
+            )
+
+        if detail == "mac_conflict":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "A computer with this MAC address "
+                    "already exists"
+                ),
+            )
+
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=str(e)
+            detail=detail,
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to register agent",
         )
 
     if result is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid  or expired enrollment key",
+            detail="Invalid or expired enrollment key",
         )
 
     return result
+
 
 @router.post(
     "/auth",
@@ -47,19 +103,37 @@ def auth_agent(
     payload: AgentAuthRequest,
     db: DbSession,
 ):
-    credential = agent_service.authenticate_agent(db, payload.agent_id, payload.client_secret)
+
+    try:
+
+        credential = (
+            agent_service.authenticate_agent(
+                db=db,
+                agent_id=payload.agent_id,
+                client_secret=payload.client_secret,
+            )
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Agent authentication failed",
+        )
 
     if credential is None:
-        raise HTTPException( 
+        raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or revoked credentail"
+            detail="Invalid or revoked credential",
         )
 
     token = create_agent_access_token(
         {
             "sub": credential.agent_id,
-            "computer_id": credential.computer_id
+            "computer_id": credential.computer_id,
         }
     )
 
-    return AgentAuthResponse(access_token=token, expires_in=15*60)
+    return AgentAuthResponse(
+        access_token=token,
+        expires_in=15 * 60,
+    )
