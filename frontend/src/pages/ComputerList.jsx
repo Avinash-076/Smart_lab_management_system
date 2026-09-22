@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-
+import { getComputers } from "../services/api";
 import Icon from "../components/Icon";
 import StatCard from "../components/StatCard";
 import ComputerFilters from "../components/ComputerFilters";
@@ -103,6 +103,22 @@ const base = Array.from(
   }
 );
 
+function mapComputer(computer) {
+  return {
+    id: computer.id,
+    name: computer.hostname,
+    ip: computer.ip_address,
+    os: `${computer.os_name} ${computer.os_version}`,
+    cpu: "N/A",
+    ram: "N/A",
+    free: null,
+    total: null,
+    last: "N/A",
+    time: "",
+    status: "Offline",
+    lab: "Unassigned",
+  };
+}
 /* =====================================================
    COMPONENT
 ===================================================== */
@@ -114,32 +130,29 @@ function ComputerList({
      COMPUTERS
   ===================================================== */
 
-  const [computers, setComputers] =
-    useState(() => {
-      try {
-        return (
-          JSON.parse(
-            localStorage.getItem(
-              "slms_computers"
-            )
-          ) || base
-        );
-      } catch {
-        return base;
-      }
-    });
+  const [computers, setComputers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  /* =====================================================
-     SAVE TO LOCAL STORAGE
-  ===================================================== */
+useEffect(() => {
+  const loadComputers = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  useEffect(() => {
-    localStorage.setItem(
-      "slms_computers",
-      JSON.stringify(computers)
-    );
-  }, [computers]);
+      const data = await getComputers();
 
+      setComputers(data.map(mapComputer));
+    } catch (err) {
+      console.error("Failed to load computers:", err);
+      setError(err.message || "Failed to load computers.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadComputers();
+}, []);
   /* =====================================================
      FILTERS
   ===================================================== */
@@ -705,6 +718,18 @@ function ComputerList({
       )}
     </>
   );
+  if (loading) {
+  return <div className="page-loading">Loading computers...</div>;
+}
+
+if (error) {
+  return (
+    <div className="page-error">
+      <h3>Failed to load computers</h3>
+      <p>{error}</p>
+    </div>
+  );
+}
 }
 
 export default ComputerList;

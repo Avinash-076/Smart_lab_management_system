@@ -1,6 +1,6 @@
 import { useState } from "react";
 import "./App.css";
-
+import { login } from "./services/api";
 import LoginPage from "./pages/LoginPage";
 
 import Sidebar from "./components/Sidebar";
@@ -52,12 +52,21 @@ function App() {
      LOGIN
   ===================================================== */
 
-  const handleLogin = (userData) => {
-    console.log("Logged in user:", userData);
+  const handleLogin = async (userData) => {
+    try {
+      const data = await login(userData.username, userData.password);
 
-    setIsLoggedIn(true);
+      localStorage.setItem("access_token", data.access_token);
+      localStorage.setItem("refresh_token", data.refresh_token);
+
+      console.log("Login successful");
+
+      setIsLoggedIn(true);
+    } catch (error) {
+      console.error("Login failed:", error);
+      alert(error.message);
+    }
   };
-
   /* =====================================================
      LOGOUT
   ===================================================== */
