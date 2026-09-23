@@ -8,7 +8,6 @@ from contextlib import asynccontextmanager
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import app.models
-from app.database import Base, engine
 from app.websocket.timeout_checker import run_offline_timeout_checker
 
 from app.routes.auth_router import router as auth_router
@@ -60,8 +59,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-Base.metadata.create_all(bind=engine)
 
 API_PREFIX = "/api"
 

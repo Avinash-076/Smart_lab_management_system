@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, ForeignKey, Float, Index, DateTime
+from sqlalchemy import DateTime, Float, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -9,8 +9,8 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.computer import Computer
 
-class SystemMetric(Base):
 
+class SystemMetric(Base):
     __tablename__ = "system_metrics"
 
     id: Mapped[int] = mapped_column(
@@ -18,7 +18,10 @@ class SystemMetric(Base):
     )
 
     computer_id: Mapped[int] = mapped_column(
-        ForeignKey("computers.id"),
+        ForeignKey(
+            "computers.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
     )
 
@@ -49,12 +52,16 @@ class SystemMetric(Base):
 
     recorded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default = lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
     computer: Mapped["Computer"] = relationship()
 
     __table_args__ = (
-        Index("ix_system_metrics_computer_id_recorded_at", "computer_id", "recorded_at"),
+        Index(
+            "ix_system_metrics_computer_id_recorded_at",
+            "computer_id",
+            "recorded_at",
+        ),
     )

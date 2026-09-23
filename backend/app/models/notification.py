@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-from datetime import datetime, timezone
-import enum
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Enum as SqlEnum
+import enum
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,7 +17,6 @@ class NotificationSeverity(str, enum.Enum):
     warning = "warning"
     critical = "critical"
 
-    
 
 class Notification(Base):
     __tablename__ = "notifications"
@@ -26,7 +26,10 @@ class Notification(Base):
     )
 
     computer_id: Mapped[int] = mapped_column(
-        ForeignKey("computers.id"),
+        ForeignKey(
+            "computers.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
     )
 
@@ -36,7 +39,10 @@ class Notification(Base):
     )
 
     severity: Mapped[NotificationSeverity] = mapped_column(
-        SqlEnum(NotificationSeverity, native_enum=False),
+        SqlEnum(
+            NotificationSeverity,
+            native_enum=False,
+        ),
         nullable=False,
     )
 
@@ -57,4 +63,4 @@ class Notification(Base):
         nullable=False,
     )
 
-    computer: Mapped["Computer"] =  relationship()
+    computer: Mapped["Computer"] = relationship()

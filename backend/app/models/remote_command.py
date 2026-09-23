@@ -1,17 +1,18 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
-from datetime import datetime, timezone
-import enum
 
-from sqlalchemy import String, DateTime, ForeignKey, Enum as SqlEnum
+import enum
+from datetime import datetime, timezone
+from typing import TYPE_CHECKING
+
+from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
 if TYPE_CHECKING:
+    from app.models.command_result import CommandResult
     from app.models.computer import Computer
     from app.models.user import User
-    from app.models.command_result import CommandResult
 
 
 class CommandType(str, enum.Enum):
@@ -28,6 +29,7 @@ class CommandStatus(str, enum.Enum):
     failed = "failed"
     cancelled = "cancelled"
 
+
 class RemoteCommand(Base):
     __tablename__ = "remote_commands"
 
@@ -36,22 +38,31 @@ class RemoteCommand(Base):
     )
 
     computer_id: Mapped[int] = mapped_column(
-        ForeignKey("computers.id"),
+        ForeignKey(
+            "computers.id",
+            ondelete="CASCADE",
+        ),
         nullable=False,
     )
 
     command_type: Mapped[CommandType] = mapped_column(
-        SqlEnum(CommandType, native_enum=False),
+        SqlEnum(
+            CommandType,
+            native_enum=False,
+        ),
         nullable=False,
     )
 
     payload: Mapped[str | None] = mapped_column(
-        String(255), 
+        String(255),
         nullable=True,
     )
 
     status: Mapped[CommandStatus] = mapped_column(
-        SqlEnum(CommandStatus, native_enum=False),
+        SqlEnum(
+            CommandStatus,
+            native_enum=False,
+        ),
         default=CommandStatus.pending,
         nullable=False,
     )
@@ -71,7 +82,7 @@ class RemoteCommand(Base):
 
     issuer: Mapped["User"] = relationship()
 
-    result: Mapped["CommandResult | None"] =  relationship(
+    result: Mapped["CommandResult | None"] = relationship(
         back_populates="command",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
