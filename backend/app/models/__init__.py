@@ -13,6 +13,7 @@ from app.models.notification import Notification
 from app.models.usage_session import UsageSession
 from app.models.issue import Issue
 from app.models.maintenance import MaintenanceRecord
+from app.models.software import Software
 
 __all__ = [
     "Computer",
@@ -30,4 +31,5 @@ __all__ = [
     "UsageSession",
     "Issue",
     "MaintenanceRecord",
+    "Software",
 ]
