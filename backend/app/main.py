@@ -23,6 +23,7 @@ from app.routes.software_router import router as software_router
 from app.routes.usage_router import router as usage_router
 from app.routes.issue_router import router as issue_router
 from app.routes.maintenance_router import router as maintenance_router
+from app.routes.user_router import router as user_router
 
 logger = logging.getLogger("slms")
 
@@ -76,6 +77,8 @@ app.include_router(software_router, prefix=API_PREFIX)
 app.include_router(usage_router,prefix=API_PREFIX)
 app.include_router(issue_router, prefix=API_PREFIX)
 app.include_router(maintenance_router, prefix=API_PREFIX)
+app.include_router(user_router, prefix=API_PREFIX)
+
 # ---- Global exception handlers ----
 
 @app.exception_handler(IntegrityError)
