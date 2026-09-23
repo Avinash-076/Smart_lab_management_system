@@ -19,6 +19,10 @@ from app.routes.enrollment_router import router as enrollment_router
 from app.routes.metric_router import router as metric_router
 from app.routes.command_router import router as command_router
 from app.routes.notification_router import router as notification_router
+from app.routes.software_router import router as software_router
+from app.routes.usage_router import router as usage_router
+from app.routes.issue_router import router as issue_router
+from app.routes.maintenance_router import router as maintenance_router
 
 logger = logging.getLogger("slms")
 
@@ -68,9 +72,10 @@ app.include_router(metric_router, prefix=API_PREFIX)
 app.include_router(websocket_router)
 app.include_router(notification_router, prefix=API_PREFIX)
 app.include_router(command_router, prefix=API_PREFIX)
-
-
-
+app.include_router(software_router, prefix=API_PREFIX)
+app.include_router(usage_router,prefix=API_PREFIX)
+app.include_router(issue_router, prefix=API_PREFIX)
+app.include_router(maintenance_router, prefix=API_PREFIX)
 # ---- Global exception handlers ----
 
 @app.exception_handler(IntegrityError)

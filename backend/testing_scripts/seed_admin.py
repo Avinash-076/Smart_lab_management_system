@@ -33,7 +33,8 @@ action_codes = [
     "UPDATE_COMPUTER",
     "DELETE_COMPUTER",
     "PROVISION_AGENT",
-    "ISSUE_COMMAND"
+    "ISSUE_COMMAND",
+    "MANAGE_USERS",
 ]
 
 for code in action_codes:

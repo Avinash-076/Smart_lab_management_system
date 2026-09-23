@@ -22,8 +22,10 @@ def get_all_notifications(
     query = select(Notification).order_by(Notification.created_at.desc()).limit(limit)
 
     if unread_only:
-        query = query.where(Notification.read_at == None)
-
+        query = query.where(
+            Notification.is_read.is_(False)
+        )
+    
     return list(db.scalars(query).all())
 
 

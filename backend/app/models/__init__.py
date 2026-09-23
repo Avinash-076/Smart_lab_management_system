@@ -10,6 +10,9 @@ from app.models.enrollment_key import EnrollmentKey
 from app.models.remote_command import RemoteCommand
 from app.models.command_result import CommandResult
 from app.models.notification import Notification
+from app.models.usage_session import UsageSession
+from app.models.issue import Issue
+from app.models.maintenance import MaintenanceRecord
 
 __all__ = [
     "Computer",
@@ -23,5 +26,8 @@ __all__ = [
     "EnrollmentKey",
     "RemoteCommand",
     "CommandResult",
-    "Notification"
+    "Notification",
+    "UsageSession",
+    "Issue",
+    "MaintenanceRecord",
 ]
