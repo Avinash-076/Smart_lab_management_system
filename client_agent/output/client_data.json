@@ -10,21 +10,21 @@
         "mac_address": "ea:85:91:09:ca:ea"
     },
     "hardware": {
-        "cpu_usage": 20.6,
+        "cpu_usage": 6.5,
         "cpu_count": 12,
         "ram_total_gb": 15.4,
-        "ram_used_gb": 9.82,
-        "ram_percent": 63.7,
+        "ram_used_gb": 9.04,
+        "ram_percent": 58.7,
         "disk_total_gb": 237.71,
-        "disk_used_gb": 104.81,
-        "disk_percent": 44.1,
-        "boot_time": "2026-09-22 18:16:21"
+        "disk_used_gb": 105.75,
+        "disk_percent": 44.5,
+        "boot_time": "2026-09-22 18:16:07"
     },
     "network": {
         "hostname": "DESKTOP-47719NF",
         "ip_address": "169.254.86.100",
         "mac_address": "ea:85:91:09:ca:ea",
-        "bytes_sent": 68397951,
-        "bytes_received": 2599554185
+        "bytes_sent": 35101602,
+        "bytes_received": 149027899
     }
 }
