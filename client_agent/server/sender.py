@@ -79,19 +79,6 @@ def send_software_inventory(
 ) -> list:
     """
     Send installed software inventory to the backend.
-
-    Expected backend payload:
-
-    {
-        "software": [
-            {
-                "name": "...",
-                "version": "...",
-                "publisher": "...",
-                "install_date": "..."
-            }
-        ]
-    }
     """
 
     software = data.get("software") or []
@@ -115,10 +102,18 @@ def send_software_inventory(
     return response.json()
 
 
+# ==========================================
+# Process Monitoring
+# ==========================================
+
 def send_process_inventory(
     data: dict,
     access_token: str,
 ) -> list:
+    """
+    Send currently running processes to the backend.
+    """
+
     processes = data.get("processes") or []
 
     payload = {
@@ -127,6 +122,56 @@ def send_process_inventory(
 
     response = requests.post(
         f"{API_BASE_URL}/api/processes",
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# ==========================================
+# Usage History
+# ==========================================
+
+def send_usage_sessions(
+    data: dict,
+    access_token: str,
+) -> list:
+    """
+    Send completed application usage sessions
+    to the backend.
+
+    Expected payload:
+
+    {
+        "sessions": [
+            {
+                "application_name": "chrome.exe",
+                "started_at": "...",
+                "ended_at": "...",
+                "duration_seconds": 120
+            }
+        ]
+    }
+    """
+
+    sessions = data.get("usage") or []
+
+    if not sessions:
+        return []
+
+    payload = {
+        "sessions": sessions
+    }
+
+    response = requests.post(
+        f"{API_BASE_URL}/api/usage",
         json=payload,
         headers={
             "Authorization": f"Bearer {access_token}",

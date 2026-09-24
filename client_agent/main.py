@@ -9,6 +9,7 @@ from config import (
     CLEAR_SCREEN,
     ENABLE_PROCESS_INFO,
     ENABLE_SOFTWARE_INFO,
+    ENABLE_USAGE_INFO,
     EXPORT_JSON,
     MONITOR_INTERVAL,
     SERVER_NAME,
@@ -19,17 +20,18 @@ from core.collector import collect_all_data
 from core.exporter import export_to_json
 from core.logger import logger
 
-from server.auth import get_access_token
-from server.enroll import is_enrolled
 from gui.enrollment_window import show_enrollment_window
+
+from server.auth import get_access_token
+from server.communication import AgentWebSocketClient
+from server.enroll import is_enrolled
 
 from server.sender import (
     send_metrics,
-    send_software_inventory,
     send_process_inventory,
+    send_software_inventory,
+    send_usage_sessions,
 )
-
-from server.communication import AgentWebSocketClient
 
 
 TOKEN_REFRESH_INTERVAL = 12 * 60
@@ -106,6 +108,7 @@ def authenticate():
 def display_data(data):
 
     print()
+
     print(
         "=" * 60
     )
@@ -121,6 +124,7 @@ def display_data(data):
     for section, values in data.items():
 
         print()
+
         print(
             section.upper()
         )
@@ -152,10 +156,15 @@ def display_data(data):
             )
 
 
+# ==========================================
+# Metrics Upload
+# ==========================================
+
 def upload_metrics(
     data,
     token_holder,
 ):
+
     try:
 
         send_metrics(
@@ -191,7 +200,8 @@ def upload_metrics(
                 )
 
                 logger.info(
-                    "Metrics sent after re-authentication."
+                    "Metrics sent after "
+                    "re-authentication."
                 )
 
                 return True
@@ -220,10 +230,15 @@ def upload_metrics(
         return False
 
 
+# ==========================================
+# Software Upload
+# ==========================================
+
 def upload_software(
     data,
     token_holder,
 ):
+
     if not ENABLE_SOFTWARE_INFO:
 
         return
@@ -249,7 +264,7 @@ def upload_software(
         )
 
         logger.info(
-            f"Software inventory uploaded "
+            "Software inventory uploaded "
             f"successfully. Items: {len(software)}"
         )
 
@@ -299,10 +314,15 @@ def upload_software(
         )
 
 
+# ==========================================
+# Process Upload
+# ==========================================
+
 def upload_processes(
     data,
     token_holder,
 ):
+
     if not ENABLE_PROCESS_INFO:
 
         return
@@ -328,7 +348,7 @@ def upload_processes(
         )
 
         logger.info(
-            f"Process inventory uploaded "
+            "Process inventory uploaded "
             f"successfully. Processes: {len(processes)}"
         )
 
@@ -378,6 +398,94 @@ def upload_processes(
         )
 
 
+# ==========================================
+# Usage Upload
+# ==========================================
+
+def upload_usage(
+    data,
+    token_holder,
+):
+
+    if not ENABLE_USAGE_INFO:
+
+        return
+
+    try:
+
+        sessions = data.get(
+            "usage",
+            [],
+        )
+
+        if not sessions:
+
+            logger.info(
+                "No completed usage sessions found."
+            )
+
+            return
+
+        send_usage_sessions(
+            data,
+            token_holder.token,
+        )
+
+        logger.info(
+            "Usage history uploaded "
+            f"successfully. Sessions: {len(sessions)}"
+        )
+
+    except HTTPError as e:
+
+        if (
+            e.response is not None
+            and e.response.status_code == 401
+        ):
+
+            logger.warning(
+                "Usage upload received "
+                "401. Re-authenticating."
+            )
+
+            try:
+
+                token_holder.token = authenticate()
+
+                send_usage_sessions(
+                    data,
+                    token_holder.token,
+                )
+
+                logger.info(
+                    "Usage history uploaded "
+                    "after re-authentication."
+                )
+
+            except Exception as retry_error:
+
+                logger.exception(
+                    "Usage upload retry failed: "
+                    f"{retry_error}"
+                )
+
+        else:
+
+            logger.exception(
+                f"Usage history upload failed: {e}"
+            )
+
+    except Exception as e:
+
+        logger.exception(
+            f"Usage history upload failed: {e}"
+        )
+
+
+# ==========================================
+# Main
+# ==========================================
+
 def main():
 
     logger.info(
@@ -406,6 +514,10 @@ def main():
         f"Computer ID: {computer_id}"
     )
 
+    # ------------------------------------------
+    # WebSocket
+    # ------------------------------------------
+
     ws_client = AgentWebSocketClient(
         computer_id=computer_id,
         get_token=lambda: token_holder.token,
@@ -418,6 +530,10 @@ def main():
     try:
 
         while True:
+
+            # --------------------------------------
+            # Token Refresh
+            # --------------------------------------
 
             if (
                 time.monotonic()
@@ -443,6 +559,10 @@ def main():
                         f"Token refresh failed: {e}"
                     )
 
+            # --------------------------------------
+            # Clear Console
+            # --------------------------------------
+
             if (
                 CLEAR_SCREEN
                 and SHOW_CONSOLE
@@ -455,6 +575,10 @@ def main():
 
                 os.system("cls")
 
+            # --------------------------------------
+            # Data Collection
+            # --------------------------------------
+
             logger.info(
                 "Collecting system information..."
             )
@@ -465,36 +589,45 @@ def main():
                 "Data collection completed."
             )
 
-            # ------------------------------------------
-            # SYSTEM / HARDWARE / NETWORK METRICS
-            # ------------------------------------------
+            # --------------------------------------
+            # Metrics
+            # --------------------------------------
 
             upload_metrics(
                 data,
                 token_holder,
             )
 
-            # ------------------------------------------
-            # SOFTWARE INVENTORY
-            # ------------------------------------------
+            # --------------------------------------
+            # Software
+            # --------------------------------------
 
             upload_software(
                 data,
                 token_holder,
             )
 
-            # ------------------------------------------
-            # PROCESS MONITORING
-            # ------------------------------------------
+            # --------------------------------------
+            # Processes
+            # --------------------------------------
 
             upload_processes(
                 data,
                 token_holder,
             )
 
-            # ------------------------------------------
-            # LOCAL JSON EXPORT
-            # ------------------------------------------
+            # --------------------------------------
+            # Usage
+            # --------------------------------------
+
+            upload_usage(
+                data,
+                token_holder,
+            )
+
+            # --------------------------------------
+            # JSON Export
+            # --------------------------------------
 
             if EXPORT_JSON:
 
@@ -514,9 +647,9 @@ def main():
                         f"JSON export failed: {e}"
                     )
 
-            # ------------------------------------------
-            # CONSOLE DISPLAY
-            # ------------------------------------------
+            # --------------------------------------
+            # Console
+            # --------------------------------------
 
             if SHOW_CONSOLE:
 
