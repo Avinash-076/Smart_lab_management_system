@@ -40,15 +40,27 @@ API_BASE_URL = os.getenv(
 # Monitoring
 # ------------------------------------------
 
+# Normal system metrics collection interval
 MONITOR_INTERVAL = 20
+
+# How often installed software should be
+# collected and uploaded.
+#
+# Software inventory is heavier than normal
+# CPU/RAM/disk monitoring, so we do not run
+# it every 20 seconds.
+SOFTWARE_SCAN_INTERVAL = 10 * 60
+
 
 ENABLE_SYSTEM_INFO = True
 ENABLE_HARDWARE_INFO = True
 ENABLE_NETWORK_INFO = True
 
-# Heavy operations should NOT run every 20 seconds.
-ENABLE_SOFTWARE_INFO = False
-ENABLE_PROCESS_INFO = False
+# Software inventory is now enabled.
+ENABLE_SOFTWARE_INFO = True
+
+# Process monitoring will be implemented next.
+ENABLE_PROCESS_INFO = True
 
 
 # ------------------------------------------

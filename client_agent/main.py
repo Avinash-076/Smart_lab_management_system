@@ -7,6 +7,8 @@ from requests.exceptions import HTTPError
 
 from config import (
     CLEAR_SCREEN,
+    ENABLE_PROCESS_INFO,
+    ENABLE_SOFTWARE_INFO,
     EXPORT_JSON,
     MONITOR_INTERVAL,
     SERVER_NAME,
@@ -20,7 +22,13 @@ from core.logger import logger
 from server.auth import get_access_token
 from server.enroll import is_enrolled
 from gui.enrollment_window import show_enrollment_window
-from server.sender import send_metrics
+
+from server.sender import (
+    send_metrics,
+    send_software_inventory,
+    send_process_inventory,
+)
+
 from server.communication import AgentWebSocketClient
 
 
@@ -34,27 +42,41 @@ class TokenHolder:
 
 
 def ensure_registered():
+
     if is_enrolled():
-        logger.info("Existing SLMS registration found.")
+
+        logger.info(
+            "Existing SLMS registration found."
+        )
+
         return
 
-    logger.info("No SLMS registration found.")
-    logger.info("Opening enrollment window.")
+    logger.info(
+        "No SLMS registration found."
+    )
+
+    logger.info(
+        "Opening enrollment window."
+    )
 
     show_enrollment_window()
 
     if not is_enrolled():
+
         raise RuntimeError(
             "SLMS enrollment was not completed."
         )
 
-    logger.info("Enrollment completed successfully.")
+    logger.info(
+        "Enrollment completed successfully."
+    )
+
 
 def get_computer_id():
 
     value = keyring.get_password(
         SERVER_NAME,
-        "computer_id"
+        "computer_id",
     )
 
     if value is None:
@@ -130,6 +152,232 @@ def display_data(data):
             )
 
 
+def upload_metrics(
+    data,
+    token_holder,
+):
+    try:
+
+        send_metrics(
+            data,
+            token_holder.token,
+        )
+
+        logger.info(
+            "Metrics sent successfully."
+        )
+
+        return True
+
+    except HTTPError as e:
+
+        if (
+            e.response is not None
+            and e.response.status_code == 401
+        ):
+
+            logger.warning(
+                "Access token expired. "
+                "Authenticating again."
+            )
+
+            try:
+
+                token_holder.token = authenticate()
+
+                send_metrics(
+                    data,
+                    token_holder.token,
+                )
+
+                logger.info(
+                    "Metrics sent after re-authentication."
+                )
+
+                return True
+
+            except Exception as retry_error:
+
+                logger.exception(
+                    "Metric retry failed: "
+                    f"{retry_error}"
+                )
+
+                return False
+
+        logger.exception(
+            f"Metric upload failed: {e}"
+        )
+
+        return False
+
+    except Exception as e:
+
+        logger.exception(
+            f"Metric upload failed: {e}"
+        )
+
+        return False
+
+
+def upload_software(
+    data,
+    token_holder,
+):
+    if not ENABLE_SOFTWARE_INFO:
+
+        return
+
+    try:
+
+        software = data.get(
+            "software",
+            [],
+        )
+
+        if not software:
+
+            logger.info(
+                "No software inventory found."
+            )
+
+            return
+
+        send_software_inventory(
+            data,
+            token_holder.token,
+        )
+
+        logger.info(
+            f"Software inventory uploaded "
+            f"successfully. Items: {len(software)}"
+        )
+
+    except HTTPError as e:
+
+        if (
+            e.response is not None
+            and e.response.status_code == 401
+        ):
+
+            logger.warning(
+                "Software upload received "
+                "401. Re-authenticating."
+            )
+
+            try:
+
+                token_holder.token = authenticate()
+
+                send_software_inventory(
+                    data,
+                    token_holder.token,
+                )
+
+                logger.info(
+                    "Software inventory uploaded "
+                    "after re-authentication."
+                )
+
+            except Exception as retry_error:
+
+                logger.exception(
+                    "Software upload retry failed: "
+                    f"{retry_error}"
+                )
+
+        else:
+
+            logger.exception(
+                f"Software inventory upload failed: {e}"
+            )
+
+    except Exception as e:
+
+        logger.exception(
+            f"Software inventory upload failed: {e}"
+        )
+
+
+def upload_processes(
+    data,
+    token_holder,
+):
+    if not ENABLE_PROCESS_INFO:
+
+        return
+
+    try:
+
+        processes = data.get(
+            "processes",
+            [],
+        )
+
+        if not processes:
+
+            logger.info(
+                "No running processes found."
+            )
+
+            return
+
+        send_process_inventory(
+            data,
+            token_holder.token,
+        )
+
+        logger.info(
+            f"Process inventory uploaded "
+            f"successfully. Processes: {len(processes)}"
+        )
+
+    except HTTPError as e:
+
+        if (
+            e.response is not None
+            and e.response.status_code == 401
+        ):
+
+            logger.warning(
+                "Process upload received "
+                "401. Re-authenticating."
+            )
+
+            try:
+
+                token_holder.token = authenticate()
+
+                send_process_inventory(
+                    data,
+                    token_holder.token,
+                )
+
+                logger.info(
+                    "Process inventory uploaded "
+                    "after re-authentication."
+                )
+
+            except Exception as retry_error:
+
+                logger.exception(
+                    "Process upload retry failed: "
+                    f"{retry_error}"
+                )
+
+        else:
+
+            logger.exception(
+                f"Process inventory upload failed: {e}"
+            )
+
+    except Exception as e:
+
+        logger.exception(
+            f"Process inventory upload failed: {e}"
+        )
+
+
 def main():
 
     logger.info(
@@ -183,9 +431,7 @@ def main():
                         "Refreshing access token..."
                     )
 
-                    token_holder.token = (
-                        authenticate()
-                    )
+                    token_holder.token = authenticate()
 
                     token_acquired_at = (
                         time.monotonic()
@@ -203,7 +449,7 @@ def main():
                 and not getattr(
                     sys,
                     "frozen",
-                    False
+                    False,
                 )
             ):
 
@@ -219,66 +465,36 @@ def main():
                 "Data collection completed."
             )
 
-            try:
+            # ------------------------------------------
+            # SYSTEM / HARDWARE / NETWORK METRICS
+            # ------------------------------------------
 
-                send_metrics(
-                    data,
-                    token_holder.token
-                )
+            upload_metrics(
+                data,
+                token_holder,
+            )
 
-                logger.info(
-                    "Metrics sent successfully."
-                )
+            # ------------------------------------------
+            # SOFTWARE INVENTORY
+            # ------------------------------------------
 
-            except HTTPError as e:
+            upload_software(
+                data,
+                token_holder,
+            )
 
-                if (
-                    e.response is not None
-                    and e.response.status_code == 401
-                ):
+            # ------------------------------------------
+            # PROCESS MONITORING
+            # ------------------------------------------
 
-                    logger.warning(
-                        "Access token expired. "
-                        "Authenticating again."
-                    )
+            upload_processes(
+                data,
+                token_holder,
+            )
 
-                    try:
-
-                        token_holder.token = (
-                            authenticate()
-                        )
-
-                        token_acquired_at = (
-                            time.monotonic()
-                        )
-
-                        send_metrics(
-                            data,
-                            token_holder.token
-                        )
-
-                        logger.info(
-                            "Metrics sent after re-authentication."
-                        )
-
-                    except Exception as retry_error:
-
-                        logger.exception(
-                            "Retry failed: "
-                            f"{retry_error}"
-                        )
-
-                else:
-
-                    logger.exception(
-                        f"Metric upload failed: {e}"
-                    )
-
-            except Exception as e:
-
-                logger.exception(
-                    f"Metric upload failed: {e}"
-                )
+            # ------------------------------------------
+            # LOCAL JSON EXPORT
+            # ------------------------------------------
 
             if EXPORT_JSON:
 
@@ -298,11 +514,16 @@ def main():
                         f"JSON export failed: {e}"
                     )
 
+            # ------------------------------------------
+            # CONSOLE DISPLAY
+            # ------------------------------------------
+
             if SHOW_CONSOLE:
 
                 display_data(data)
 
                 print()
+
                 print(
                     f"Next scan in "
                     f"{MONITOR_INTERVAL} seconds..."

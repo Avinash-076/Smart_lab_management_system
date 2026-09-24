@@ -1,68 +1,81 @@
 import psutil
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def get_running_processes():
-
     processes = []
-    seen = set()
 
-    # Prime CPU measurement
-    for proc in psutil.process_iter():
+    for process in psutil.process_iter(
+        [
+            "pid",
+            "name",
+            "username",
+            "cpu_percent",
+            "memory_percent",
+            "status",
+            "create_time",
+        ]
+    ):
         try:
-            proc.cpu_percent(None)
-        except Exception:
-            pass
+            info = process.info
 
-    for proc in psutil.process_iter([
-        "pid",
-        "name",
-        "username",
-        "status",
-        "create_time"
-    ]):
+            pid = info.get("pid")
+            name = info.get("name")
 
-        try:
-
-            name = proc.info["name"]
-
-            if not name:
+            if pid is None or not name:
                 continue
 
-            if name in seen:
-                continue
+            username = info.get("username")
 
-            seen.add(name)
+            cpu_percent = info.get("cpu_percent") or 0
+            memory_percent = info.get("memory_percent") or 0
 
-            try:
+            status = info.get("status")
+
+            create_time = info.get("create_time")
+
+            start_time = None
+
+            if create_time:
                 start_time = datetime.fromtimestamp(
-                    proc.info["create_time"]
-                ).strftime("%Y-%m-%d %H:%M:%S")
-            except Exception:
-                start_time = "Unknown"
+                    create_time,
+                    tz=timezone.utc,
+                ).isoformat()
 
-            process = {
-                "pid": proc.info["pid"],
-                "name": name,
-                "user": proc.info["username"],
-                "cpu_percent": proc.cpu_percent(interval=None),
-                "memory_percent": round(proc.memory_percent(), 2),
-                "status": proc.info["status"],
-                "start_time": start_time
-            }
-
-            processes.append(process)
+            processes.append(
+                {
+                    "pid": pid,
+                    "name": name,
+                    "user": username,
+                    "cpu_percent": max(
+                        0,
+                        float(cpu_percent),
+                    ),
+                    "memory_percent": max(
+                        0,
+                        float(memory_percent),
+                    ),
+                    "status": status,
+                    "start_time": start_time,
+                }
+            )
 
         except (
             psutil.NoSuchProcess,
             psutil.AccessDenied,
-            psutil.ZombieProcess
+            psutil.ZombieProcess,
         ):
             continue
 
+        except Exception:
+            continue
+
     processes.sort(
-        key=lambda x: x["cpu_percent"],
-        reverse=True
+        key=lambda item: (
+            item["cpu_percent"],
+            item["memory_percent"],
+        ),
+        reverse=True,
     )
 
     return processes

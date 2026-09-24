@@ -3,6 +3,10 @@ import requests
 from config import API_BASE_URL
 
 
+# ==========================================
+# Metrics
+# ==========================================
+
 def build_metric_payload(data: dict) -> dict:
     """
     Convert collected client data into the payload
@@ -44,6 +48,9 @@ def send_metrics(
     data: dict,
     access_token: str
 ) -> dict:
+    """
+    Send current system metrics to the backend.
+    """
 
     payload = build_metric_payload(data)
 
@@ -55,6 +62,77 @@ def send_metrics(
             "Content-Type": "application/json",
         },
         timeout=10,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+# ==========================================
+# Software Inventory
+# ==========================================
+
+def send_software_inventory(
+    data: dict,
+    access_token: str
+) -> list:
+    """
+    Send installed software inventory to the backend.
+
+    Expected backend payload:
+
+    {
+        "software": [
+            {
+                "name": "...",
+                "version": "...",
+                "publisher": "...",
+                "install_date": "..."
+            }
+        ]
+    }
+    """
+
+    software = data.get("software") or []
+
+    payload = {
+        "software": software
+    }
+
+    response = requests.post(
+        f"{API_BASE_URL}/api/software",
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        timeout=30,
+    )
+
+    response.raise_for_status()
+
+    return response.json()
+
+
+def send_process_inventory(
+    data: dict,
+    access_token: str,
+) -> list:
+    processes = data.get("processes") or []
+
+    payload = {
+        "processes": processes
+    }
+
+    response = requests.post(
+        f"{API_BASE_URL}/api/processes",
+        json=payload,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+        },
+        timeout=30,
     )
 
     response.raise_for_status()

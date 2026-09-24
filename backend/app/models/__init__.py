@@ -14,6 +14,8 @@ from app.models.usage_session import UsageSession
 from app.models.issue import Issue
 from app.models.maintenance import MaintenanceRecord
 from app.models.software import Software
+from app.models.process import Process
+
 
 __all__ = [
     "Computer",
@@ -32,4 +34,5 @@ __all__ = [
     "Issue",
     "MaintenanceRecord",
     "Software",
+    "Process",
 ]
