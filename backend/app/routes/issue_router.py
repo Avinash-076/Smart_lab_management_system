@@ -203,6 +203,12 @@ def create_agent_issue(
             issue_data=create_data,
         )
 
+    except IntegrityError:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Failed to create agent issue",
+        )
+
     except SQLAlchemyError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

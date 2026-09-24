@@ -8,7 +8,6 @@ from app.models.issue import (
     Issue,
     IssueSeverity,
     IssueStatus,
-    IssueSource,
 )
 from app.schemas.issue_schema import (
     IssueCreate,
@@ -41,6 +40,11 @@ def get_issues(
         500,
     )
 
+    offset = max(
+        offset,
+        0,
+    )
+
     query = select(Issue)
 
     if computer_id is not None:
@@ -60,7 +64,9 @@ def get_issues(
 
     query = (
         query
-        .order_by(Issue.created_at.desc())
+        .order_by(
+            Issue.created_at.desc()
+        )
         .limit(limit)
         .offset(offset)
     )
@@ -137,6 +143,10 @@ def update_issue(
 
         issue.resolved_at = None
         issue.resolved_by = None
+
+        # Resolution information no longer applies
+        # after the issue is reopened.
+        issue.resolution_notes = None
 
     issue.updated_at = datetime.now(
         timezone.utc

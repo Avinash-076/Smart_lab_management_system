@@ -38,18 +38,21 @@ def get_maintenance_records(
         500,
     )
 
+    offset = max(
+        offset,
+        0,
+    )
+
     query = select(MaintenanceRecord)
 
     if computer_id is not None:
         query = query.where(
-            MaintenanceRecord.computer_id
-            == computer_id
+            MaintenanceRecord.computer_id == computer_id
         )
 
     if maintenance_status is not None:
         query = query.where(
-            MaintenanceRecord.status
-            == maintenance_status
+            MaintenanceRecord.status == maintenance_status
         )
 
     query = (
@@ -134,22 +137,30 @@ def update_maintenance(
 
     now = datetime.now(timezone.utc)
 
-    if (
-        record.status
-        == MaintenanceStatus.in_progress
-        and record.started_at is None
-    ):
-        record.started_at = now
+    # Keep timestamps consistent with maintenance status.
+    if record.status == MaintenanceStatus.scheduled:
+        record.started_at = None
+        record.completed_at = None
 
-    if (
-        record.status
-        == MaintenanceStatus.completed
-        and record.completed_at is None
-    ):
-        record.completed_at = now
+    elif record.status == MaintenanceStatus.in_progress:
 
         if record.started_at is None:
             record.started_at = now
+
+        record.completed_at = None
+
+    elif record.status == MaintenanceStatus.completed:
+
+        if record.started_at is None:
+            record.started_at = now
+
+        if record.completed_at is None:
+            record.completed_at = now
+
+    elif record.status == MaintenanceStatus.cancelled:
+        # A cancelled maintenance task should not appear
+        # as completed.
+        record.completed_at = None
 
     record.updated_at = now
 

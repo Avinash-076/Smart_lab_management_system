@@ -16,24 +16,83 @@ class ConnectionManager:
     ) -> None:
         await websocket.accept()
 
+        old_connection = self.client_connections.get(
+            computer_id
+        )
+
+        # Replace an older connection for the same computer.
+        if (
+            old_connection is not None
+            and old_connection is not websocket
+        ):
+            try:
+                await old_connection.close(
+                    code=4002,
+                    reason="Replaced by a new connection",
+                )
+            except Exception:
+                pass
+
         self.client_connections[computer_id] = websocket
-        self.client_last_seen[computer_id] = datetime.now(
-            timezone.utc
+
+        self.client_last_seen[computer_id] = (
+            datetime.now(timezone.utc)
         )
 
     def touch_client(
         self,
         computer_id: int,
+        websocket: WebSocket | None = None,
     ) -> None:
-        if computer_id in self.client_connections:
-            self.client_last_seen[computer_id] = datetime.now(
-                timezone.utc
-            )
+        current_connection = (
+            self.client_connections.get(computer_id)
+        )
+
+        if current_connection is None:
+            return
+
+        # If a specific WebSocket was supplied, make sure
+        # it is still the active connection.
+        if (
+            websocket is not None
+            and current_connection is not websocket
+        ):
+            return
+
+        self.client_last_seen[computer_id] = (
+            datetime.now(timezone.utc)
+        )
+
+    def is_active_connection(
+        self,
+        computer_id: int,
+        websocket: WebSocket,
+    ) -> bool:
+        return (
+            self.client_connections.get(computer_id)
+            is websocket
+        )
 
     def disconnect_client(
         self,
         computer_id: int,
-    ) -> None:
+        websocket: WebSocket | None = None,
+    ) -> bool:
+        current_connection = (
+            self.client_connections.get(computer_id)
+        )
+
+        if current_connection is None:
+            return False
+
+        # Do not allow an old WebSocket to disconnect
+        # a newer connection.
+        if (
+            websocket is not None
+            and current_connection is not websocket
+        ):
+            return False
+
         self.client_connections.pop(
             computer_id,
             None,
@@ -44,15 +103,18 @@ class ConnectionManager:
             None,
         )
 
+        return True
+
     async def connect_dashboard(
         self,
         websocket: WebSocket,
     ) -> None:
         await websocket.accept()
 
-        self.dashboard_connections.append(
-            websocket
-        )
+        if websocket not in self.dashboard_connections:
+            self.dashboard_connections.append(
+                websocket
+            )
 
     def disconnect_dashboard(
         self,
@@ -67,11 +129,15 @@ class ConnectionManager:
         self,
         message: dict,
     ) -> None:
-        dead_connections = []
+        dead_connections: list[WebSocket] = []
 
-        for connection in self.dashboard_connections:
+        for connection in list(
+            self.dashboard_connections
+        ):
             try:
-                await connection.send_json(message)
+                await connection.send_json(
+                    message
+                )
 
             except Exception:
                 dead_connections.append(
@@ -103,10 +169,9 @@ class ConnectionManager:
             return True
 
         except Exception:
-            # The connection exists in the manager,
-            # but the actual WebSocket is no longer usable.
             self.disconnect_client(
-                computer_id
+                computer_id,
+                connection,
             )
 
             return False

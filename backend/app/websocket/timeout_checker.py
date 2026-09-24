@@ -12,63 +12,95 @@ CHECK_INTERVAL_SECONDS = 20
 
 async def run_offline_timeout_checker():
     while True:
-        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
+        await asyncio.sleep(
+            CHECK_INTERVAL_SECONDS
+        )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(
+            timezone.utc
+        )
 
         stale_computers = [
-            (computer_id, last_seen)
+            (
+                computer_id,
+                last_seen,
+            )
             for computer_id, last_seen
-            in list(manager.client_last_seen.items())
+            in list(
+                manager.client_last_seen.items()
+            )
             if (
                 now - last_seen
-            ).total_seconds() > OFFLINE_TIMEOUT_SECONDS
+            ).total_seconds()
+            > OFFLINE_TIMEOUT_SECONDS
         ]
 
         for computer_id, last_seen in stale_computers:
 
-            # Save the WebSocket BEFORE removing the client
-            # from the connection manager.
-            websocket = manager.client_connections.get(
-                computer_id
+            websocket = (
+                manager.client_connections.get(
+                    computer_id
+                )
             )
+
+            # The connection may have refreshed while
+            # this list was being processed.
+            current_last_seen = (
+                manager.client_last_seen.get(
+                    computer_id
+                )
+            )
+
+            if (
+                current_last_seen is None
+                or current_last_seen != last_seen
+            ):
+                continue
 
             db = SessionLocal()
 
             try:
-                computer = computer_service.get_computer_by_id(
-                    db,
-                    computer_id,
+                computer = (
+                    computer_service.get_computer_by_id(
+                        db,
+                        computer_id,
+                    )
                 )
 
-                if computer is not None:
-                    await computer_service.set_offline(
-                        db,
-                        computer,
+                if computer is None:
+                    manager.disconnect_client(
+                        computer_id,
+                        websocket,
                     )
+                    continue
 
-                    await manager.broadcast_to_dashboards(
-                        {
-                            "type": "status_update",
-                            "computer_id": computer_id,
-                            "status": "offline",
-                        }
-                    )
+                await computer_service.set_offline(
+                    db,
+                    computer,
+                )
+
+                await manager.broadcast_to_dashboards(
+                    {
+                        "type": "status_update",
+                        "computer_id": computer_id,
+                        "status": "offline",
+                    }
+                )
 
             except Exception:
-                # Keep the background checker alive even if
-                # one computer causes a database error.
+                # Keep the background checker alive.
                 pass
 
             finally:
                 db.close()
 
-            # Remove the stale client from the manager.
+            # Remove only the connection that was found
+            # stale. A newer connection must remain online.
             manager.disconnect_client(
-                computer_id
+                computer_id,
+                websocket,
             )
 
-            # Close the stale WebSocket if it still exists.
             if websocket is not None:
                 try:
                     await websocket.close(

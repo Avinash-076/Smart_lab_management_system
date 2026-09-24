@@ -1,12 +1,23 @@
-from typing import TYPE_CHECKING
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String 
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import (
+    DateTime,
+    ForeignKey,
+    String,
+)
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from app.database import Base
+
+
 if TYPE_CHECKING:
     from app.models.computer import Computer
+
 
 class ClientStatus(Base):
     __tablename__ = "client_status"
@@ -16,7 +27,10 @@ class ClientStatus(Base):
     )
 
     computer_id: Mapped[int] = mapped_column(
-        ForeignKey("computers.id"),
+        ForeignKey(
+            "computers.id",
+            ondelete="CASCADE",
+        ),
         unique=True,
         nullable=False,
     )
@@ -24,12 +38,12 @@ class ClientStatus(Base):
     status: Mapped[str] = mapped_column(
         String(20),
         default="offline",
-        nullable=False
+        nullable=False,
     )
 
     last_seen: Mapped[datetime | None] = mapped_column(
-        DateTime,
-        nullable=True
+        DateTime(timezone=True),
+        nullable=True,
     )
 
     computer: Mapped["Computer"] = relationship(

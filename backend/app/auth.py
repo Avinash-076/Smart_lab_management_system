@@ -112,9 +112,6 @@ def create_refresh_token(data: dict) -> str:
 # AGENT ACCESS TOKEN
 # ============================================================
 
-AGENT_TOKEN_EXPIRE_MINUTES = 15
-
-
 def create_agent_access_token(data: dict) -> str:
 
     to_encode = data.copy()
@@ -122,7 +119,7 @@ def create_agent_access_token(data: dict) -> str:
     expire = (
         datetime.now(timezone.utc)
         + timedelta(
-            minutes=AGENT_TOKEN_EXPIRE_MINUTES
+            minutes=settings.agent_token_expire_minutes
         )
     )
 

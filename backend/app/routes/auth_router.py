@@ -42,10 +42,6 @@ router = APIRouter(
 )
 
 
-# ============================================================
-# LOGIN
-# ============================================================
-
 @router.post(
     "/login",
     response_model=TokenResponse,
@@ -56,14 +52,12 @@ def login(
     request: Request,
 ):
 
+    username = credentials.username.strip()
+
     user = auth_service.get_user_by_username(
         db,
-        credentials.username,
+        username,
     )
-
-    # --------------------------------------------------------
-    # Invalid credentials
-    # --------------------------------------------------------
 
     if (
         user is None
@@ -91,10 +85,6 @@ def login(
                 "WWW-Authenticate": "Bearer"
             },
         )
-
-    # --------------------------------------------------------
-    # Successful login
-    # --------------------------------------------------------
 
     audit_service.log_action(
         db=db,
@@ -126,25 +116,18 @@ def login(
     )
 
 
-# ============================================================
-# REFRESH ACCESS TOKEN
-# ============================================================
-
 @router.post(
     "/refresh",
     response_model=AccessTokenResponse,
 )
 def refresh_access_token(
     payload: RefreshRequest,
+    db: DbSession,
 ):
 
     decoded = decode_token(
         payload.refresh_token
     )
-
-    # --------------------------------------------------------
-    # Only refresh tokens are accepted.
-    # --------------------------------------------------------
 
     if decoded.get("type") != "refresh":
 
@@ -156,9 +139,7 @@ def refresh_access_token(
             },
         )
 
-    user_id = decoded.get(
-        "sub"
-    )
+    user_id = decoded.get("sub")
 
     if user_id is None:
 
@@ -170,9 +151,38 @@ def refresh_access_token(
             },
         )
 
+    try:
+        user_id = int(user_id)
+
+    except (TypeError, ValueError):
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user identifier",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    # Verify that the user still exists.
+    user = auth_service.get_user_by_id(
+        db,
+        user_id,
+    )
+
+    if user is None:
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
     new_access_token = create_access_token(
         {
-            "sub": str(user_id)
+            "sub": str(user.id)
         }
     )
 
