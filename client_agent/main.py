@@ -3,10 +3,12 @@ import sys
 import time
 
 import keyring
+
 from requests.exceptions import HTTPError
 
 from config import (
     CLEAR_SCREEN,
+    ENABLE_ISSUE_REPORTING,
     ENABLE_PROCESS_INFO,
     ENABLE_SOFTWARE_INFO,
     ENABLE_USAGE_INFO,
@@ -20,13 +22,18 @@ from core.collector import collect_all_data
 from core.exporter import export_to_json
 from core.logger import logger
 
-from gui.enrollment_window import show_enrollment_window
+from gui.enrollment_window import (
+    show_enrollment_window,
+)
 
 from server.auth import get_access_token
-from server.communication import AgentWebSocketClient
+from server.communication import (
+    AgentWebSocketClient,
+)
 from server.enroll import is_enrolled
 
 from server.sender import (
+    send_issue,
     send_metrics,
     send_process_inventory,
     send_software_inventory,
@@ -39,9 +46,16 @@ TOKEN_REFRESH_INTERVAL = 12 * 60
 
 class TokenHolder:
 
-    def __init__(self, token):
+    def __init__(
+        self,
+        token,
+    ):
         self.token = token
 
+
+# ==========================================
+# Registration
+# ==========================================
 
 def ensure_registered():
 
@@ -74,6 +88,10 @@ def ensure_registered():
     )
 
 
+# ==========================================
+# Computer ID
+# ==========================================
+
 def get_computer_id():
 
     value = keyring.get_password(
@@ -84,11 +102,16 @@ def get_computer_id():
     if value is None:
 
         raise RuntimeError(
-            "Computer ID not found in Windows Keyring."
+            "Computer ID not found in "
+            "Windows Keyring."
         )
 
     return int(value)
 
+
+# ==========================================
+# Authentication
+# ==========================================
 
 def authenticate():
 
@@ -105,7 +128,13 @@ def authenticate():
     return token
 
 
-def display_data(data):
+# ==========================================
+# Console Display
+# ==========================================
+
+def display_data(
+    data,
+):
 
     print()
 
@@ -141,7 +170,10 @@ def display_data(data):
 
             continue
 
-        if isinstance(values, dict):
+        if isinstance(
+            values,
+            dict,
+        ):
 
             for key, value in values.items():
 
@@ -149,7 +181,10 @@ def display_data(data):
                     f"{key:20}: {value}"
                 )
 
-        elif isinstance(values, list):
+        elif isinstance(
+            values,
+            list,
+        ):
 
             print(
                 f"Total items: {len(values)}"
@@ -192,7 +227,9 @@ def upload_metrics(
 
             try:
 
-                token_holder.token = authenticate()
+                token_holder.token = (
+                    authenticate()
+                )
 
                 send_metrics(
                     data,
@@ -265,7 +302,8 @@ def upload_software(
 
         logger.info(
             "Software inventory uploaded "
-            f"successfully. Items: {len(software)}"
+            f"successfully. "
+            f"Items: {len(software)}"
         )
 
     except HTTPError as e:
@@ -282,7 +320,9 @@ def upload_software(
 
             try:
 
-                token_holder.token = authenticate()
+                token_holder.token = (
+                    authenticate()
+                )
 
                 send_software_inventory(
                     data,
@@ -349,7 +389,8 @@ def upload_processes(
 
         logger.info(
             "Process inventory uploaded "
-            f"successfully. Processes: {len(processes)}"
+            f"successfully. "
+            f"Processes: {len(processes)}"
         )
 
     except HTTPError as e:
@@ -366,7 +407,9 @@ def upload_processes(
 
             try:
 
-                token_holder.token = authenticate()
+                token_holder.token = (
+                    authenticate()
+                )
 
                 send_process_inventory(
                     data,
@@ -433,7 +476,8 @@ def upload_usage(
 
         logger.info(
             "Usage history uploaded "
-            f"successfully. Sessions: {len(sessions)}"
+            f"successfully. "
+            f"Sessions: {len(sessions)}"
         )
 
     except HTTPError as e:
@@ -450,7 +494,9 @@ def upload_usage(
 
             try:
 
-                token_holder.token = authenticate()
+                token_holder.token = (
+                    authenticate()
+                )
 
                 send_usage_sessions(
                     data,
@@ -480,6 +526,105 @@ def upload_usage(
         logger.exception(
             f"Usage history upload failed: {e}"
         )
+
+
+# ==========================================
+# Issue Reporting
+# ==========================================
+
+def upload_issues(
+    data,
+    token_holder,
+):
+
+    if not ENABLE_ISSUE_REPORTING:
+
+        return
+
+    issues = data.get(
+        "issues",
+        [],
+    )
+
+    if not issues:
+
+        logger.info(
+            "No new issues detected."
+        )
+
+        return
+
+    for issue in issues:
+
+        try:
+
+            result = send_issue(
+                issue,
+                token_holder.token,
+            )
+
+            logger.warning(
+                "Issue reported successfully: "
+                f"{issue['title']}"
+            )
+
+            logger.info(
+                f"Backend issue ID: "
+                f"{result.get('id')}"
+            )
+
+        except HTTPError as e:
+
+            if (
+                e.response is not None
+                and e.response.status_code == 401
+            ):
+
+                logger.warning(
+                    "Issue upload received "
+                    "401. Re-authenticating."
+                )
+
+                try:
+
+                    token_holder.token = (
+                        authenticate()
+                    )
+
+                    result = send_issue(
+                        issue,
+                        token_holder.token,
+                    )
+
+                    logger.warning(
+                        "Issue reported after "
+                        "re-authentication: "
+                        f"{issue['title']}"
+                    )
+
+                    logger.info(
+                        f"Backend issue ID: "
+                        f"{result.get('id')}"
+                    )
+
+                except Exception as retry_error:
+
+                    logger.exception(
+                        "Issue retry failed: "
+                        f"{retry_error}"
+                    )
+
+            else:
+
+                logger.exception(
+                    f"Issue upload failed: {e}"
+                )
+
+        except Exception as e:
+
+            logger.exception(
+                f"Issue upload failed: {e}"
+            )
 
 
 # ==========================================
@@ -520,12 +665,15 @@ def main():
 
     ws_client = AgentWebSocketClient(
         computer_id=computer_id,
-        get_token=lambda: token_holder.token,
+        get_token=lambda:
+            token_holder.token,
     )
 
     ws_client.start()
 
-    token_acquired_at = time.monotonic()
+    token_acquired_at = (
+        time.monotonic()
+    )
 
     try:
 
@@ -547,7 +695,9 @@ def main():
                         "Refreshing access token..."
                     )
 
-                    token_holder.token = authenticate()
+                    token_holder.token = (
+                        authenticate()
+                    )
 
                     token_acquired_at = (
                         time.monotonic()
@@ -573,7 +723,9 @@ def main():
                 )
             ):
 
-                os.system("cls")
+                os.system(
+                    "cls"
+                )
 
             # --------------------------------------
             # Data Collection
@@ -626,6 +778,15 @@ def main():
             )
 
             # --------------------------------------
+            # Issues
+            # --------------------------------------
+
+            upload_issues(
+                data,
+                token_holder,
+            )
+
+            # --------------------------------------
             # JSON Export
             # --------------------------------------
 
@@ -653,7 +814,9 @@ def main():
 
             if SHOW_CONSOLE:
 
-                display_data(data)
+                display_data(
+                    data
+                )
 
                 print()
 
