@@ -118,10 +118,19 @@ async def client_websocket(
             ):
                 break
 
-            manager.touch_client(
+            # Update in-memory heartbeat timestamp.
+            last_seen = manager.touch_client(
                 computer_id,
                 websocket,
             )
+
+            # Also persist heartbeat timestamp in SQLite.
+            if last_seen is not None:
+                computer_service.record_last_seen(
+                    db,
+                    computer,
+                    last_seen,
+                )
 
             if message == "ping":
                 continue

@@ -6,7 +6,12 @@ from app.services import computer_service
 from app.websocket.connection_manager import manager
 
 
+# The client sends a heartbeat every 20 seconds.
+# We allow more than three missed heartbeats before
+# considering the client offline.
 OFFLINE_TIMEOUT_SECONDS = 75
+
+# Check for stale connections every 20 seconds.
 CHECK_INTERVAL_SECONDS = 20
 
 
@@ -16,9 +21,7 @@ async def run_offline_timeout_checker():
             CHECK_INTERVAL_SECONDS
         )
 
-        now = datetime.now(
-            timezone.utc
-        )
+        now = datetime.now(timezone.utc)
 
         stale_computers = [
             (
@@ -88,14 +91,17 @@ async def run_offline_timeout_checker():
                 )
 
             except Exception:
-                # Keep the background checker alive.
+                # Keep the background checker alive even
+                # if one computer causes a database error.
                 pass
 
             finally:
                 db.close()
 
-            # Remove only the connection that was found
-            # stale. A newer connection must remain online.
+            # Remove only the stale connection.
+            #
+            # If a newer connection has appeared meanwhile,
+            # disconnect_client() will refuse to remove it.
             manager.disconnect_client(
                 computer_id,
                 websocket,

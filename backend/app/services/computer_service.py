@@ -222,7 +222,9 @@ def record_heartbeat(
         )
 
     computer.status_info.status = "online"
-    computer.status_info.last_seen = datetime.now(timezone.utc)
+    computer.status_info.last_seen = datetime.now(
+        timezone.utc
+    )
 
     try:
         db.commit()
@@ -246,7 +248,33 @@ def set_online(
         )
 
     computer.status_info.status = "online"
-    computer.status_info.last_seen = datetime.now(timezone.utc)
+    computer.status_info.last_seen = datetime.now(
+        timezone.utc
+    )
+
+    try:
+        db.commit()
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+
+def record_last_seen(
+    db: Session,
+    computer: Computer,
+    last_seen: datetime | None = None,
+) -> None:
+    if computer.status_info is None:
+        computer.status_info = ClientStatus(
+            computer_id=computer.id
+        )
+
+    computer.status_info.status = "online"
+    computer.status_info.last_seen = (
+        last_seen
+        or datetime.now(timezone.utc)
+    )
 
     try:
         db.commit()
@@ -262,6 +290,10 @@ async def set_offline(
 ) -> None:
 
     if computer.status_info is None:
+        return
+
+    # Avoid unnecessary duplicate offline notifications.
+    if computer.status_info.status == "offline":
         return
 
     computer.status_info.status = "offline"
