@@ -1,7 +1,7 @@
 # Phase 0 Baseline Report: SLMS Client Agent Hardening
 
 ## Overview
-This document establishes the verified architectural baseline for the Smart Lab Management System (SLMS) Client Agent. Every component, flow, and identified problem from A-01 through K-06 has been verified by direct static analysis of the client agent and backend source code, execution diagnostics, and configuration inspection.
+This document establishes the verified architectural baseline for the Smart Lab Management System (SLMS) Client Agent. Every component, flow, and identified problem from A-01 through K-06 has been verified by direct inspection of the client agent and backend source code, execution diagnostics, and configuration inspection.
 
 ---
 
@@ -43,11 +43,11 @@ The client agent is currently a standalone desktop Python script designed to mon
 +-------------------------------------------------------------------------------+
 ```
 
-### Architectural Deficiencies Identified
-1. **Monolithic Procedural Loop**: `main.py` is responsible for enrollment UI launching, token lifecycle, sequential data collection, 5 sequential REST network calls, uncoordinated WebSocket instantiation, JSON file dumping, and terminal console printing.
+### Architectural Characteristics Identified
+1. **Monolithic Procedural Loop**: `main.py` handles enrollment UI launching, token lifecycle, sequential data collection, 5 sequential REST network calls, uncoordinated WebSocket instantiation, JSON file dumping, and terminal console printing.
 2. **Absence of Service Layer**: The agent executes as a standard interactive user process relying on `%APPDATA%\...\Startup`. If no student logs into the Windows workstation, the agent does not run.
 3. **Absence of Resilient Outbox**: All REST network transmissions are immediate and synchronous in-memory attempts. Any network interruption, transient backend error (5xx), or computer sleep causes immediate telemetry and issue data loss.
-4. **Unthrottled Uploads**: Software inventory (up to 2,000 items) and running process snapshots (hundreds of processes) are transmitted every 20 seconds, causing full database table deletes and inserts on SQLite for every cycle across 40 clients.
+4. **Unthrottled Uploads**: Software inventory (up to 2,000 items) and running process snapshots (hundreds of processes) are transmitted every 20 seconds, causing full database table deletes and inserts on SQLite for every cycle.
 
 ---
 
@@ -78,7 +78,7 @@ The client agent is currently a standalone desktop Python script designed to mon
    - Backend validates enrollment key in database, binds/creates `Computer` and `AgentCredential`, generates a random `client_secret` (SHA-256 hashed in database), and returns:
      `{"computer_id": int, "agent_id": str, "client_secret": str}`.
    - Client stores `agent_id`, `client_secret`, and `computer_id` in Windows Credential Locker using the Python `keyring` library under service name `"SLMS"`.
-   - **Flaw**: The `server_url` parameter is **not stored**. Subsequent calls fall back to `API_BASE_URL` in `config.py`.
+   - **Gap**: The `server_url` parameter is **not persisted**. Subsequent calls fall back to `API_BASE_URL` in `config.py`.
 
 2. **Runtime Authentication Phase**:
    - `server/auth.py::get_access_token()` reads `agent_id` and `client_secret` from `keyring`.
@@ -109,11 +109,6 @@ The client agent is currently a standalone desktop Python script designed to mon
        └── If present ──> Proceed to Runtime Authentication
 ```
 
-### Critical Gaps in Enrollment
-- Server URL is not persisted; agent relies on local environment or config default.
-- No trust binding or TLS certificate pinning; any rogue server URL could be entered.
-- Requires interactive desktop session (Tkinter dialog); fails completely in non-interactive Session 0 Windows Service mode.
-
 ---
 
 ## REST Communication
@@ -131,12 +126,6 @@ All REST communication is handled via `requests` in `client_agent/server/sender.
 | `/api/issues/agent` | `POST` | `{"title": str, "description": str, "severity": str}` | 15s | `sender.py::send_issue` | `issue_service.py` |
 | `/api/commands/{id}/result`| `POST` | `{"success": bool, "message": str}` | 10s | `communication.py::_send_command_result`| `command_service.py` |
 
-### Critical Flaws in REST Flow
-- **No Durable Outbox**: If any call fails, payload is dropped or retry fails permanently.
-- **Silent Metric Corruption**: If hardware collector fails, `build_metric_payload` substitutes `0` for CPU/RAM/Disk.
-- **Massive Inefficiency**: Full process list and unchanged software lists uploaded every 20 seconds.
-- **Lack of Idempotency**: `/api/usage` creates duplicate records if network drops before HTTP response is received.
-
 ---
 
 ## WebSocket Communication
@@ -144,18 +133,13 @@ All REST communication is handled via `requests` in `client_agent/server/sender.
 Handled by `AgentWebSocketClient` in `client_agent/server/communication.py` using `websocket-client` (`websocket.WebSocketApp`):
 
 - **Target URL**: `{WS_BASE_URL}/{computer_id}?token={token}`
-- **Security Vulnerability**: JWT token exposed as a URL query parameter (`?token=...`).
+- **Security & Contract Finding**: The JWT token is currently passed as a URL query parameter (`?token=...`). Backend `websocket_router.py` explicitly declares `token: str = Query(...)`. Removing the query parameter client-side only will break WebSocket connection. Migration requires coordinated backend support for header-based auth (`Authorization: Bearer <token>`) with backward-compatible query parameter fallback.
 - **Heartbeat**: Background thread sends text `"ping"` every 20 seconds.
 - **Backend Expectation**: `backend/app/websocket/timeout_checker.py` expects heartbeat within 75 seconds; marks computer offline if missing.
 - **Command Handling**:
   - Receives JSON: `{"type": "command", "command_id": int, "command_type": str, "payload": str}`.
-  - Passes to `server/command_handler.py::execute_command(command_type, payload)`.
   - Allowed commands: `message`, `lock`, `restart`, `shutdown`.
   - Dispatches result via HTTP `POST /api/commands/{command_id}/result`.
-- **Bugs**:
-  - Reconnect exponential backoff delay is never reset upon successful connection.
-  - Interactive `MessageBoxW` used for `"message"` command (incompatible with Session 0 services).
-  - Command execution result is not durable; lost if HTTP POST fails.
 
 ---
 
@@ -172,28 +156,24 @@ Executed synchronously inside `main.py::main()` every 20 seconds:
    - `modules/network.py`: Finds first non-127 IP, `uuid.getnode()` MAC, cumulative bytes sent/recv.
    - `modules/issues.py`: Evaluates RAM > 85%, Disk > 90%. Emits new issues.
 2. **Sequential Uploads**:
-   - `upload_metrics()`
-   - `upload_software()` (uploads cached software every 20s regardless of changes!)
-   - `upload_processes()` (uploads full process table every 20s!)
-   - `upload_usage()`
-   - `upload_issues()`
+   - `upload_metrics()`, `upload_software()`, `upload_processes()`, `upload_usage()`, `upload_issues()`.
 3. **Telemetry Dump**:
    - `core/exporter.py`: Non-atomic file dump to `output/client_data.json` if `EXPORT_JSON=True`.
 4. **Sleep**:
-   - `time.sleep(20)` (actual loop cadence = 20s + ~1.5s execution time).
+   - `time.sleep(20)`.
 
 ---
 
-## Local Storage
+## Local Storage & Credential Architecture Considerations
 
-1. **Windows Keyring**:
-   - Stores `agent_id`, `client_secret`, `computer_id` under service `SLMS`.
-   - Uses Windows Credential Manager.
-2. **`paths.py` / Application Directory**:
-   - `LOG_FOLDER`: `client_agent/logs/` (local to program directory).
-   - `OUTPUT_FOLDER`: `client_agent/output/` (local to program directory).
-   - `CREDENTIAL_FILE`: `client_agent/agent_credential.json` (legacy file path).
-   - **Defect**: Violates Windows service design principles; a service in `C:\Program Files` cannot write to its install directory without elevated write permissions. Standard location is `%PROGRAMDATA%\SLMS`.
+1. **Windows Keyring Context Issue**:
+   - The current agent runs in an interactive user session and stores credentials via `keyring` in the interactive user's Windows Credential Locker.
+   - In Phase 2, a production Windows Service runs in Session 0 under `NT AUTHORITY\SYSTEM` or a dedicated Virtual Service Account (`NT SERVICE\SLMSService`).
+   - Windows Credential Manager stores credentials on a per-user basis. Credentials saved by an interactive admin will not automatically be accessible to `LocalSystem` or the service account without explicit machine-scoped storage (e.g. DPAPI with `CRYPTPROTECT_LOCAL_MACHINE` or machine-level credential vault).
+   - **Conclusion**: Phase 1 must not bind permanently to a user-scoped keyring path without preparing the machine-level abstraction needed by Phase 2.
+2. **Directory Structure**:
+   - Current: Files stored in `BASE_PATH` (application directory). In production, an installed application in `C:\Program Files\SLMS` cannot write logs or local state without administrator elevation.
+   - Windows Standard: `%PROGRAMDATA%\SLMS\` (`logs\`, `data\`, `cache\`) protected with restrictive DACLs (SYSTEM and Administrators only).
 
 ---
 
@@ -201,140 +181,122 @@ Executed synchronously inside `main.py::main()` every 20 seconds:
 
 - Implemented in `client_agent/core/logger.py`.
 - Outputs to `client_agent/logs/client.log` via standard `logging.FileHandler`.
-- **Defects**:
-  - No log rotation (`RotatingFileHandler` or `TimedRotatingFileHandler` missing).
-  - Log file will grow indefinitely.
-  - No log retention policy.
-  - Stored inside codebase working tree instead of `%PROGRAMDATA%\SLMS\logs`.
+- Lacks rotation and retention policies; logs grow unbounded.
 
 ---
 
 ## Windows Startup & Service Handling
 
-- **Current Implementation**: `client_agent/startup.py::add_to_startup()` copies script/exe to the user's Startup folder.
-- **Defects**:
-  - No Windows Service exists.
-  - Does not run on computer boot; requires student/user login.
-  - Terminates when user logs out.
-  - No Windows Service Control Manager (SCM) integration, recovery actions, or service lifecycle commands.
+- Currently relies on `client_agent/startup.py::add_to_startup()` copying the executable into `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup`.
+- Fails to start on boot without student login; halts on logout.
 
 ---
 
 ## Packaging
 
-- **Current Build Specs**:
-  - `client_agent/main.spec`
-  - `client_agent/SLMS_Client_Agent.spec`
-- **Defects**:
-  - Two redundant spec files.
-  - Neither includes data files, runtime hooks, or hidden imports for win32/keyring.
-  - PyInstaller is not listed in `pyproject.toml` or `requirements.txt`.
-  - Dependencies are unpinned in `requirements.txt` and pinned in `uv.lock`.
+- Redundant spec files: `main.spec` and `SLMS_Client_Agent.spec`.
+- PyInstaller unlisted in dependencies; lack of hidden imports for Windows services and security packages.
 
 ---
 
 ## Test Status & Diagnostics
 
-### Pre-Hardening Test Execution
-1. **Running `python client_agent/tests/test_logger.py`**:
-   - Result: **FAILED** (`ModuleNotFoundError: No module named 'client_agent'`).
-   - Root Cause: Python package root not on `sys.path`.
-2. **Running with `PYTHONPATH=.`**:
-   - Result: **FAILED** (`ModuleNotFoundError: No module named 'config'`).
-   - Root Cause: `logger.py` uses bare `from config import ...` instead of package relative or fully qualified imports.
-3. **Running `unittest discover`**:
-   - Result: `Ran 0 tests in 0.000s. NO TESTS RAN`.
-   - Root Cause: No automated test cases exist in the repository; `test_logger.py` is merely an ad-hoc print script without assertions or test runners.
-4. **Pytest Status**:
-   - Not installed in virtual environment.
-5. **Git Status & Working Tree**:
-   - Tracked files include diagnostic telemetry `client_agent/output/client_data.json`.
-   - Working tree had uncommitted `client_agent/uv.lock`. Dedicated branch `feature/client-agent-hardening` created.
+### Pre-Hardening Test Status
+1. `client_agent/tests/test_logger.py` had no assertions and failed to run due to unconfigured package import structure.
+2. Pytest and pytest-mock have now been installed via `uv`.
+3. A test harness configuration ([`client_agent/tests/conftest.py`](file:///d:/PC/slms1/Smart_lab_management_system/client_agent/tests/conftest.py)) was established, adding both workspace root and `client_agent` to `sys.path`.
+4. A minimal smoke test suite ([`client_agent/tests/test_smoke.py`](file:///d:/PC/slms1/Smart_lab_management_system/client_agent/tests/test_smoke.py)) was created and executed:
+   - **Result**: `3 passed in 0.06s` under `pytest 9.1.1`.
+   - The test infrastructure is now operational.
 
 ---
 
-## Problem Verification Matrix (A-01 through K-06)
+## Problem Classification Matrix (A-01 through K-06)
 
-Every problem has been mapped to concrete files and code locations and categorized:
+Problems are classified into four precise categories:
+- **CONFIRMED DEFECT**: Verifiable bug, crash, logic failure, or silent data loss in active code.
+- **CONFIRMED REQUIREMENT GAP**: Missing feature or capability required for production compliance.
+- **ARCHITECTURAL RECOMMENDATION**: Design enhancement for maintainability, modularity, or resilience.
+- **PRODUCT DECISION REQUIRED**: Strategy requiring lab/stakeholder definition or contract choice.
 
-| Code | Status | Description | File / Location | Evidence / Verification Notes |
+| Code | Classification | Description | File / Location | Evidence / Verification Notes |
 | :--- | :--- | :--- | :--- | :--- |
-| **A-01** | **CONFIRMED** | HTTP is allowed/default | `config.py:27` | Default `API_BASE_URL` is `http://127.0.0.1:8000`. No HTTPS enforcement. |
-| **A-02** | **CONFIRMED** | WebSocket allows `ws://` | `config.py:112` | Default `WS_BASE_URL` is `ws://127.0.0.1:8000/ws/client`. No WSS requirement. |
-| **A-03** | **CONFIRMED** | WS JWT passed in URL | `server/communication.py:84` | URL constructed as `f"{WS_BASE_URL}/{self.computer_id}?token={token}"`. |
-| **A-04** | **CONFIRMED** | Enrollment accepts arbitrary URLs | `gui/enrollment_window.py:108` | Accepts any text in `server_entry` without validation, domain whitelist, or scheme check. |
-| **A-05** | **CONFIRMED** | Server identity not persisted | `server/enroll.py:80-97` | Stores credentials in keyring but never persists `server_url`, CA pin, or server identity. |
-| **A-06** | **CONFIRMED** | TLS trust strategy undefined | `server/*.py` | `requests` calls use default trust; no separation of dev/prod cert validation or custom CA. |
-| **A-07** | **CONFIRMED** | No signed update/integrity | Project-wide | Zero update mechanisms or binary hash/integrity checks exist. |
-| **A-08** | **CONFIRMED** | Sensitive local files unprotected | `paths.py:24-26` | Output, logs, credentials in application directory without DPAPI or ACL restrictions. |
-| **A-09** | **CONFIRMED** | Personal username collected | `modules/system_info.py:64`, `modules/processes.py:32` | Collects `getpass.getuser()` and process owner usernames; violates SRS student privacy. |
-| **A-10** | **CONFIRMED** | Legacy auth/registration code | `server/registration.py`, `config.py:126-130` | Incomplete dead file `registration.py` and unused legacy config variables. |
-| **B-01** | **CONFIRMED** | No real Windows Service | Project-wide | Agent runs only as foreground script; no `win32service` or SCM service code exists. |
-| **B-02** | **CONFIRMED** | `startup.py` uses Startup folder | `startup.py:15-21` | Targets `%APPDATA%\...\Startup`, which is user-session bound. |
-| **B-03** | **CONFIRMED** | Depends on user login | `startup.py`, `gui/enrollment_window.py` | Cannot start or operate without an interactive user login session. |
-| **B-04** | **CONFIRMED** | No service recovery policy | Project-wide | No SCM configuration or crash recovery mechanism defined. |
-| **B-05** | **CONFIRMED** | No service lifecycle commands | Project-wide | Missing install, start, stop, restart, uninstall CLI handlers. |
-| **B-06** | **CONFIRMED** | `MessageBoxW` in non-interactive | `server/command_handler.py:12` | `MessageBoxW(0, ...)` fails or hangs in Windows Session 0 (service session). |
-| **B-07** | **CONFIRMED** | Privilege model undefined | Project-wide | Service account, required DACLs, and network rights are undocumented and unconstrained. |
-| **C-01** | **CONFIRMED** | No durable upload queue | `server/sender.py` | Direct HTTP POST calls; payloads dropped on network/server failure. |
-| **C-02** | **CONFIRMED** | Issue uploads need durable retry | `main.py:440-475` | If HTTP POST fails, issue is not queued for retry. |
-| **C-03** | **CONFIRMED** | Usage events need durable retry | `main.py:350-410` | If usage upload fails, sessions are permanently lost. |
-| **C-04** | **CONFIRMED** | Command results need retry | `server/communication.py:284` | If command result POST fails, result is discarded. |
-| **C-05** | **CONFIRMED** | Monitoring state lost on restart| `modules/usage.py:27`, `modules/issues.py:23` | Active tracking state is stored exclusively in in-memory global dictionaries/sets. |
-| **C-06** | **CONFIRMED** | Lack of idempotency | `server/sender.py`, Backend | Usage session retries create duplicate rows in backend `usage_sessions` table. |
-| **C-07** | **CONFIRMED** | Need bounded queue / backpressure| Project-wide | No local storage mechanism; persistent queue must enforce storage limits and FIFO/drop policy. |
-| **C-08** | **CONFIRMED** | No defined retry policy | `main.py` | Only immediate single 401 retry; lacks exponential backoff, priority, and dead-letter handling. |
-| **D-01** | **CONFIRMED** | Failures become valid zeros | `server/sender.py:48-64` | `hardware.get("cpu_usage", 0)` silently converts missing/failed metrics to 0%. |
-| **D-02** | **CONFIRMED** | `safe_run` error handling coarse | `core/health.py:6-18` | Swallows all exceptions, returns `None`, discards structured error context. |
-| **D-03** | **CONFIRMED** | Network identity can be incorrect | `modules/network.py:37` | `uuid.getnode()` may return arbitrary virtual/random MAC; first non-127 IP is unreliable. |
-| **D-04** | **CONFIRMED** | Network logic duplicated | `modules/network.py` & `system_info.py` | Both independently implement non-loopback IP and MAC address resolution. |
-| **D-05** | **CONFIRMED** | MAC must identify active adapter| `modules/network.py:37`, `system_info.py:44`| Blindly uses `uuid.getnode()` instead of matching the active default route adapter. |
-| **D-06** | **CONFIRMED** | Network counters cumulative | `modules/network.py:42`, `backend/models/system_metric.py:43` | `psutil.net_io_counters()` is cumulative since boot. Backend schema stores Float. Must retain contract. |
-| **D-07** | **CONFIRMED** | Software cache broken on empty | `core/collector.py:41-47` | If scan returns `[]`, `if _cached_software` is False, triggering repeated scans and cache wipe. |
-| **D-08** | **CONFIRMED** | CPU collection blocks 1 second | `modules/hardware.py:29` | `psutil.cpu_percent(interval=1)` synchronously blocks monitoring thread every cycle. |
-| **D-09** | **CONFIRMED** | Usage tracking uses PID + name | `modules/usage.py:91` | Keyed by `(pid, name.casefold())`; vulnerable to PID reuse collisions. |
-| **D-10** | **CONFIRMED** | Usage state only in memory | `modules/usage.py:27` | `_ACTIVE_SESSIONS` lost on process restart. |
-| **D-11** | **CONFIRMED** | Transient drop creates stop event| `modules/usage.py:168` | Single scan omission immediately terminates session, creating false stop and restart. |
-| **D-12** | **CONFIRMED** | Ambiguous process vs app tracking| `modules/usage.py` | Tracks all background system processes as user applications. |
-| **E-01** | **CONFIRMED** | Full process list uploaded 20s | `main.py:530` | Sends full process inventory every 20 seconds, wiping and re-inserting DB rows. |
-| **E-02** | **CONFIRMED** | System-process noise unfiltered | `modules/processes.py:11` | Emits background svchost, runtime brokers, system idle, etc. |
-| **E-03** | **CONFIRMED** | Process username collected | `modules/processes.py:32` | Gathers process username; violates student privacy and degrades WMI performance. |
-| **E-04** | **CONFIRMED** | Process payload size unconstrained| `modules/processes.py` | Transmits hundreds of unfiltered process dicts in a single request. |
-| **E-05** | **CONFIRMED** | Software uploaded every 20s | `main.py:523` | Scanned every 10 min, but uploaded on every 20s loop iteration unconditionally. |
-| **E-06** | **CONFIRMED** | Software not change-aware | `main.py:296` | Uploads without checking if software inventory hash changed. |
-| **E-07** | **CONFIRMED** | Software discovery limitations | `modules/software.py` | Scans HKLM 32/64-bit uninstall keys; lacks HKCU user installs or Store app documentation. |
-| **F-01** | **CONFIRMED** | Issue state not decoupled | `modules/issues.py:23` | Only has `_ACTIVE_ISSUES` set; lacks DETECTED, QUEUED, SENT, ACK, RECOVERED. |
-| **F-02** | **CONFIRMED** | Failed issue upload suppresses | `modules/issues.py:99` | Added to `_ACTIVE_ISSUES` during detection; if upload fails, issue is permanently muted. |
-| **F-03** | **CONFIRMED** | Issue rules overlap backend | `modules/issues.py:68` | RAM/Disk rules hardcoded on client; backend `alert_service.py` evaluates same metrics. |
-| **F-04** | **CONFIRMED** | No hysteresis/debounce | `modules/issues.py` | Fluctuating metric across threshold generates rapid issue flapping. |
-| **G-01** | **CONFIRMED** | WS JWT in URL | `server/communication.py:84` | Passed in URL query parameter `?token=...`. |
-| **G-02** | **CONFIRMED** | WSS required in prod | `config.py:112` | Allows insecure `ws://`. |
-| **G-03** | **CONFIRMED** | Reconnect delay not reset | `server/communication.py:133` | Delay variable in outer loop is never reset by `_on_open()`. |
-| **G-04** | **CONFIRMED** | Token expiry coordination | `server/communication.py` | Uses static token lambda; doesn't trigger auth refresh on WS 4001 auth failure. |
-| **G-05** | **CONFIRMED** | Command result not durable | `server/communication.py:284` | HTTP failure drops command result. |
-| **G-06** | **CONFIRMED** | Missing observable WS states | `server/communication.py` | No state enum (CONNECTING, CONNECTED, AUTHENTICATING, etc.). |
-| **H-01** | **CONFIRMED** | `main.py` overburdened | `main.py` | Single file handles UI, auth, scheduling, collectors, 5 uploads, export, console. |
-| **H-02** | **CONFIRMED** | Sequential collection | `core/collector.py:53-118` | All collectors execute synchronously on main thread. |
-| **H-03** | **CONFIRMED** | Sequential REST uploads | `main.py:516-545` | 5 HTTP requests executed back-to-back in loop. |
-| **H-04** | **CONFIRMED** | Interval is `work + sleep(20)` | `main.py:575` | Loop drifts significantly; not fixed-interval target execution scheduling. |
-| **H-05** | **CONFIRMED** | Unbounded workers/queues | `server/communication.py:140` | Spawns unmanaged daemon threads (`_ping_loop`). |
-| **I-01** | **CONFIRMED** | No log rotation | `core/logger.py:14` | Plain `FileHandler`; will grow indefinitely. |
-| **I-02** | **CONFIRMED** | No log retention | `core/logger.py` | No cleanup or retention limits. |
-| **I-03** | **CONFIRMED** | Non-standard data directories | `paths.py:24-26` | Uses application directory instead of `%PROGRAMDATA%\SLMS`. |
-| **I-04** | **CONFIRMED** | JSON export enabled by default | `config.py:95` | `EXPORT_JSON = True`. Writes disk telemetry every 20s. |
-| **I-05** | **CONFIRMED** | JSON export not atomic | `core/exporter.py:14` | Standard `open("w")`; vulnerable to corruption. |
-| **I-06** | **CONFIRMED** | Telemetry retention undefined | `core/exporter.py` | Overwrites single file, but diagnostics history has no retention policy. |
-| **I-07** | **CONFIRMED** | Telemetry treated as source | `output/client_data.json` | Telemetry file tracked in git repository. |
-| **J-01** | **CONFIRMED** | Almost no automated tests | `tests/` | Only `test_logger.py` exists (a 6-line print script). |
-| **J-02** | **CONFIRMED** | Tests lack assertions | `tests/test_logger.py` | Contains zero assertions or TestCase classes. |
-| **J-03** | **CONFIRMED** | Broken package/import structure| `core/logger.py`, `tests/` | Absolute imports fail when running tests from repo root or package root. |
-| **J-04..14**| **CONFIRMED** | Missing test categories | Project-wide | Need suites for auth, outbox, collectors, WS, service, and 40-PC scenarios. |
-| **K-01** | **CONFIRMED** | Multiple PyInstaller spec files | `main.spec`, `SLMS_Client_Agent.spec` | Two diverging, incomplete spec files. |
-| **K-02** | **CONFIRMED** | Dependencies inconsistent | `requirements.txt`, `pyproject.toml`, `uv.lock` | Unpinned in requirements.txt, pinned in uv.lock, PyInstaller missing. |
-| **K-03** | **CONFIRMED** | Package/version inconsistencies| `client_agent/` | Version mismatch (0.1.0 vs 1.0.0). |
-| **K-04** | **CONFIRMED** | `.gitignore` incomplete | `.gitignore`, `client_agent/.gitignore`| Fails to exclude logs, outbox database, and telemetry files. |
-| **K-05** | **CONFIRMED** | Obsolete `data/agent.json` | `data/agent.json` | Verified unused anywhere in the codebase. |
-| **K-06** | **CONFIRMED** | Obsolete modules exist | `server/registration.py` | Truncated, unreferenced module. |
+| **A-01** | **CONFIRMED REQUIREMENT GAP** | HTTP is allowed/default | `config.py:27` | Default `API_BASE_URL` is `http://127.0.0.1:8000`. Production must require HTTPS. |
+| **A-02** | **CONFIRMED REQUIREMENT GAP** | WebSocket allows `ws://` | `config.py:112` | Default `WS_BASE_URL` is `ws://127.0.0.1:8000/ws/client`. Production must require WSS. |
+| **A-03** | **CONFIRMED DEFECT** | WS JWT passed in URL | `server/communication.py:84` | URL constructed as `?token={token}`. Backend currently requires query param; requires coordinated migration. |
+| **A-04** | **CONFIRMED REQUIREMENT GAP** | Enrollment accepts arbitrary URLs | `gui/enrollment_window.py:108` | Accepts arbitrary server URL without validation or enterprise domain whitelist. |
+| **A-05** | **CONFIRMED DEFECT** | Server identity not persisted | `server/enroll.py:80-97` | Stores credentials in keyring but never persists `server_url`, causing agent to fall back to `API_BASE_URL`. |
+| **A-06** | **CONFIRMED REQUIREMENT GAP** | TLS trust strategy undefined | `server/*.py` | Standard requests validation; needs enterprise CA configuration (`SLMS_CA_BUNDLE`) without verify=False. |
+| **A-07** | **PRODUCT DECISION REQUIRED** | Signed update / integrity | Architecture | Determine whether agent needs self-update integrity checks or relies on enterprise distribution (SCCM/GPO/Intune). |
+| **A-08** | **CONFIRMED REQUIREMENT GAP** | Sensitive local files unprotected | `paths.py:24-26` | Files stored in program directory without DPAPI protection or restrictive NTFS DACLs. |
+| **A-09** | **CONFIRMED REQUIREMENT GAP** | Personal username collected | `system_info.py:64`, `processes.py:32` | Collects `getpass.getuser()` and process usernames; violates SRS student privacy constraint. |
+| **A-10** | **CONFIRMED DEFECT** | Legacy auth/registration code | `server/registration.py`, `config.py:126`| Dead, truncated file `registration.py` and unused legacy config keys. Marked for deprecation. |
+| **B-01** | **CONFIRMED REQUIREMENT GAP** | No real Windows Service | Project-wide | Agent runs only as foreground script; lacks Windows SCM integration. |
+| **B-02** | **CONFIRMED DEFECT** | `startup.py` uses Startup folder | `startup.py:15-21` | Copies binary to user-specific `%APPDATA%\...\Startup`. |
+| **B-03** | **CONFIRMED REQUIREMENT GAP** | Depends on user login | `startup.py`, `gui/enrollment_window.py` | Cannot start or operate without an interactive desktop user session. |
+| **B-04** | **CONFIRMED REQUIREMENT GAP** | No service recovery policy | Project-wide | Lacks automatic restart-on-failure configuration. |
+| **B-05** | **CONFIRMED REQUIREMENT GAP** | No service lifecycle commands | Project-wide | Missing install, start, stop, restart, uninstall CLI handlers. |
+| **B-06** | **CONFIRMED DEFECT** | `MessageBoxW` in non-interactive | `server/command_handler.py:12` | `MessageBoxW(0, ...)` fails or hangs indefinitely in Windows Session 0. |
+| **B-07** | **CONFIRMED REQUIREMENT GAP** | Privilege model undefined | Project-wide | Service account, required DACLs, and network rights are unconstrained. |
+| **C-01** | **CONFIRMED REQUIREMENT GAP** | No durable upload queue | `server/sender.py` | Direct HTTP POST calls; payloads dropped on network/server failure. |
+| **C-02** | **CONFIRMED DEFECT** | Issue uploads need durable retry | `main.py:440-475` | If HTTP POST fails, issue is permanently dropped from queue. |
+| **C-03** | **CONFIRMED DEFECT** | Usage events need durable retry | `main.py:350-410` | If usage upload fails, sessions are permanently lost. |
+| **C-04** | **CONFIRMED DEFECT** | Command results need retry | `server/communication.py:284` | If command result POST fails, result is discarded. |
+| **C-05** | **CONFIRMED DEFECT** | Monitoring state lost on restart| `modules/usage.py:27`, `modules/issues.py:23` | Active tracking state is stored exclusively in in-memory global dictionaries/sets. |
+| **C-06** | **CONFIRMED DEFECT** | Lack of idempotency | `server/sender.py`, Backend | Usage session retries create duplicate rows in backend `usage_sessions` table. |
+| **C-07** | **CONFIRMED REQUIREMENT GAP** | Need bounded queue / backpressure| Project-wide | Outbox queue must enforce size limits and drop policy to protect disk. |
+| **C-08** | **CONFIRMED REQUIREMENT GAP** | No defined retry policy | `main.py` | Lacks exponential backoff, priority levels (HIGH/MED/LOW), and dead-letter handling. |
+| **D-01** | **CONFIRMED DEFECT** | Failures become valid zeros | `server/sender.py:48-64` | `hardware.get("cpu_usage", 0)` silently converts missing/failed metrics to 0%. |
+| **D-02** | **ARCHITECTURAL RECOMMENDATION** | `safe_run` error handling coarse | `core/health.py:6-18` | Swallows all exceptions, returns `None`, discards structured error context. |
+| **D-03** | **CONFIRMED DEFECT** | Network identity can be incorrect | `modules/network.py:37` | `uuid.getnode()` may return arbitrary virtual/random MAC; first non-127 IP is unreliable. |
+| **D-04** | **CONFIRMED DEFECT** | Network logic duplicated | `modules/network.py` & `system_info.py` | Both independently implement non-loopback IP and MAC address resolution. |
+| **D-05** | **CONFIRMED DEFECT** | MAC must identify active adapter| `modules/network.py:37`, `system_info.py:44`| Blindly uses `uuid.getnode()` instead of matching the active default route adapter. |
+| **D-06** | **PRODUCT DECISION REQUIRED** | Network counters cumulative vs rate| `modules/network.py:42`, `system_metric.py:43`| Current contract sends cumulative bytes since boot. Clarify whether backend expects rate or cumulative. |
+| **D-07** | **CONFIRMED DEFECT** | Software cache broken on empty | `core/collector.py:41-47` | If scan returns `[]`, `if _cached_software` is False, triggering repeated scans and cache wipe. |
+| **D-08** | **CONFIRMED DEFECT** | CPU collection blocks 1 second | `modules/hardware.py:29` | `psutil.cpu_percent(interval=1)` synchronously blocks monitoring thread every cycle. |
+| **D-09** | **CONFIRMED DEFECT** | Usage tracking uses PID + name | `modules/usage.py:91` | Keyed by `(pid, name.casefold())`; vulnerable to PID reuse collisions. |
+| **D-10** | **CONFIRMED DEFECT** | Usage state only in memory | `modules/usage.py:27` | `_ACTIVE_SESSIONS` lost on process restart. |
+| **D-11** | **CONFIRMED DEFECT** | Transient drop creates stop event| `modules/usage.py:168` | Single scan omission immediately terminates session, creating false stop and restart. |
+| **D-12** | **PRODUCT DECISION REQUIRED** | Process vs Application tracking | `modules/usage.py` | Clarify whether usage should track all system processes or only interactive applications. |
+| **E-01** | **CONFIRMED DEFECT** | Full process list uploaded 20s | `main.py:530` | Sends full process inventory every 20 seconds, wiping and re-inserting DB rows. |
+| **E-02** | **PRODUCT DECISION REQUIRED** | System-process filtering rules | `modules/processes.py:11` | Establish approved whitelist/blacklist for system noise (svchost, idle, etc.). |
+| **E-03** | **CONFIRMED REQUIREMENT GAP** | Process username collected | `modules/processes.py:32` | Gathers process username; violates student privacy and degrades WMI performance. |
+| **E-04** | **PRODUCT DECISION REQUIRED** | Process payload limits | `modules/processes.py` | Define policy: top N by CPU/RAM, delta reporting, or hard limit (e.g. 50 processes). |
+| **E-05** | **CONFIRMED DEFECT** | Software uploaded every 20s | `main.py:523` | Scanned every 10 min, but uploaded on every 20s loop iteration unconditionally. |
+| **E-06** | **CONFIRMED REQUIREMENT GAP** | Software not change-aware | `main.py:296` | Uploads without checking if software inventory hash changed. |
+| **E-07** | **PRODUCT DECISION REQUIRED** | Software discovery scope | `modules/software.py` | Scans HKLM 32/64-bit uninstall keys; decide whether HKCU user-level software is required. |
+| **F-01** | **CONFIRMED REQUIREMENT GAP** | Issue state not decoupled | `modules/issues.py:23` | Only has `_ACTIVE_ISSUES` set; lacks DETECTED, QUEUED, SENT, ACK, RECOVERED. |
+| **F-02** | **CONFIRMED DEFECT** | Failed issue upload suppresses | `modules/issues.py:99` | Added to `_ACTIVE_ISSUES` during detection; if upload fails, issue is permanently muted. |
+| **F-03** | **PRODUCT DECISION REQUIRED** | Issue rules overlap backend | `modules/issues.py:68` | RAM/Disk rules hardcoded on client; backend `alert_service.py` evaluates same metrics. Decide rule authority. |
+| **F-04** | **PRODUCT DECISION REQUIRED** | Debounce / hysteresis limits | `modules/issues.py` | Define threshold buffer (e.g. 2% hysteresis) and time debounce to prevent flapping. |
+| **G-01** | **CONFIRMED DEFECT** | WS JWT in URL | `server/communication.py:84` | Passed in URL query parameter `?token=...`. |
+| **G-02** | **CONFIRMED REQUIREMENT GAP** | WSS required in prod | `config.py:112` | Allows insecure `ws://`. |
+| **G-03** | **CONFIRMED DEFECT** | Reconnect delay not reset | `server/communication.py:133` | Delay variable in outer loop is never reset by `_on_open()`. |
+| **G-04** | **CONFIRMED DEFECT** | Token expiry coordination | `server/communication.py` | Uses static token lambda; doesn't trigger auth refresh on WS 4001 auth failure. |
+| **G-05** | **CONFIRMED DEFECT** | Command result not durable | `server/communication.py:284` | HTTP failure drops command result. |
+| **G-06** | **CONFIRMED REQUIREMENT GAP** | Missing observable WS states | `server/communication.py` | No state enum (CONNECTING, CONNECTED, AUTHENTICATING, etc.). |
+| **H-01** | **ARCHITECTURAL RECOMMENDATION** | `main.py` overburdened | `main.py` | Decompose into RuntimeManager, Scheduler, CollectorManager, UploadManager, WebSocketManager, TokenManager, OutboxManager, ShutdownManager. |
+| **H-02** | **ARCHITECTURAL RECOMMENDATION** | Sequential collection | `core/collector.py:53-118` | Decouple long-running collectors from fast system metrics. |
+| **H-03** | **ARCHITECTURAL RECOMMENDATION** | Sequential REST uploads | `main.py:516-545` | Batch or decouple uploads via Outbox worker. |
+| **H-04** | **CONFIRMED DEFECT** | Interval is `work + sleep(20)` | `main.py:575` | Loop drifts significantly; not fixed-interval target execution scheduling. |
+| **H-05** | **ARCHITECTURAL RECOMMENDATION** | Unbounded workers/queues | `server/communication.py:140` | Use bounded thread pool for auxiliary tasks. |
+| **I-01** | **CONFIRMED DEFECT** | No log rotation | `core/logger.py:14` | Plain `FileHandler`; will grow indefinitely. |
+| **I-02** | **CONFIRMED REQUIREMENT GAP** | No log retention | `core/logger.py` | Missing retention limits (e.g. 5 files x 10MB). |
+| **I-03** | **CONFIRMED REQUIREMENT GAP** | Non-standard data directories | `paths.py:24-26` | Uses application directory instead of `%PROGRAMDATA%\SLMS`. |
+| **I-04** | **CONFIRMED REQUIREMENT GAP** | JSON export enabled by default | `config.py:95` | `EXPORT_JSON = True`. Should be opt-in diagnostic tool. |
+| **I-05** | **CONFIRMED DEFECT** | JSON export not atomic | `core/exporter.py:14` | Standard `open("w")`; vulnerable to corruption. |
+| **I-06** | **CONFIRMED REQUIREMENT GAP** | Telemetry retention undefined | `core/exporter.py` | Diagnostics history has no cleanup policy. |
+| **I-07** | **CONFIRMED DEFECT** | Telemetry treated as source | `output/client_data.json` | Telemetry file tracked in git repository. |
+| **J-01** | **CONFIRMED DEFECT** | Almost no automated tests | `tests/` | Only `test_logger.py` existed (ad-hoc print script). |
+| **J-02** | **CONFIRMED DEFECT** | Tests lack assertions | `tests/test_logger.py` | Contained zero assertions. |
+| **J-03** | **CONFIRMED DEFECT** | Broken package/import structure| `core/logger.py`, `tests/` | Resolved with `conftest.py` test harness setup. |
+| **J-04..14**| **CONFIRMED REQUIREMENT GAP** | Missing test categories | Project-wide | Need suites for auth, outbox, collectors, WS, service, and load. |
+| **K-01** | **CONFIRMED DEFECT** | Multiple PyInstaller spec files | `main.spec`, `SLMS_Client_Agent.spec` | Two diverging, incomplete spec files. |
+| **K-02** | **ARCHITECTURAL RECOMMENDATION** | Dependencies inconsistent | `requirements.txt`, `pyproject.toml`, `uv.lock` | Define authoritative dependency source. |
+| **K-03** | **ARCHITECTURAL RECOMMENDATION** | Package/version inconsistencies| `client_agent/` | Version mismatch (0.1.0 vs 1.0.0). |
+| **K-04** | **CONFIRMED REQUIREMENT GAP** | `.gitignore` incomplete | `.gitignore`, `client_agent/.gitignore`| Fails to exclude logs, outbox database, and telemetry files. |
+| **K-05** | **ARCHITECTURAL RECOMMENDATION** | Obsolete `data/agent.json` | `data/agent.json` | Verified unused. Deprecation documented. |
+| **K-06** | **ARCHITECTURAL RECOMMENDATION** | Obsolete modules exist | `server/registration.py` | Truncated, unreferenced module. Deprecation documented. |
 
 ---
 
@@ -342,27 +304,28 @@ Every problem has been mapped to concrete files and code locations and categoriz
 
 | File | Current Role | Target Phase | Planned Modifications |
 | :--- | :--- | :--- | :--- |
-| `config.py` | Configuration constants | Phase 1, 8, 9 | Enforce HTTPS/WSS in production, add trusted server validation, configurable data paths, disable debug JSON export by default. |
-| `paths.py` | Path resolution | Phase 1, 2, 9 | Move data, logs, cache, outbox database to `%PROGRAMDATA%\SLMS\` with secure DACLs. |
+| `config.py` | Configuration constants | Phase 1, 8, 9 | Enforce HTTPS/WSS in production, add trusted server validation, add development bypass flag (`SLMS_ALLOW_INSECURE_HTTP`), support enterprise CA bundle (`SLMS_CA_BUNDLE`). |
+| `paths.py` | Path resolution | Phase 1, 2, 9 | Define standard `%PROGRAMDATA%\SLMS\` paths (`logs`, `data`, `cache`) while preserving backward-compatible development fallback. |
 | `startup.py` | Startup folder deployment | Phase 2 | Deprecate user Startup folder; replace with Windows Service installer/controller. |
-| `service.py` *(New)* | Windows Service | Phase 2 | `win32serviceutil` implementation for background non-interactive execution with restart recovery. |
+| `service.py` *(New)* | Windows Service | Phase 2 | Background service architecture for non-interactive execution with restart recovery. |
 | `storage/outbox.py` *(New)* | Durable local store | Phase 3 | SQLite-backed persistent priority outbox with deduplication, retry policy, backpressure, and TTL. |
 | `core/health.py` | Result wrapper | Phase 4 | Introduce `CollectorResult` (SUCCESS, UNKNOWN, FAILED) with explicit error diagnostics. |
 | `modules/hardware.py` | Hardware metrics | Phase 4 | Remove blocking `psutil.cpu_percent(interval=1)` (use non-blocking delta sampling). |
 | `modules/network.py` | Network identity/metrics| Phase 4 | Canonicalize network identity, accurately bind to active default interface MAC/IP. Preserve cumulative counters contract. |
-| `modules/system_info.py` | System metadata | Phase 4, 9 | Remove duplicated network logic; remove Windows username collection (privacy). |
-| `modules/processes.py` | Process inventory | Phase 5, 9 | Remove process owner username collection; filter system noise; limit payload size. |
+| `modules/system_info.py` | System metadata | Phase 1, 4 | Remove student Windows username collection (`A-09`). Remove duplicate network identity logic. |
+| `modules/processes.py` | Process inventory | Phase 1, 5 | Remove process owner username collection (`A-09`, `E-03`). Filter system noise; limit payload size. |
 | `modules/software.py` | Software inventory | Phase 5 | Fix empty scan cache bug; document registry limits. |
 | `modules/usage.py` | App usage tracking | Phase 4, 5 | Robust process identity (`pid` + `create_time`), persist active state across restarts, debounce transient process drops. |
 | `modules/issues.py` | Issue detection | Phase 6 | Decouple detection from delivery, introduce full state lifecycle, add hysteresis debounce. |
-| `server/communication.py` | WebSocket client | Phase 1, 7 | Remove JWT from URL (compatible migration), add observable connection state machine, fix reconnect delay reset, durable command execution results. |
+| `server/communication.py` | WebSocket client | Phase 1, 7 | Coordinated WebSocket auth migration (header with query param fallback), reconnect delay reset fix, durable command execution results. |
+| `backend/app/routes/websocket_router.py` | Backend WS endpoint | Phase 1, 7 | Accept `Authorization: Bearer <token>` header with backward-compatible query param fallback. |
 | `server/command_handler.py`| Remote commands | Phase 2, 7 | Replace interactive `MessageBoxW` with `WTSSendMessage` for Session 0 compatibility. |
-| `server/enroll.py` | Enrollment | Phase 1 | Bind and persist server identity, enforce HTTPS, validate server certificates. |
+| `server/enroll.py` | Enrollment | Phase 1 | Bind and persist server identity, enforce HTTPS, validate server certificates against enterprise CA or system trust store. |
 | `server/auth.py` | Token authentication | Phase 1 | Enforce HTTPS, manage token lifecycle, integrate with Outbox retry. |
 | `server/sender.py` | REST transmission | Phase 1, 3, 5 | Route uploads through durable outbox; prevent zero-metric coercion; software hash change detection. |
-| `server/registration.py` | Legacy registration | Phase 1 | Safely decommission after confirming zero active references. |
-| `data/agent.json` | Legacy file | Phase 11 | Safely decommission. |
-| `core/logger.py` | Logging | Phase 9 | Implement `RotatingFileHandler` with configurable size/retention in `%PROGRAMDATA%\SLMS\logs`. |
+| `server/registration.py` | Legacy registration | Phase 1, 11 | Document deprecation and prove zero references. Do not delete until replacement is verified. |
+| `data/agent.json` | Legacy file | Phase 1, 11 | Document deprecation. Do not delete until replacement is verified. |
+| `core/logger.py` | Logging | Phase 9 | Implement `RotatingFileHandler` with configurable size/retention. |
 | `core/exporter.py` | JSON export | Phase 9 | Implement atomic write (`.tmp` + `os.replace`), disable by default. |
 | `main.py` | Main orchestrator | Phase 8 | Refactor into modular architecture: `RuntimeManager`, `Scheduler`, `CollectorManager`, `UploadManager`, `WebSocketManager`, `TokenManager`, `OutboxManager`, `ShutdownManager`. |
 | `main.spec` / `SLMS_Client_Agent.spec` | PyInstaller build | Phase 11 | Unify into single canonical spec file with all required dependencies, hidden imports, and metadata. |
@@ -370,19 +333,18 @@ Every problem has been mapped to concrete files and code locations and categoriz
 
 ---
 
-## Backend Dependencies & Backward Compatibility
+## Backend Dependencies & Backward Compatibility Strategy
 
-1. **WebSocket Token Handshake (`A-03`, `G-01`)**:
-   - Backend `backend/app/routes/websocket_router.py`:
-     ```python
-     @router.websocket("/ws/client/{computer_id}")
-     async def client_websocket(websocket: WebSocket, computer_id: int, token: str = Query(...)):
-     ```
-   - **Contract Risk**: Backend strictly requires `token` as a URL query parameter (`Query(...)`). If the client omits `?token=...`, FastAPI rejects the WebSocket handshake before connection.
-   - **Strategy**: Phase 1 foundation will prepare secure token transport. If backend change is coordinated, update backend `websocket_router.py` to accept token via either header `Authorization: Bearer <token>` or first-message handshake `{"type": "auth", "token": "..."}`, while keeping query parameter support as a backward-compatible fallback.
+1. **WebSocket Authentication Coordinated Migration (`A-03`, `G-01`)**:
+   - Current backend requirement: `token: str = Query(...)` in `backend/app/routes/websocket_router.py`.
+   - Migration Strategy:
+     1. Modify backend `websocket_router.py` to accept `token: str | None = Query(default=None)` and check `websocket.headers.get("authorization")` for `Bearer <token>`. If the header is missing, fall back to the query parameter `token`.
+     2. Update client `server/communication.py` to send `Authorization: Bearer <token>` in WebSocket headers.
+     3. Keep query parameter fallback during transition so older clients/scripts continue working without interruption.
+     4. Write automated integration tests for both header-based and query-based WebSocket handshakes.
 2. **Cumulative Network Bytes (`D-06`)**:
    - Backend `MetricUpload` schema requires `network_sent: float | None` and `network_received: float | None`.
-   - The database stores these as raw cumulative floats without computing delta rates on backend. The client must continue sending cumulative bytes to preserve existing behavior.
+   - The database stores these as raw cumulative floats without computing delta rates on backend. The client must continue sending cumulative bytes to preserve existing contract.
 3. **Usage Session Deduplication (`C-06`)**:
    - Backend `UsageSessionCreate` does not currently require a client session UUID or idempotency key.
    - Client will track uploaded sessions in local SQLite store to ensure it never uploads the same session twice, ensuring client-side idempotency without breaking backend schema.
@@ -392,44 +354,23 @@ Every problem has been mapped to concrete files and code locations and categoriz
 
 ---
 
-## Identified Risks & Mitigations
+## 40-PC Scale & Performance Considerations
 
-1. **Windows Session 0 Isolation**:
-   - *Risk*: Running as a Windows Service isolates the process from the user's interactive desktop. `MessageBoxW` and Tkinter enrollment will fail.
-   - *Mitigation*: Separate enrollment into an administrative setup tool / CLI command (`slms-agent enroll ...`), and replace `MessageBoxW` with Windows Terminal Services API (`wtsapi32.dll` `WTSSendMessage`) to broadcast messages to active user sessions.
-2. **Keyring Access in Windows Service Context**:
-   - *Risk*: `keyring` (Windows Credential Manager) behavior differs when running under `LocalSystem` vs a dedicated user account.
-   - *Mitigation*: Verify Windows Credential Manager behavior under the service account; provide DPAPI-encrypted file fallback in `%PROGRAMDATA%\SLMS\credentials\` if Keyring is inaccessible in Session 0.
-3. **High Database Write Load with 40 PCs**:
-   - *Risk*: 40 PCs uploading full process lists and software lists every 20s overwhelms SQLite backend with concurrent table locks.
-   - *Mitigation*: Hash-based software change detection (upload only on change or hourly heartbeat), and filter processes to top resource consumers, dramatically reducing payload and DB churn.
+- **Measurable Performance Target**: Support for 40 concurrent client agents communicating with a single FastAPI + SQLite backend is an operational performance target.
+- **Verification Strategy**: Rather than relying on static estimates, full verification of the 40-PC scale will be conducted via realistic automated load tests in **Phase 11**.
+- Key metrics to measure in Phase 11:
+  - Database lock contention on SQLite during concurrent metric, process, and usage writes.
+  - WebSocket connection stability and memory footprint with 40 simultaneous persistent connections.
+  - Heartbeat processing overhead and offline timeout checker CPU utilization.
+  - Network bandwidth reduction achieved through change-aware software scanning and filtered process uploads.
 
 ---
 
-## Phase 1 Implementation Plan: Security and Transport Foundation
+## Identified Risks & Mitigations
 
-### Goals
-Harden communication security and local credential/identity storage without breaking existing working functionality:
-1. **Enforce HTTPS / WSS in Production**:
-   - Add scheme validation in `config.py` and `server/enroll.py`.
-   - Disallow plaintext HTTP/WS unless an explicit `SLMS_DEV_INSECURE=1` or `SLMS_ALLOW_HTTP=1` environment flag is present for local test environments.
-2. **Controlled Trusted Server Configuration (`A-04`, `A-05`)**:
-   - Persist the validated server URL and server identity upon enrollment.
-   - Store server configuration in secure configuration store rather than falling back to defaults.
-3. **TLS Validation & Trust Strategy (`A-06`)**:
-   - Enforce strict TLS certificate verification.
-   - Support optional custom CA certificate bundle path (`SLMS_CA_BUNDLE`) for lab enterprise root CAs.
-   - Explicitly forbid `verify=False`.
-4. **Local Data Directory & Permission Hardening (`A-08`, `I-03`)**:
-   - Update `paths.py` to route production logs, data, and cache to `%PROGRAMDATA%\SLMS`.
-   - Implement restrictive Windows ACLs (SYSTEM and Administrators only).
-5. **Privacy Hardening (`A-09`, `E-03`)**:
-   - Remove student Windows username collection from `modules/system_info.py`.
-   - Remove process username collection from `modules/processes.py`.
-6. **Decommission Obsolete Code (`A-10`, `K-05`)**:
-   - Remove `client_agent/server/registration.py` and legacy config keys.
-   - Remove unused `client_agent/data/agent.json`.
-7. **Package & Import Structure Fix (`J-03`)**:
-   - Standardize package imports so the agent can be executed both as an installed package and as standalone scripts.
-8. **Automated Security & Transport Tests (`J-04`, `J-05`)**:
-   - Introduce pytest suite testing TLS enforcement, URL validation, credential storage, and privacy stripping.
+1. **Windows Security Context Differences (Interactive vs Service)**:
+   - *Risk*: Running as a Windows Service isolates the process from the user's interactive desktop. Credentials stored in the interactive user's Keyring vault are inaccessible to `LocalSystem` or a virtual service account.
+   - *Mitigation*: Design an abstracted `CredentialStore` interface in Phase 1 that supports both interactive Keyring and machine-level storage (DPAPI with `CRYPTPROTECT_LOCAL_MACHINE`), deferring credential storage finalization until Phase 2 Windows Service architecture is established.
+2. **TLS Certificate Trust in Lab Environments**:
+   - *Risk*: Educational labs often use private internal PKI / self-signed root certificates. Strict TLS without custom CA configuration will fail in enterprise lab environments.
+   - *Mitigation*: Support standard system CA trust store and provide an explicit `SLMS_CA_BUNDLE` setting for lab private root CAs. Never use `verify=False`.
