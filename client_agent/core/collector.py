@@ -199,6 +199,7 @@ def collect_all_data(
     include_software: bool = True,
     software_cache: SoftwareCache | None = None,
     process_cache: ProcessCache | None = None,
+    issue_state_file: str | None = None,
 ) -> dict:
     """
     Collect all enabled client-agent data with cadence gating (E-01, E-05).
@@ -208,6 +209,7 @@ def collect_all_data(
                          If False, processes collection is bypassed for this cycle.
     - include_software: If True, collects software inventory (reusing cache if valid).
                         If False, software scanning is bypassed for this cycle.
+    - issue_state_file: Optional custom state file path for issue detection tracking.
     """
     data = {}
 
@@ -271,7 +273,7 @@ def collect_all_data(
     if ENABLE_ISSUE_REPORTING:
         data["issues"] = safe_run(
             "Problem Detection",
-            lambda: detect_issues(data),
+            lambda: detect_issues(data, state_file=issue_state_file),
         )
 
     return data

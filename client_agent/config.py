@@ -168,11 +168,20 @@ ENABLE_ISSUE_REPORTING = True
 
 
 # ==========================================
-# Issue Detection Thresholds
+# Issue Detection & Debounce/Hysteresis (Phase 6 F-03 / F-04)
 # ==========================================
 
-RAM_HIGH_THRESHOLD = 85
-DISK_CRITICAL_THRESHOLD = 90
+# RAM thresholds (trigger > threshold, recovery <= threshold)
+RAM_HIGH_THRESHOLD: float = float(os.getenv("SLMS_RAM_HIGH_THRESHOLD", "85.0"))
+RAM_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_RAM_RECOVERY_THRESHOLD", "80.0"))
+
+# Disk thresholds (trigger > threshold, recovery <= threshold)
+DISK_CRITICAL_THRESHOLD: float = float(os.getenv("SLMS_DISK_CRITICAL_THRESHOLD", "90.0"))
+DISK_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_DISK_RECOVERY_THRESHOLD", "85.0"))
+
+# Debounce & Cooldown
+ISSUE_DEBOUNCE_CYCLES: int = int(os.getenv("SLMS_ISSUE_DEBOUNCE_CYCLES", "2"))
+ISSUE_COOLDOWN_SECONDS: int = int(os.getenv("SLMS_ISSUE_COOLDOWN_SECONDS", "0"))
 
 
 # ==========================================

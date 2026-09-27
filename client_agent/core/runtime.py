@@ -37,6 +37,11 @@ from core.credentials import get_credential_store
 from core.exporter import export_to_json
 from core.logger import logger
 from core.outbox import DurableOutbox, OutboxDeliveryWorker, OutboxPriority
+from core.outbox.models import OutboxRecord, OutboxStatus
+from modules.issues import (
+    record_issue_delivered,
+    record_issue_enqueued,
+)
 from modules.software import (
     compute_software_fingerprint,
     load_software_state,
@@ -342,6 +347,7 @@ def upload_issues(
     data: dict[str, Any],
     token_holder: TokenHolder,
     outbox: DurableOutbox | None = None,
+    state_file: str | None = None,
 ) -> bool:
     if not ENABLE_ISSUE_REPORTING:
         return False
@@ -358,15 +364,44 @@ def upload_issues(
         for issue in issues:
             try:
                 comp_id = get_computer_id()
-                title_slug = issue.get("title", "").replace(" ", "_")[:32]
-                key = f"issue_{comp_id}_{title_slug}_{int(time.time())}"
+                issue_key = issue.get("issue_key", "unknown")
+                incident_id = issue.get("incident_id") or "legacy"
+                key = f"issue_{comp_id}_{issue_key}_{incident_id}"
+                issue["idempotency_key"] = key
+
+                # Check if record already exists in outbox (F-02)
+                existing_record = outbox.get_record_by_idempotency_key(key)
+                if existing_record is not None:
+                    if existing_record.status == OutboxStatus.DEAD_LETTER:
+                        logger.warning(
+                            f"Issue outbox record {existing_record.id} ({key}) was DEAD_LETTER; "
+                            "requeuing for active delivery."
+                        )
+                        outbox.requeue_dead_letter(existing_record.id)
+                        record_issue_enqueued(issue_key, incident_id, state_file)
+                        continue
+                    elif existing_record.status in (OutboxStatus.PENDING, OutboxStatus.PROCESSING):
+                        logger.info(
+                            f"Issue already pending in outbox (id={existing_record.id}, key={key}); "
+                            "awaiting delivery."
+                        )
+                        record_issue_enqueued(issue_key, incident_id, state_file)
+                        continue
+                    elif existing_record.status == OutboxStatus.DELIVERED:
+                        logger.info(
+                            f"Issue already delivered according to outbox (id={existing_record.id}, key={key})."
+                        )
+                        record_issue_delivered(issue_key, incident_id, state_file)
+                        continue
+
                 outbox.enqueue(
                     event_type="issue",
                     payload=issue,
                     idempotency_key=key,
                     priority=OutboxPriority.ISSUE,
                 )
-                logger.info("Issue report enqueued to durable outbox.")
+                logger.info(f"Issue report enqueued to durable outbox (key={key}).")
+                record_issue_enqueued(issue_key, incident_id, state_file)
             except Exception as e:
                 logger.exception(f"Failed to enqueue issue to outbox: {e}")
                 all_enqueued = False
@@ -375,8 +410,14 @@ def upload_issues(
     all_sent = True
     for issue in issues:
         try:
+            comp_id = get_computer_id()
+            issue_key = issue.get("issue_key", "unknown")
+            incident_id = issue.get("incident_id") or "legacy"
+            key = f"issue_{comp_id}_{issue_key}_{incident_id}"
+            issue["idempotency_key"] = key
             send_issue(issue, token_holder.token)
-            logger.info("Issue report sent successfully.")
+            logger.info(f"Issue report sent successfully (key={key}).")
+            record_issue_delivered(issue_key, incident_id, state_file)
         except Exception as e:
             logger.exception(f"Issue upload failed: {e}")
             all_sent = False
@@ -423,6 +464,7 @@ class AgentRuntime:
         process_interval: float = PROCESS_COLLECTION_INTERVAL,
         software_interval: float = SOFTWARE_SCAN_INTERVAL,
         software_state_file: str | None = None,
+        issue_state_file: str | None = None,
     ):
         self.stop_event = stop_event or threading.Event()
         self.is_service = is_service
@@ -431,6 +473,7 @@ class AgentRuntime:
         self.process_interval = process_interval
         self.software_interval = software_interval
         self.software_state_file = software_state_file
+        self.issue_state_file = issue_state_file
         self._last_process_collection: float | None = None
         self._last_software_scan: float | None = None
         self.delivery_worker: OutboxDeliveryWorker | None = None
@@ -528,6 +571,14 @@ class AgentRuntime:
                         logger.info(
                             f"Software inventory delivery confirmed by outbox (fingerprint={fp[:12]}...)."
                         )
+                elif item.event_type == "issue":
+                    issue_key = item.payload.get("issue_key")
+                    incident_id = item.payload.get("incident_id")
+                    if issue_key and incident_id:
+                        record_issue_delivered(issue_key, incident_id, self.issue_state_file)
+                        logger.info(
+                            f"Issue delivery confirmed by outbox (key={issue_key}, incident={incident_id})."
+                        )
 
             # Start Outbox Delivery Worker
             if self.enable_outbox and self.outbox:
@@ -592,6 +643,7 @@ class AgentRuntime:
                 data = collect_all_data(
                     include_processes=due_proc,
                     include_software=due_sw,
+                    issue_state_file=self.issue_state_file,
                 )
                 logger.info("Data collection completed.")
 
@@ -615,7 +667,12 @@ class AgentRuntime:
                 if due_proc:
                     upload_processes(data, self.token_holder, outbox=active_outbox)
                 upload_usage(data, self.token_holder, outbox=active_outbox)
-                upload_issues(data, self.token_holder, outbox=active_outbox)
+                upload_issues(
+                    data,
+                    self.token_holder,
+                    outbox=active_outbox,
+                    state_file=self.issue_state_file,
+                )
 
                 if EXPORT_JSON:
                     try:
