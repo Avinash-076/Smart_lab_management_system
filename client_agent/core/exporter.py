@@ -12,6 +12,11 @@ def export_to_json(data, filename="client_data.json"):
     filepath = os.path.join(OUTPUT_FOLDER, filename)
 
     with open(filepath, "w", encoding="utf-8") as file:
-        json.dump(data, file, indent=4)
+        json.dump(
+            data,
+            file,
+            indent=4,
+            default=lambda o: o.to_dict() if hasattr(o, "to_dict") else str(o),
+        )
 
     return filepath

@@ -20,7 +20,9 @@ from requests.exceptions import HTTPError
 
 from config import (
     CLEAR_SCREEN,
+    ENABLE_HARDWARE_INFO,
     ENABLE_ISSUE_REPORTING,
+    ENABLE_NETWORK_INFO,
     ENABLE_PROCESS_INFO,
     ENABLE_SOFTWARE_INFO,
     ENABLE_USAGE_INFO,
@@ -79,9 +81,25 @@ def upload_metrics(
     token_holder: TokenHolder,
     outbox: DurableOutbox | None = None,
 ) -> bool:
+    if not ENABLE_HARDWARE_INFO and not ENABLE_NETWORK_INFO:
+        return False
+
+    hardware_entry = data.get("hardware")
+    if hasattr(hardware_entry, "is_failed") and hardware_entry.is_failed:
+        logger.warning(f"Skipping metrics upload: hardware collector reported failure ({hardware_entry.error})")
+        return False
+    if hardware_entry is None and ENABLE_HARDWARE_INFO:
+        logger.warning("Skipping metrics upload: hardware data is None.")
+        return False
+
+    try:
+        metric_payload = build_metric_payload(data)
+    except Exception as e:
+        logger.warning(f"Skipping metrics upload: cannot build metric payload ({e})")
+        return False
+
     if outbox is not None:
         try:
-            metric_payload = build_metric_payload(data)
             comp_id = get_computer_id()
             key = f"metric_{comp_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
             outbox.enqueue(
@@ -97,7 +115,7 @@ def upload_metrics(
             return False
 
     try:
-        send_metrics(data, token_holder.token)
+        send_metrics(metric_payload, token_holder.token)
         logger.info("Metrics sent successfully.")
         return True
     except HTTPError as e:
@@ -105,7 +123,7 @@ def upload_metrics(
             logger.warning("Access token expired during metrics upload. Re-authenticating...")
             try:
                 token_holder.token = authenticate_agent()
-                send_metrics(data, token_holder.token)
+                send_metrics(metric_payload, token_holder.token)
                 logger.info("Metrics sent after re-authentication.")
                 return True
             except Exception as retry_error:
@@ -124,9 +142,14 @@ def upload_software(
 ) -> bool:
     if not ENABLE_SOFTWARE_INFO:
         return False
-    software = data.get("software")
+    software_entry = data.get("software")
+    if hasattr(software_entry, "is_failed") and software_entry.is_failed:
+        logger.warning(f"Skipping software upload: software collector reported failure ({software_entry.error})")
+        return False
+    software = software_entry.data if hasattr(software_entry, "data") else software_entry
     if not software:
         return False
+
 
     if outbox is not None:
         try:
@@ -170,7 +193,11 @@ def upload_processes(
 ) -> bool:
     if not ENABLE_PROCESS_INFO:
         return False
-    processes = data.get("processes")
+    processes_entry = data.get("processes")
+    if hasattr(processes_entry, "is_failed") and processes_entry.is_failed:
+        logger.warning(f"Skipping process upload: process collector reported failure ({processes_entry.error})")
+        return False
+    processes = processes_entry.data if hasattr(processes_entry, "data") else processes_entry
     if not processes:
         return False
 
@@ -216,7 +243,11 @@ def upload_usage(
 ) -> bool:
     if not ENABLE_USAGE_INFO:
         return False
-    usage = data.get("usage")
+    usage_entry = data.get("usage")
+    if hasattr(usage_entry, "is_failed") and usage_entry.is_failed:
+        logger.warning(f"Skipping usage upload: usage collector reported failure ({usage_entry.error})")
+        return False
+    usage = usage_entry.data if hasattr(usage_entry, "data") else usage_entry
     if not usage:
         return False
 
@@ -262,7 +293,11 @@ def upload_issues(
 ) -> bool:
     if not ENABLE_ISSUE_REPORTING:
         return False
-    issues = data.get("issues")
+    issues_entry = data.get("issues")
+    if hasattr(issues_entry, "is_failed") and issues_entry.is_failed:
+        logger.warning(f"Skipping issue upload: issue detector reported failure ({issues_entry.error})")
+        return False
+    issues = issues_entry.data if hasattr(issues_entry, "data") else issues_entry
     if not issues:
         return False
 
@@ -302,14 +337,19 @@ def display_console_data(data: dict[str, Any]) -> None:
     print("=" * 60)
     for section, values in data.items():
         print(f"\n{section.upper()}\n" + "-" * 60)
-        if values is None:
+        if hasattr(values, "is_failed") and values.is_failed:
+            print(f"Collection failed: {values.error.message if values.error else 'Error'}")
+            continue
+        actual_val = values.data if hasattr(values, "data") else values
+        if actual_val is None:
             print("Unable to collect data.")
             continue
-        if isinstance(values, dict):
-            for k, v in values.items():
+        if isinstance(actual_val, dict):
+            for k, v in actual_val.items():
                 print(f"{k:20}: {v}")
-        elif isinstance(values, list):
-            print(f"Total items: {len(values)}")
+        elif isinstance(actual_val, list):
+            print(f"Total items: {len(actual_val)}")
+
 
 
 # ============================================================================

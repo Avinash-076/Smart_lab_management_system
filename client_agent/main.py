@@ -163,32 +163,33 @@ def display_data(
             "-" * 60
         )
 
-        if values is None:
+        if hasattr(values, "is_failed") and values.is_failed:
+            print(f"Collection failed: {values.error.message if values.error else 'Error'}")
+            continue
 
+        actual_val = values.data if hasattr(values, "data") else values
+
+        if actual_val is None:
             print(
                 "Unable to collect data."
             )
-
             continue
 
         if isinstance(
-            values,
+            actual_val,
             dict,
         ):
-
-            for key, value in values.items():
-
+            for key, value in actual_val.items():
                 print(
                     f"{key:20}: {value}"
                 )
 
         elif isinstance(
-            values,
+            actual_val,
             list,
         ):
-
             print(
-                f"Total items: {len(values)}"
+                f"Total items: {len(actual_val)}"
             )
 
 
@@ -200,19 +201,24 @@ def upload_metrics(
     data,
     token_holder,
 ):
+    hardware_entry = data.get("hardware")
+    if hasattr(hardware_entry, "is_failed") and hardware_entry.is_failed:
+        logger.warning(f"Skipping metrics upload: hardware collector reported failure ({hardware_entry.error})")
+        return False
+    if hardware_entry is None and ENABLE_HARDWARE_INFO:
+        logger.warning("Skipping metrics upload: hardware data is None.")
+        return False
 
     try:
-
         send_metrics(
             data,
             token_holder.token,
         )
-
         logger.info(
             "Metrics sent successfully."
         )
-
         return True
+
 
     except HTTPError as e:
 
@@ -283,10 +289,16 @@ def upload_software(
 
     try:
 
-        software = data.get(
+        software_entry = data.get(
             "software",
             [],
         )
+
+        if hasattr(software_entry, "is_failed") and software_entry.is_failed:
+            logger.warning("Skipping software upload: collector reported failure.")
+            return
+
+        software = software_entry.data if hasattr(software_entry, "data") else software_entry
 
         if not software:
 
@@ -370,10 +382,16 @@ def upload_processes(
 
     try:
 
-        processes = data.get(
+        processes_entry = data.get(
             "processes",
             [],
         )
+
+        if hasattr(processes_entry, "is_failed") and processes_entry.is_failed:
+            logger.warning("Skipping process upload: collector reported failure.")
+            return
+
+        processes = processes_entry.data if hasattr(processes_entry, "data") else processes_entry
 
         if not processes:
 
@@ -457,10 +475,16 @@ def upload_usage(
 
     try:
 
-        sessions = data.get(
+        sessions_entry = data.get(
             "usage",
             [],
         )
+
+        if hasattr(sessions_entry, "is_failed") and sessions_entry.is_failed:
+            logger.warning("Skipping usage upload: collector reported failure.")
+            return
+
+        sessions = sessions_entry.data if hasattr(sessions_entry, "data") else sessions_entry
 
         if not sessions:
 
@@ -472,6 +496,7 @@ def upload_usage(
 
         send_usage_sessions(
             data,
+
             token_holder.token,
         )
 

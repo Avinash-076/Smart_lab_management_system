@@ -33,32 +33,67 @@ def build_metric_payload(data: dict) -> dict:
     """
     Convert collected client data into the payload expected by the SLMS metrics API.
     Preserves cumulative network byte counter contract and passes idempotency_key if present.
+
+    D-01 / D-02 Hardening:
+    Does NOT convert collector failures into valid numeric 0 values.
+    If hardware collection failed or is missing, raises ValueError.
+    Network byte counters allow None on failure, preserving distinguishability.
     """
+    from core.health import CollectionResult
+
     if "cpu_usage" in data and ("ram_usage" in data or "ram_percent" in data):
         payload = {
-            "cpu_usage": data.get("cpu_usage", 0),
-            "ram_usage": data.get("ram_usage", data.get("ram_percent", 0)),
-            "disk_usage": data.get("disk_usage", data.get("disk_percent", 0)),
-            "network_sent": data.get("network_sent", 0),
-            "network_received": data.get("network_received", 0),
+            "cpu_usage": float(data["cpu_usage"]),
+            "ram_usage": float(data.get("ram_usage", data.get("ram_percent", 0.0))),
+            "disk_usage": float(data.get("disk_usage", data.get("disk_percent", 0.0))),
+            "network_sent": data.get("network_sent"),
+            "network_received": data.get("network_received"),
         }
         if "idempotency_key" in data:
             payload["idempotency_key"] = data["idempotency_key"]
         return payload
 
-    hardware = data.get("hardware") or {}
-    network = data.get("network") or {}
+    hardware_entry = data.get("hardware")
+    if isinstance(hardware_entry, CollectionResult):
+        if hardware_entry.is_failed:
+            raise ValueError(f"Hardware metrics collection failed: {hardware_entry.error}")
+        hardware = hardware_entry.data or {}
+    elif hardware_entry is None:
+        raise ValueError("Hardware metrics are unavailable; cannot build metric payload.")
+    else:
+        hardware = hardware_entry
+
+    network_entry = data.get("network")
+    if isinstance(network_entry, CollectionResult):
+        if network_entry.is_failed:
+            network_sent = None
+            network_received = None
+        else:
+            net_data = network_entry.data or {}
+            network_sent = net_data.get("bytes_sent")
+            network_received = net_data.get("bytes_received")
+    elif isinstance(network_entry, dict):
+        network_sent = network_entry.get("bytes_sent")
+        network_received = network_entry.get("bytes_received")
+    else:
+        network_sent = None
+        network_received = None
+
+    cpu_val = hardware.get("cpu_usage")
+    if cpu_val is None:
+        raise ValueError("Missing cpu_usage in hardware data; cannot fabricate 0% metric.")
 
     payload = {
-        "cpu_usage": hardware.get("cpu_usage", 0),
-        "ram_usage": hardware.get("ram_percent", 0),
-        "disk_usage": hardware.get("disk_percent", 0),
-        "network_sent": network.get("bytes_sent", 0),
-        "network_received": network.get("bytes_received", 0),
+        "cpu_usage": float(cpu_val),
+        "ram_usage": float(hardware.get("ram_percent", hardware.get("ram_usage", 0.0))),
+        "disk_usage": float(hardware.get("disk_percent", hardware.get("disk_usage", 0.0))),
+        "network_sent": network_sent,
+        "network_received": network_received,
     }
     if "idempotency_key" in data:
         payload["idempotency_key"] = data["idempotency_key"]
     return payload
+
 
 
 def send_metrics(data: dict, access_token: str) -> dict:

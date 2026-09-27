@@ -22,36 +22,94 @@ from modules.system_info import get_system_info
 from modules.usage import collect_usage_sessions
 
 
-_last_software_scan = 0.0
-_cached_software = []
+class SoftwareCache:
+    """
+    Explicit cache container for installed software inventory (D-07).
+    Distinguishes valid empty inventory ([]) from missing, expired,
+    corrupted, or failed cache states.
+    """
+
+    def __init__(self, ttl: float = SOFTWARE_SCAN_INTERVAL):
+        self.ttl = ttl
+        self._items: list[dict] | None = None
+        self._last_scan_time: float | None = None
+        self._is_valid: bool = False
+
+    @property
+    def is_present(self) -> bool:
+        """Returns True if the cache contains a valid scan, even if empty ([])."""
+        return self._is_valid and self._items is not None
+
+    def is_expired(self, now: float | None = None) -> bool:
+        """Check if the cache has exceeded its TTL."""
+        if not self._is_valid or self._last_scan_time is None:
+            return True
+        if now is None:
+            now = time.monotonic()
+        return (now - self._last_scan_time) >= self.ttl
+
+    def get(self, now: float | None = None) -> list[dict] | None:
+        """
+        Return cached inventory if valid and not expired.
+        Returns None if cache is missing, expired, or invalid.
+        """
+        if not self._is_valid or self._items is None:
+            return None
+        # Integrity check: items must be a list
+        if not isinstance(self._items, list):
+            self.invalidate()
+            return None
+        if self.is_expired(now):
+            return None
+        return self._items
+
+    def set(self, items: list[dict], now: float | None = None) -> None:
+        """
+        Store a valid scan result in cache (even if empty []).
+        Validates that items is a list of dicts.
+        """
+        if not isinstance(items, list):
+            self.invalidate()
+            return
+        if now is None:
+            now = time.monotonic()
+        self._items = items
+        self._last_scan_time = now
+        self._is_valid = True
+
+    def invalidate(self) -> None:
+        """Mark cache as missing/invalid."""
+        self._items = None
+        self._last_scan_time = None
+        self._is_valid = False
 
 
-def _collect_software():
+_software_cache = SoftwareCache()
+
+
+def _collect_software(cache: SoftwareCache | None = None) -> list[dict]:
     """
     Collect software inventory only when the configured
     software scan interval has elapsed.
 
-    The previously collected inventory is reused between scans.
+    The previously collected inventory (including valid empty [])
+    is reused between scans.
     """
-
-    global _last_software_scan
-    global _cached_software
-
+    active_cache = cache if cache is not None else _software_cache
     now = time.monotonic()
 
-    if (
-        _cached_software
-        and now - _last_software_scan
-        < SOFTWARE_SCAN_INTERVAL
-    ):
-        return _cached_software
+    cached = active_cache.get(now=now)
+    if cached is not None:
+        return cached
 
-    software = get_installed_software()
+    # Rescan required: cache missing, expired, or corrupted
+    raw_software = get_installed_software()
+    if not isinstance(raw_software, list):
+        raise TypeError(f"get_installed_software returned invalid type: {type(raw_software)}")
 
-    _cached_software = software
-    _last_software_scan = now
+    active_cache.set(raw_software, now=now)
+    return raw_software
 
-    return software
 
 
 def collect_all_data() -> dict:
