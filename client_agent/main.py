@@ -19,6 +19,7 @@ from config import (
 )
 
 from core.collector import collect_all_data
+from core.credentials import get_credential_store
 from core.exporter import export_to_json
 from core.logger import logger
 
@@ -92,21 +93,21 @@ def ensure_registered():
 # Computer ID
 # ==========================================
 
-def get_computer_id():
-
-    value = keyring.get_password(
-        SERVER_NAME,
-        "computer_id",
-    )
-
-    if value is None:
-
-        raise RuntimeError(
-            "Computer ID not found in "
-            "Windows Keyring."
+def get_computer_id() -> int:
+    store = get_credential_store()
+    creds = store.get_enrolled_credentials()
+    if not creds or creds.get("computer_id") is None:
+        value = keyring.get_password(
+            SERVER_NAME,
+            "computer_id",
         )
+        if value is None:
+            raise RuntimeError(
+                "Computer ID not found in credential store."
+            )
+        return int(value)
 
-    return int(value)
+    return int(creds["computer_id"])
 
 
 # ==========================================
@@ -632,222 +633,17 @@ def upload_issues(
 # ==========================================
 
 def main():
+    from core.runtime import AgentRuntime
 
-    logger.info(
-        "=" * 60
-    )
-
-    logger.info(
-        "SLMS Client Agent Starting"
-    )
-
-    logger.info(
-        "=" * 60
-    )
-
-    ensure_registered()
-
-    access_token = authenticate()
-
-    token_holder = TokenHolder(
-        access_token
-    )
-
-    computer_id = get_computer_id()
-
-    logger.info(
-        f"Computer ID: {computer_id}"
-    )
-
-    # ------------------------------------------
-    # WebSocket
-    # ------------------------------------------
-
-    ws_client = AgentWebSocketClient(
-        computer_id=computer_id,
-        get_token=lambda:
-            token_holder.token,
-    )
-
-    ws_client.start()
-
-    token_acquired_at = (
-        time.monotonic()
-    )
-
+    runtime = AgentRuntime(is_service=False)
     try:
-
-        while True:
-
-            # --------------------------------------
-            # Token Refresh
-            # --------------------------------------
-
-            if (
-                time.monotonic()
-                - token_acquired_at
-                > TOKEN_REFRESH_INTERVAL
-            ):
-
-                try:
-
-                    logger.info(
-                        "Refreshing access token..."
-                    )
-
-                    token_holder.token = (
-                        authenticate()
-                    )
-
-                    token_acquired_at = (
-                        time.monotonic()
-                    )
-
-                except Exception as e:
-
-                    logger.exception(
-                        f"Token refresh failed: {e}"
-                    )
-
-            # --------------------------------------
-            # Clear Console
-            # --------------------------------------
-
-            if (
-                CLEAR_SCREEN
-                and SHOW_CONSOLE
-                and not getattr(
-                    sys,
-                    "frozen",
-                    False,
-                )
-            ):
-
-                os.system(
-                    "cls"
-                )
-
-            # --------------------------------------
-            # Data Collection
-            # --------------------------------------
-
-            logger.info(
-                "Collecting system information..."
-            )
-
-            data = collect_all_data()
-
-            logger.info(
-                "Data collection completed."
-            )
-
-            # --------------------------------------
-            # Metrics
-            # --------------------------------------
-
-            upload_metrics(
-                data,
-                token_holder,
-            )
-
-            # --------------------------------------
-            # Software
-            # --------------------------------------
-
-            upload_software(
-                data,
-                token_holder,
-            )
-
-            # --------------------------------------
-            # Processes
-            # --------------------------------------
-
-            upload_processes(
-                data,
-                token_holder,
-            )
-
-            # --------------------------------------
-            # Usage
-            # --------------------------------------
-
-            upload_usage(
-                data,
-                token_holder,
-            )
-
-            # --------------------------------------
-            # Issues
-            # --------------------------------------
-
-            upload_issues(
-                data,
-                token_holder,
-            )
-
-            # --------------------------------------
-            # JSON Export
-            # --------------------------------------
-
-            if EXPORT_JSON:
-
-                try:
-
-                    filepath = export_to_json(
-                        data
-                    )
-
-                    logger.info(
-                        f"JSON exported: {filepath}"
-                    )
-
-                except Exception as e:
-
-                    logger.exception(
-                        f"JSON export failed: {e}"
-                    )
-
-            # --------------------------------------
-            # Console
-            # --------------------------------------
-
-            if SHOW_CONSOLE:
-
-                display_data(
-                    data
-                )
-
-                print()
-
-                print(
-                    f"Next scan in "
-                    f"{MONITOR_INTERVAL} seconds..."
-                )
-
-            time.sleep(
-                MONITOR_INTERVAL
-            )
-
+        runtime.start()
     except KeyboardInterrupt:
-
-        logger.info(
-            "Client stopped by user."
-        )
-
+        logger.info("Client stopped by user.")
     except Exception as e:
-
-        logger.exception(
-            f"Unexpected client error: {e}"
-        )
-
+        logger.exception(f"Unexpected client error: {e}")
     finally:
-
-        ws_client.stop()
-
-        logger.info(
-            "SLMS Client Agent stopped."
-        )
+        runtime.stop()
 
 
 if __name__ == "__main__":

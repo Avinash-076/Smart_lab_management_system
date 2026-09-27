@@ -5,24 +5,41 @@ from core.logger import logger
 
 
 def handle_message(payload):
+    """
+    Handle administrative message notice.
+    Service-safe architecture: Eliminates Session 0 MessageBoxW calls.
+    Broadcasts message to active user desktop sessions via msg.exe if available,
+    and records the notice in the agent log.
+    """
+    raw_message = str(payload).strip() if payload else "Message from administrator"
+    # Truncate to reasonable maximum length (1024 chars) to prevent command-line buffer issues
+    message = raw_message[:1024] if len(raw_message) > 1024 else raw_message
+    logger.info(f"Administrator notice received: {message}")
+
+    # Attempt to broadcast to active interactive user sessions via Windows msg.exe
     try:
-        message = payload or "Message from administrator"
-
-        ctypes.windll.user32.MessageBoxW(
-            0,
-            message,
-            "SLMS Notice",
-            0x40
+        result = subprocess.run(
+            ["msg", "*", "/time:15", message],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
         )
+        if result.returncode == 0:
+            return True, "Notice broadcast to interactive user session(s)"
+        else:
+            logger.debug(
+                f"msg.exe returned code {result.returncode}: "
+                f"{result.stderr.strip() or result.stdout.strip()}"
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
+        logger.debug(f"msg.exe broadcast unavailable or timed out: {exc}")
+    except Exception as exc:
+        logger.debug(f"msg.exe unexpected error: {exc}")
 
-        return True, "Message displayed"
+    # Non-interactive fallback: notice was safely recorded in agent logs
+    return True, f"Notice recorded in agent log: {message}"
 
-    except Exception as e:
-        logger.exception(
-            "Failed to display message"
-        )
-
-        return False, str(e)
 
 
 def handle_lock(payload):

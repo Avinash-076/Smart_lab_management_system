@@ -81,6 +81,21 @@ def enroll(enrollment_key: str, server_url: str | None = None) -> dict:
     # Persist the validated server URL so the client communicates with the intended server
     store.set_server_url(base_url)
 
+    # When enrolled interactively, also provision ServiceCredentialStore so
+    # the Windows Service can authenticate immediately in Session 0 across reboots
+    try:
+        from core.credentials import KeyringCredentialStore, ServiceCredentialStore
+        if isinstance(store, KeyringCredentialStore):
+            service_store = ServiceCredentialStore()
+            service_store.save_enrolled_credentials(
+                agent_id=str(agent_id),
+                client_secret=str(client_secret),
+                computer_id=int(computer_id),
+            )
+            service_store.set_server_url(base_url)
+    except Exception:
+        pass
+
     return {
         "agent_id": agent_id,
         "computer_id": computer_id,
