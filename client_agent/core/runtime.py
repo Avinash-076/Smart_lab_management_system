@@ -65,8 +65,21 @@ TOKEN_REFRESH_INTERVAL = 12 * 60  # 12 minutes
 
 
 class TokenHolder:
+    """Thread-safe container for the active JWT access token."""
+
     def __init__(self, token: str):
-        self.token = token
+        self._lock = threading.Lock()
+        self._token = token
+
+    @property
+    def token(self) -> str:
+        with self._lock:
+            return self._token
+
+    @token.setter
+    def token(self, value: str) -> None:
+        with self._lock:
+            self._token = value
 
 
 def get_computer_id() -> int:
@@ -489,6 +502,11 @@ class AgentRuntime:
     def is_running(self) -> bool:
         return self._is_running
 
+    @property
+    def ws_state(self):
+        """Observable WebSocket connection state (Phase 7 G-06)."""
+        return self.ws_client.state if self.ws_client else None
+
     def due_for_process_collection(self, now: float | None = None) -> bool:
         """
         Check if process inventory collection is due based on cadence (E-01).
@@ -595,7 +613,9 @@ class AgentRuntime:
             self.ws_client = AgentWebSocketClient(
                 computer_id=self.computer_id,
                 get_token=lambda: self.token_holder.token if self.token_holder else "",
+                refresh_token=self._refresh_token_safe,
                 outbox=self.outbox if self.enable_outbox else None,
+                is_enrolled=is_enrolled,
             )
             self.ws_client.start()
 

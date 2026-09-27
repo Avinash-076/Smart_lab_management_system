@@ -135,6 +135,16 @@ except Exception:
 
 
 # ==========================================
+# WebSocket Communication (Phase 7 G-03 / G-06)
+# ==========================================
+
+WS_PING_INTERVAL_SECONDS: float = float(os.getenv("SLMS_WS_PING_INTERVAL", "20.0"))
+WS_RECONNECT_BASE_DELAY: float = float(os.getenv("SLMS_WS_RECONNECT_BASE_DELAY", "5.0"))
+WS_RECONNECT_MAX_DELAY: float = float(os.getenv("SLMS_WS_RECONNECT_MAX_DELAY", "60.0"))
+WS_RECONNECT_JITTER_RATIO: float = float(os.getenv("SLMS_WS_RECONNECT_JITTER", "0.15"))
+
+
+# ==========================================
 # Monitoring
 # ==========================================
 
