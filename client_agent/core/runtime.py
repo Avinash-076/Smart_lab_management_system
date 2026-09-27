@@ -28,13 +28,22 @@ from config import (
     ENABLE_USAGE_INFO,
     EXPORT_JSON,
     MONITOR_INTERVAL,
+    PROCESS_COLLECTION_INTERVAL,
     SHOW_CONSOLE,
+    SOFTWARE_SCAN_INTERVAL,
 )
 from core.collector import collect_all_data
 from core.credentials import get_credential_store
 from core.exporter import export_to_json
 from core.logger import logger
 from core.outbox import DurableOutbox, OutboxDeliveryWorker, OutboxPriority
+from modules.software import (
+    compute_software_fingerprint,
+    load_software_state,
+    record_software_delivered,
+    record_software_enqueued,
+    save_software_state,
+)
 from server.auth import get_access_token
 from server.communication import AgentWebSocketClient
 from server.enroll import is_enrolled
@@ -139,22 +148,59 @@ def upload_software(
     data: dict[str, Any],
     token_holder: TokenHolder,
     outbox: DurableOutbox | None = None,
+    state_file: str | None = None,
+    force: bool = False,
 ) -> bool:
     if not ENABLE_SOFTWARE_INFO:
         return False
     software_entry = data.get("software")
+    if software_entry is None:
+        return False
     if hasattr(software_entry, "is_failed") and software_entry.is_failed:
         logger.warning(f"Skipping software upload: software collector reported failure ({software_entry.error})")
         return False
     software = software_entry.data if hasattr(software_entry, "data") else software_entry
-    if not software:
+    if software is None:
         return False
 
+    # E-06: Compute deterministic fingerprint
+    fingerprint = compute_software_fingerprint(software)
+    state = load_software_state(state_file)
+    last_delivered = state.get("last_delivered_fingerprint")
 
+    # If this exact inventory has already been successfully delivered, skip upload
+    if not force and last_delivered is not None and last_delivered == fingerprint:
+        logger.info(
+            f"Software inventory unchanged (already delivered, fingerprint={fingerprint[:12]}...); skipping upload."
+        )
+        return False
+
+    # Asynchronous outbox delivery mode
     if outbox is not None:
         try:
             comp_id = get_computer_id()
-            key = f"software_{comp_id}_{int(time.time())}"
+            key = f"software_{comp_id}_{fingerprint[:16]}"
+
+            # Check if record already exists in outbox
+            existing_record = outbox.get_record_by_idempotency_key(key)
+            if existing_record is not None:
+                from core.outbox.models import OutboxStatus
+                if existing_record.status == OutboxStatus.DEAD_LETTER:
+                    logger.warning(
+                        f"Software inventory outbox record {existing_record.id} was DEAD_LETTER; "
+                        "requeuing for active delivery."
+                    )
+                    outbox.requeue_dead_letter(existing_record.id)
+                    record_software_enqueued(fingerprint, state_file)
+                    return True
+                elif existing_record.status in (OutboxStatus.PENDING, OutboxStatus.PROCESSING):
+                    logger.info(
+                        f"Software inventory already pending in outbox (id={existing_record.id}, "
+                        f"fingerprint={fingerprint[:12]}...); awaiting delivery."
+                    )
+                    record_software_enqueued(fingerprint, state_file)
+                    return False
+
             outbox.enqueue(
                 event_type="software",
                 payload={"software": software},
@@ -162,20 +208,24 @@ def upload_software(
                 priority=OutboxPriority.TELEMETRY,
             )
             logger.info("Software inventory enqueued to durable outbox.")
+            record_software_enqueued(fingerprint, state_file)
             return True
         except Exception as e:
             logger.exception(f"Failed to enqueue software to outbox: {e}")
             return False
 
+    # Direct synchronous upload mode (outbox is None)
     try:
         send_software_inventory(software, token_holder.token)
         logger.info("Software inventory sent successfully.")
+        record_software_delivered(fingerprint, state_file)
         return True
     except HTTPError as e:
         if e.response is not None and e.response.status_code == 401:
             try:
                 token_holder.token = authenticate_agent()
                 send_software_inventory(software, token_holder.token)
+                record_software_delivered(fingerprint, state_file)
                 return True
             except Exception as retry_error:
                 logger.exception(f"Software retry failed: {retry_error}")
@@ -194,11 +244,13 @@ def upload_processes(
     if not ENABLE_PROCESS_INFO:
         return False
     processes_entry = data.get("processes")
+    if processes_entry is None:
+        return False
     if hasattr(processes_entry, "is_failed") and processes_entry.is_failed:
         logger.warning(f"Skipping process upload: process collector reported failure ({processes_entry.error})")
         return False
     processes = processes_entry.data if hasattr(processes_entry, "data") else processes_entry
-    if not processes:
+    if processes is None:
         return False
 
     if outbox is not None:
@@ -368,11 +420,19 @@ class AgentRuntime:
         is_service: bool = False,
         outbox: DurableOutbox | None = None,
         enable_outbox: bool = True,
+        process_interval: float = PROCESS_COLLECTION_INTERVAL,
+        software_interval: float = SOFTWARE_SCAN_INTERVAL,
+        software_state_file: str | None = None,
     ):
         self.stop_event = stop_event or threading.Event()
         self.is_service = is_service
         self.enable_outbox = enable_outbox
         self.outbox = outbox if (outbox is not None or not enable_outbox) else DurableOutbox()
+        self.process_interval = process_interval
+        self.software_interval = software_interval
+        self.software_state_file = software_state_file
+        self._last_process_collection: float | None = None
+        self._last_software_scan: float | None = None
         self.delivery_worker: OutboxDeliveryWorker | None = None
         self.ws_client: AgentWebSocketClient | None = None
         self.token_holder: TokenHolder | None = None
@@ -385,6 +445,28 @@ class AgentRuntime:
     @property
     def is_running(self) -> bool:
         return self._is_running
+
+    def due_for_process_collection(self, now: float | None = None) -> bool:
+        """
+        Check if process inventory collection is due based on cadence (E-01).
+        Triggers on initial run, then every process_interval seconds.
+        """
+        if now is None:
+            now = time.monotonic()
+        if self._last_process_collection is None:
+            return True
+        return (now - self._last_process_collection) >= self.process_interval
+
+    def due_for_software_scan(self, now: float | None = None) -> bool:
+        """
+        Check if software inventory scan is due based on cadence (E-05).
+        Triggers on initial run, then every software_interval seconds.
+        """
+        if now is None:
+            now = time.monotonic()
+        if self._last_software_scan is None:
+            return True
+        return (now - self._last_software_scan) >= self.software_interval
 
     def _refresh_token_safe(self) -> str:
         """Refresh JWT access token and update token holder in-memory."""
@@ -436,6 +518,17 @@ class AgentRuntime:
             if self.stop_event.is_set():
                 return
 
+            # Delivery confirmation callback
+            def _handle_outbox_delivered(item: OutboxRecord) -> None:
+                if item.event_type == "software":
+                    software_list = item.payload.get("software")
+                    if software_list is not None:
+                        fp = compute_software_fingerprint(software_list)
+                        record_software_delivered(fp, self.software_state_file)
+                        logger.info(
+                            f"Software inventory delivery confirmed by outbox (fingerprint={fp[:12]}...)."
+                        )
+
             # Start Outbox Delivery Worker
             if self.enable_outbox and self.outbox:
                 self.delivery_worker = OutboxDeliveryWorker(
@@ -443,6 +536,7 @@ class AgentRuntime:
                     get_token=lambda: self.token_holder.token if self.token_holder else "",
                     refresh_token=self._refresh_token_safe,
                     stop_event=self.stop_event,
+                    on_delivered=_handle_outbox_delivered,
                 )
                 self.delivery_worker.start()
 
@@ -461,14 +555,16 @@ class AgentRuntime:
 
         try:
             while not self.stop_event.is_set():
+                loop_now = time.monotonic()
+
                 # ----------------------------------------------------
                 # Token Refresh Check
                 # ----------------------------------------------------
-                if time.monotonic() - token_acquired_at > TOKEN_REFRESH_INTERVAL:
+                if loop_now - token_acquired_at > TOKEN_REFRESH_INTERVAL:
                     try:
                         logger.info("Refreshing access token...")
                         self.token_holder.token = authenticate_agent()
-                        token_acquired_at = time.monotonic()
+                        token_acquired_at = loop_now
                     except Exception as e:
                         logger.exception(f"Periodic token refresh failed: {e}")
 
@@ -484,19 +580,40 @@ class AgentRuntime:
                     os.system("cls")
 
                 # ----------------------------------------------------
+                # Cadence Gating (E-01, E-05)
+                # ----------------------------------------------------
+                due_proc = self.due_for_process_collection(loop_now)
+                due_sw = self.due_for_software_scan(loop_now)
+
+                # ----------------------------------------------------
                 # Data Collection
                 # ----------------------------------------------------
                 logger.info("Collecting system information...")
-                data = collect_all_data()
+                data = collect_all_data(
+                    include_processes=due_proc,
+                    include_software=due_sw,
+                )
                 logger.info("Data collection completed.")
+
+                if due_proc:
+                    self._last_process_collection = loop_now
+                if due_sw:
+                    self._last_software_scan = loop_now
 
                 # ----------------------------------------------------
                 # Uploads
                 # ----------------------------------------------------
                 active_outbox = self.outbox if self.enable_outbox else None
                 upload_metrics(data, self.token_holder, outbox=active_outbox)
-                upload_software(data, self.token_holder, outbox=active_outbox)
-                upload_processes(data, self.token_holder, outbox=active_outbox)
+                if due_sw:
+                    upload_software(
+                        data,
+                        self.token_holder,
+                        outbox=active_outbox,
+                        state_file=self.software_state_file,
+                    )
+                if due_proc:
+                    upload_processes(data, self.token_holder, outbox=active_outbox)
                 upload_usage(data, self.token_holder, outbox=active_outbox)
                 upload_issues(data, self.token_holder, outbox=active_outbox)
 

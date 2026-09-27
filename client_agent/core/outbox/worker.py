@@ -44,6 +44,7 @@ class OutboxDeliveryWorker:
         poll_interval: float = 5.0,
         stop_event: threading.Event | None = None,
         wake_event: threading.Event | None = None,
+        on_delivered: Callable[[OutboxRecord], None] | None = None,
     ):
         self.outbox = outbox
         self.get_token = get_token
@@ -52,6 +53,7 @@ class OutboxDeliveryWorker:
         self.poll_interval = poll_interval
         self.stop_event = stop_event or threading.Event()
         self.wake_event = wake_event or self.outbox.wake_event or threading.Event()
+        self.on_delivered = on_delivered
         self.outbox.wake_event = self.wake_event
 
         self._thread: threading.Thread | None = None
@@ -150,6 +152,11 @@ class OutboxDeliveryWorker:
         try:
             self._dispatch_event(item, token)
             self.outbox.mark_delivered(item.id)
+            if self.on_delivered:
+                try:
+                    self.on_delivered(item)
+                except Exception as cb_err:
+                    logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
             logger.debug(f"Outbox item {item.id} ({item.event_type}) delivered successfully.")
         except Exception as exc:
             self._handle_delivery_failure(item, exc, token)
@@ -209,6 +216,11 @@ class OutboxDeliveryWorker:
                 f"Outbox item {item.id} duplicate confirmed by server ({error_msg}); marked delivered."
             )
             self.outbox.mark_delivered(item.id)
+            if self.on_delivered:
+                try:
+                    self.on_delivered(item)
+                except Exception as cb_err:
+                    logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
             return
 
         # 2. Authentication Expired (HTTP 401)
@@ -219,6 +231,11 @@ class OutboxDeliveryWorker:
                 # Retry immediately with refreshed token
                 self._dispatch_event(item, new_token)
                 self.outbox.mark_delivered(item.id)
+                if self.on_delivered:
+                    try:
+                        self.on_delivered(item)
+                    except Exception as cb_err:
+                        logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
                 logger.info(f"Outbox item {item.id} delivered successfully after re-authentication.")
                 return
             except Exception as retry_exc:

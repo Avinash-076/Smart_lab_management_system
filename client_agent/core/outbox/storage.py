@@ -222,6 +222,40 @@ class DurableOutbox:
             payload_size=payload_size,
         )
 
+    def get_record_by_idempotency_key(self, idempotency_key: str) -> OutboxRecord | None:
+        """Find an outbox record by its idempotency key."""
+        with self._lock:
+            with self._get_connection() as conn:
+                cur = conn.execute(
+                    "SELECT * FROM outbox_items WHERE idempotency_key = ?;",
+                    (idempotency_key,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return self._row_to_record(row)
+                return None
+
+    def requeue_dead_letter(self, record_id: int) -> bool:
+        """Re-activate a DEAD_LETTER record to PENDING status for re-delivery."""
+        now = time.time()
+        with self._lock:
+            with self._get_connection() as conn:
+                cur = conn.execute(
+                    """
+                    UPDATE outbox_items
+                    SET status = ?, attempt_count = 0, next_attempt_at = ?,
+                        updated_at = ?, last_error = NULL
+                    WHERE id = ? AND status = ?;
+                    """,
+                    (OutboxStatus.PENDING.value, now, now, record_id, OutboxStatus.DEAD_LETTER.value),
+                )
+                conn.commit()
+                requeued = cur.rowcount > 0
+
+        if requeued and self.wake_event:
+            self.wake_event.set()
+        return requeued
+
     def get_pending_batch(
         self,
         limit: int = 20,

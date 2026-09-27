@@ -42,6 +42,8 @@ CONFIG_FOLDER = os.path.join(DATA_DIR, "config")
 CACHE_FOLDER = os.path.join(DATA_DIR, "cache")
 OUTBOX_FOLDER = os.path.join(DATA_DIR, "outbox")
 OUTBOX_DB_PATH = os.path.join(OUTBOX_FOLDER, "outbox.db")
+SOFTWARE_STATE_FILE = os.path.join(DATA_DIR, "software_state.json")
+USAGE_STATE_FILE = os.path.join(DATA_DIR, "usage_state.json")
 
 # Deprecated legacy path - preserved for backward compatibility
 CREDENTIAL_FILE = os.path.join(BASE_PATH, "agent_credential.json")

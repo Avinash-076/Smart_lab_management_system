@@ -138,11 +138,20 @@ except Exception:
 # Monitoring
 # ==========================================
 
-# Normal system metrics collection interval.
+# Normal system metrics collection interval (seconds).
 MONITOR_INTERVAL = 20
 
-# Installed software scan interval.
-SOFTWARE_SCAN_INTERVAL = 10 * 60
+# Running processes inventory collection interval (seconds) - E-01 (target 1-5 minutes).
+PROCESS_COLLECTION_INTERVAL: int = int(os.getenv("SLMS_PROCESS_INTERVAL", "120"))
+
+# Installed software scan interval (seconds) - E-05 (target 10-30 minutes).
+SOFTWARE_SCAN_INTERVAL: int = int(os.getenv("SLMS_SOFTWARE_INTERVAL", str(15 * 60)))
+
+# Maximum processes retained in inventory payload - E-04 (bounded payload).
+MAX_PROCESSES_INVENTORY: int = int(os.getenv("SLMS_MAX_PROCESSES", "500"))
+
+# Maximum process name character length (matches backend schema).
+MAX_PROCESS_NAME_LENGTH: int = 255
 
 
 # ==========================================
