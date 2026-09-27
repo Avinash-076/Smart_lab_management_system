@@ -26,13 +26,29 @@ router = APIRouter()
 async def client_websocket(
     websocket: WebSocket,
     computer_id: int,
-    token: str = Query(...),
+    token: str | None = Query(default=None),
 ):
     db = SessionLocal()
 
     try:
+        # Authorization header is the target production architecture.
+        # The '?token=' query parameter is supported temporarily for backward compatibility
+        # and will be removed in the WebSocket hardening phase.
+        auth_header = websocket.headers.get("authorization")
+        raw_token = None
+        if auth_header and auth_header.lower().startswith("bearer "):
+            raw_token = auth_header[7:].strip()
+        elif token:
+            raw_token = token.strip()
+
+        if not raw_token:
+            await websocket.close(
+                code=4001
+            )
+            return
+
         try:
-            payload = decode_token(token)
+            payload = decode_token(raw_token)
 
         except HTTPException:
             await websocket.close(

@@ -1,3 +1,11 @@
+"""
+DEPRECATED MODULE - DO NOT USE.
+This module represents legacy registration code that is superseded by
+server/enroll.py and server/auth.py. It is retained temporarily during
+the hardening phase to verify that zero external dependencies exist and
+will be decommissioned in a subsequent phase.
+"""
+
 import os
 import json
 import socket

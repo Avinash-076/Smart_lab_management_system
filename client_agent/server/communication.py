@@ -5,8 +5,14 @@ import time
 import requests
 import websocket
 
-from config import API_BASE_URL, WS_BASE_URL
+from config import get_api_base_url, get_ws_base_url
 from core.logger import logger
+from core.security import (
+    build_websocket_endpoint,
+    build_websocket_headers,
+    create_secure_session,
+    get_ca_bundle_path,
+)
 from server.command_handler import execute_command
 
 
@@ -80,19 +86,22 @@ class AgentWebSocketClient:
             try:
 
                 token = self.get_token()
+                ws_base = get_ws_base_url()
+                url = build_websocket_endpoint(ws_base, self.computer_id)
+                headers = build_websocket_headers(token)
 
-                url = (
-                    f"{WS_BASE_URL}/"
-                    f"{self.computer_id}"
-                    f"?token={token}"
-                )
+                sslopt = {}
+                ca_bundle = get_ca_bundle_path()
+                if ca_bundle:
+                    sslopt["ca_certs"] = ca_bundle
 
                 logger.info(
-                    "Connecting to SLMS WebSocket..."
+                    f"Connecting to SLMS WebSocket at {url}..."
                 )
 
                 self._ws_app = websocket.WebSocketApp(
                     url,
+                    header=headers,
                     on_open=self._on_open,
                     on_message=self._on_message,
                     on_error=self._on_error,
@@ -102,6 +111,7 @@ class AgentWebSocketClient:
                 self._ws_app.run_forever(
                     ping_interval=None,
                     ping_timeout=None,
+                    sslopt=sslopt if sslopt else None,
                 )
 
                 if self._stop:
@@ -284,10 +294,11 @@ class AgentWebSocketClient:
         try:
 
             token = self.get_token()
+            api_url = get_api_base_url()
+            session = create_secure_session()
 
-            response = requests.post(
-                f"{API_BASE_URL}"
-                f"/api/commands/{command_id}/result",
+            response = session.post(
+                f"{api_url}/api/commands/{command_id}/result",
                 json={
                     "success": success,
                     "message": message,

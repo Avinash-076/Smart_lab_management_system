@@ -20,6 +20,7 @@ Thumbs.db
 
 # SQLite database files
 *.sqlite3
+*.db
 slms.db
 
 # Log files

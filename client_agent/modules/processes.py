@@ -9,7 +9,6 @@ def get_running_processes():
         [
             "pid",
             "name",
-            "username",
             "cpu_percent",
             "memory_percent",
             "status",
@@ -24,8 +23,6 @@ def get_running_processes():
 
             if pid is None or not name:
                 continue
-
-            username = info.get("username")
 
             cpu_percent = info.get("cpu_percent") or 0
             memory_percent = info.get("memory_percent") or 0
@@ -46,7 +43,7 @@ def get_running_processes():
                 {
                     "pid": pid,
                     "name": name,
-                    "user": username,
+                    "user": None,
                     "cpu_percent": max(
                         0,
                         float(cpu_percent),

@@ -1,4 +1,3 @@
-import getpass
 import platform
 import socket
 import uuid
@@ -61,7 +60,6 @@ def get_system_info() -> dict:
 
     return {
         "computer_name": socket.gethostname(),
-        "username": getpass.getuser(),
         "operating_system": platform.system(),
         "os_version": platform.version(),
         "machine": platform.machine(),

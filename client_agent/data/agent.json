@@ -1,4 +1,5 @@
 {
+    "_deprecated": "DEPRECATED: Unused legacy agent configuration file retained temporarily during hardening.",
     "registered": false,
     "computer_id": null,
     "agent_token": null
