@@ -8,6 +8,7 @@ from app.models.issue import (
     Issue,
     IssueSeverity,
     IssueStatus,
+    IssueSource,
 )
 from app.schemas.issue_schema import (
     IssueCreate,
@@ -82,13 +83,46 @@ def create_issue(
     created_by: int | None = None,
 ) -> Issue:
 
+    title_clean = issue_data.title.strip()
+    description_clean = issue_data.description.strip()
+
+    if issue_data.idempotency_key:
+        existing_key = db.scalars(
+            select(Issue).where(
+                Issue.idempotency_key == issue_data.idempotency_key
+            )
+        ).first()
+        if existing_key:
+            return existing_key
+
+    if issue_data.source == IssueSource.agent:
+        existing = db.scalars(
+            select(Issue).where(
+                Issue.computer_id == issue_data.computer_id,
+                Issue.title == title_clean,
+                Issue.status == IssueStatus.open,
+            )
+        ).first()
+        if existing:
+            existing.description = description_clean
+            existing.severity = issue_data.severity
+            existing.updated_at = datetime.now(timezone.utc)
+            try:
+                db.commit()
+                db.refresh(existing)
+                return existing
+            except SQLAlchemyError:
+                db.rollback()
+                raise
+
     issue = Issue(
         computer_id=issue_data.computer_id,
-        title=issue_data.title.strip(),
-        description=issue_data.description.strip(),
+        title=title_clean,
+        description=description_clean,
         severity=issue_data.severity,
         status=IssueStatus.open,
         source=issue_data.source,
+        idempotency_key=issue_data.idempotency_key,
         created_by=created_by,
     )
 
@@ -101,6 +135,24 @@ def create_issue(
 
     except IntegrityError:
         db.rollback()
+        if issue_data.idempotency_key:
+            existing_key = db.scalars(
+                select(Issue).where(
+                    Issue.idempotency_key == issue_data.idempotency_key
+                )
+            ).first()
+            if existing_key:
+                return existing_key
+        if issue_data.source == IssueSource.agent:
+            existing = db.scalars(
+                select(Issue).where(
+                    Issue.computer_id == issue_data.computer_id,
+                    Issue.title == title_clean,
+                    Issue.status == IssueStatus.open,
+                )
+            ).first()
+            if existing:
+                return existing
         raise
 
     except SQLAlchemyError:

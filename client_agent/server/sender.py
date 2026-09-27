@@ -32,18 +32,33 @@ def _build_headers(access_token: str) -> dict:
 def build_metric_payload(data: dict) -> dict:
     """
     Convert collected client data into the payload expected by the SLMS metrics API.
-    Preserves cumulative network byte counter contract.
+    Preserves cumulative network byte counter contract and passes idempotency_key if present.
     """
+    if "cpu_usage" in data and ("ram_usage" in data or "ram_percent" in data):
+        payload = {
+            "cpu_usage": data.get("cpu_usage", 0),
+            "ram_usage": data.get("ram_usage", data.get("ram_percent", 0)),
+            "disk_usage": data.get("disk_usage", data.get("disk_percent", 0)),
+            "network_sent": data.get("network_sent", 0),
+            "network_received": data.get("network_received", 0),
+        }
+        if "idempotency_key" in data:
+            payload["idempotency_key"] = data["idempotency_key"]
+        return payload
+
     hardware = data.get("hardware") or {}
     network = data.get("network") or {}
 
-    return {
+    payload = {
         "cpu_usage": hardware.get("cpu_usage", 0),
         "ram_usage": hardware.get("ram_percent", 0),
         "disk_usage": hardware.get("disk_percent", 0),
         "network_sent": network.get("bytes_sent", 0),
         "network_received": network.get("bytes_received", 0),
     }
+    if "idempotency_key" in data:
+        payload["idempotency_key"] = data["idempotency_key"]
+    return payload
 
 
 def send_metrics(data: dict, access_token: str) -> dict:
@@ -68,11 +83,14 @@ def send_metrics(data: dict, access_token: str) -> dict:
 # Software Inventory
 # ==========================================
 
-def send_software_inventory(data: dict, access_token: str) -> list:
+def send_software_inventory(data: dict | list, access_token: str) -> list:
     """
     Send installed software inventory to the backend.
     """
-    software = data.get("software") or []
+    if isinstance(data, list):
+        software = data
+    else:
+        software = data.get("software") or []
     payload = {"software": software}
     api_url = get_api_base_url()
     session = create_secure_session()
@@ -91,11 +109,14 @@ def send_software_inventory(data: dict, access_token: str) -> list:
 # Process Monitoring
 # ==========================================
 
-def send_process_inventory(data: dict, access_token: str) -> list:
+def send_process_inventory(data: dict | list, access_token: str) -> list:
     """
     Send currently running processes to the backend.
     """
-    processes = data.get("processes") or []
+    if isinstance(data, list):
+        processes = data
+    else:
+        processes = data.get("processes") or []
     payload = {"processes": processes}
     api_url = get_api_base_url()
     session = create_secure_session()
@@ -114,11 +135,14 @@ def send_process_inventory(data: dict, access_token: str) -> list:
 # Usage History
 # ==========================================
 
-def send_usage_sessions(data: dict, access_token: str) -> list:
+def send_usage_sessions(data: dict | list, access_token: str) -> list:
     """
     Send completed application usage sessions to the backend.
     """
-    sessions = data.get("usage") or []
+    if isinstance(data, list):
+        sessions = data
+    else:
+        sessions = data.get("usage") or data.get("sessions") or []
     if not sessions:
         return []
 
@@ -149,6 +173,8 @@ def send_issue(issue: dict, access_token: str) -> dict:
         "description": issue["description"],
         "severity": issue["severity"],
     }
+    if "idempotency_key" in issue and issue["idempotency_key"]:
+        payload["idempotency_key"] = issue["idempotency_key"]
     api_url = get_api_base_url()
     session = create_secure_session()
 
@@ -171,3 +197,24 @@ def send_issues(issues: list[dict], access_token: str) -> list[dict]:
         result = send_issue(issue, access_token)
         results.append(result)
     return results
+
+
+# ==========================================
+# Command Results
+# ==========================================
+
+def send_command_result(command_id: int, payload: dict, access_token: str) -> dict:
+    """
+    Send remote command execution result to the backend.
+    """
+    api_url = get_api_base_url()
+    session = create_secure_session()
+
+    response = session.post(
+        f"{api_url}/api/commands/{command_id}/result",
+        json=payload,
+        headers=_build_headers(access_token),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()

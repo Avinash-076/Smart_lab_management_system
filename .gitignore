@@ -21,7 +21,11 @@ Thumbs.db
 # SQLite database files
 *.sqlite3
 *.db
+*.db-wal
+*.db-shm
 slms.db
+/outbox/
+!client_agent/core/outbox/
 
 # Log files
 *.log

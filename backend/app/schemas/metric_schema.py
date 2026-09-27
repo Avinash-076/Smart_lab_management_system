@@ -8,6 +8,7 @@ class MetricUpload(BaseModel):
     disk_usage: float = Field(ge=0, le=100)
     network_sent: float | None = Field(default=None, ge=0)
     network_received: float | None = Field(default=None, ge=0)
+    idempotency_key: str | None = Field(default=None, max_length=128)
 
 class MetricRespond(BaseModel):
     id: int
@@ -17,6 +18,7 @@ class MetricRespond(BaseModel):
     disk_usage: float
     network_sent: float | None 
     network_received: float | None
+    idempotency_key: str | None = None
     recorded_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

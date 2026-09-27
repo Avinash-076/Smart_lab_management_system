@@ -11,8 +11,17 @@ async def create_metric(
     computer_id: int,
     metric_data: MetricUpload
 ) -> SystemMetric:
+    if metric_data.idempotency_key:
+        existing = db.scalars(
+            select(SystemMetric).where(
+                SystemMetric.idempotency_key == metric_data.idempotency_key
+            )
+        ).first()
+        if existing:
+            return existing
+
     metric = SystemMetric(
-        computer_id= computer_id,
+        computer_id=computer_id,
         **metric_data.model_dump(),
     )
 
@@ -22,6 +31,14 @@ async def create_metric(
         db.refresh(metric)
     except IntegrityError:
         db.rollback()
+        if metric_data.idempotency_key:
+            existing = db.scalars(
+                select(SystemMetric).where(
+                    SystemMetric.idempotency_key == metric_data.idempotency_key
+                )
+            ).first()
+            if existing:
+                return existing
         raise
     except SQLAlchemyError:
         db.rollback()

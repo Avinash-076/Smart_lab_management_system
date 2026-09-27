@@ -21,15 +21,16 @@ from app.auth import create_agent_access_token
 
 @pytest.fixture(scope="session", autouse=True)
 def init_db():
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
-    # Cleanup test db
-    test_db = Path("test_slms.db")
-    if test_db.exists():
-        try:
-            test_db.unlink()
-        except Exception:
-            pass
+    Base.metadata.drop_all(bind=engine)
+    for p in [Path("test_slms.db"), BACKEND_DIR / "test_slms.db"]:
+        if p.exists():
+            try:
+                p.unlink()
+            except Exception:
+                pass
 
 
 @pytest.fixture

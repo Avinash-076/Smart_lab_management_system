@@ -28,6 +28,11 @@ class IssueCreate(BaseModel):
 
     source: IssueSource = IssueSource.admin
 
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+
 
 class IssueUpdate(BaseModel):
     title: str | None = Field(
@@ -62,6 +67,7 @@ class IssueResponse(BaseModel):
     source: IssueSource
 
     resolution_notes: str | None
+    idempotency_key: str | None = None
 
     created_by: int | None
     resolved_by: int | None
@@ -87,3 +93,8 @@ class IssueAgentCreate(BaseModel):
     )
 
     severity: IssueSeverity = IssueSeverity.medium
+
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=128,
+    )

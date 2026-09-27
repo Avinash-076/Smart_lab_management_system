@@ -100,6 +100,13 @@ class Issue(Base):
         nullable=True,
     )
 
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(128),
+        nullable=True,
+        unique=True,
+        index=True,
+    )
+
     created_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"),
         nullable=True,

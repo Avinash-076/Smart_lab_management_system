@@ -40,12 +40,14 @@ LOG_FOLDER = os.path.join(DATA_DIR, "logs")
 OUTPUT_FOLDER = os.path.join(DATA_DIR, "output")
 CONFIG_FOLDER = os.path.join(DATA_DIR, "config")
 CACHE_FOLDER = os.path.join(DATA_DIR, "cache")
+OUTBOX_FOLDER = os.path.join(DATA_DIR, "outbox")
+OUTBOX_DB_PATH = os.path.join(OUTBOX_FOLDER, "outbox.db")
 
 # Deprecated legacy path - preserved for backward compatibility
 CREDENTIAL_FILE = os.path.join(BASE_PATH, "agent_credential.json")
 
 # Ensure standard directories exist
-for folder in (LOG_FOLDER, OUTPUT_FOLDER, CONFIG_FOLDER, CACHE_FOLDER):
+for folder in (LOG_FOLDER, OUTPUT_FOLDER, CONFIG_FOLDER, CACHE_FOLDER, OUTBOX_FOLDER):
     try:
         os.makedirs(folder, exist_ok=True)
     except Exception:

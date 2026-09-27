@@ -50,6 +50,15 @@ def create_usage_session(
 
     except IntegrityError:
         db.rollback()
+        existing = db.scalars(
+            select(UsageSession).where(
+                UsageSession.computer_id == computer_id,
+                UsageSession.application_name == session_data.application_name.strip(),
+                UsageSession.started_at == session_data.started_at,
+            )
+        ).first()
+        if existing:
+            return existing
         raise
 
     except SQLAlchemyError:
@@ -91,6 +100,20 @@ def create_usage_sessions(
                     int(calculated),
                 )
 
+            # Deduplicate if session already exists for this computer and start time
+            existing = db.scalars(
+                select(UsageSession).where(
+                    UsageSession.computer_id == computer_id,
+                    UsageSession.application_name == application_name,
+                    UsageSession.started_at == item.started_at,
+                )
+            ).first()
+            if existing:
+                existing.ended_at = item.ended_at
+                existing.duration_seconds = duration
+                records.append(existing)
+                continue
+
             record = UsageSession(
                 computer_id=computer_id,
                 application_name=application_name,
@@ -111,6 +134,23 @@ def create_usage_sessions(
 
     except IntegrityError:
         db.rollback()
+        # Concurrency race: another request committed the same sessions simultaneously
+        resolved_records: list[UsageSession] = []
+        for item in usage_data.sessions[:MAX_USAGE_SESSIONS]:
+            app_name = item.application_name.strip()
+            if not app_name:
+                continue
+            rec = db.scalars(
+                select(UsageSession).where(
+                    UsageSession.computer_id == computer_id,
+                    UsageSession.application_name == app_name,
+                    UsageSession.started_at == item.started_at,
+                )
+            ).first()
+            if rec:
+                resolved_records.append(rec)
+        if resolved_records:
+            return resolved_records
         raise
 
     except SQLAlchemyError:

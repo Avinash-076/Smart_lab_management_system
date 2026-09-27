@@ -28,9 +28,11 @@ class AgentWebSocketClient:
         self,
         computer_id: int,
         get_token,
+        outbox=None,
     ):
         self.computer_id = computer_id
         self.get_token = get_token
+        self.outbox = outbox
 
         self._ws_app = None
         self._stop = False
@@ -274,11 +276,38 @@ class AgentWebSocketClient:
             payload,
         )
 
-        self._send_command_result(
-            command_id,
-            success,
-            result_message,
-        )
+        if self.outbox is not None:
+            try:
+                from core.outbox.models import OutboxPriority
+                self.outbox.enqueue(
+                    event_type="command_result",
+                    payload={
+                        "command_id": command_id,
+                        "success": success,
+                        "message": result_message,
+                    },
+                    idempotency_key=f"cmd_result_{command_id}",
+                    priority=OutboxPriority.COMMAND,
+                    max_attempts=10,
+                )
+                logger.info(
+                    f"Command result enqueued to durable outbox: {command_id}"
+                )
+            except Exception as outbox_error:
+                logger.exception(
+                    f"Failed to enqueue command result to outbox: {outbox_error}"
+                )
+                self._send_command_result(
+                    command_id,
+                    success,
+                    result_message,
+                )
+        else:
+            self._send_command_result(
+                command_id,
+                success,
+                result_message,
+            )
 
     # ==========================================
     # Command Result

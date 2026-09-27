@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from typing import Any
+import uuid
 
 from requests.exceptions import HTTPError
 
@@ -31,10 +32,12 @@ from core.collector import collect_all_data
 from core.credentials import get_credential_store
 from core.exporter import export_to_json
 from core.logger import logger
+from core.outbox import DurableOutbox, OutboxDeliveryWorker, OutboxPriority
 from server.auth import get_access_token
 from server.communication import AgentWebSocketClient
 from server.enroll import is_enrolled
 from server.sender import (
+    build_metric_payload,
     send_issue,
     send_metrics,
     send_process_inventory,
@@ -71,7 +74,28 @@ def authenticate_agent() -> str:
 # Telemetry Upload Helpers
 # ============================================================================
 
-def upload_metrics(data: dict[str, Any], token_holder: TokenHolder) -> bool:
+def upload_metrics(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+) -> bool:
+    if outbox is not None:
+        try:
+            metric_payload = build_metric_payload(data)
+            comp_id = get_computer_id()
+            key = f"metric_{comp_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            outbox.enqueue(
+                event_type="metrics",
+                payload=metric_payload,
+                idempotency_key=key,
+                priority=OutboxPriority.TELEMETRY,
+            )
+            logger.info("Metrics enqueued to durable outbox.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to enqueue metrics to outbox: {e}")
+            return False
+
     try:
         send_metrics(data, token_holder.token)
         logger.info("Metrics sent successfully.")
@@ -93,12 +117,33 @@ def upload_metrics(data: dict[str, Any], token_holder: TokenHolder) -> bool:
     return False
 
 
-def upload_software(data: dict[str, Any], token_holder: TokenHolder) -> bool:
+def upload_software(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+) -> bool:
     if not ENABLE_SOFTWARE_INFO:
         return False
     software = data.get("software")
     if not software:
         return False
+
+    if outbox is not None:
+        try:
+            comp_id = get_computer_id()
+            key = f"software_{comp_id}_{int(time.time())}"
+            outbox.enqueue(
+                event_type="software",
+                payload={"software": software},
+                idempotency_key=key,
+                priority=OutboxPriority.TELEMETRY,
+            )
+            logger.info("Software inventory enqueued to durable outbox.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to enqueue software to outbox: {e}")
+            return False
+
     try:
         send_software_inventory(software, token_holder.token)
         logger.info("Software inventory sent successfully.")
@@ -118,12 +163,33 @@ def upload_software(data: dict[str, Any], token_holder: TokenHolder) -> bool:
     return False
 
 
-def upload_processes(data: dict[str, Any], token_holder: TokenHolder) -> bool:
+def upload_processes(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+) -> bool:
     if not ENABLE_PROCESS_INFO:
         return False
     processes = data.get("processes")
     if not processes:
         return False
+
+    if outbox is not None:
+        try:
+            comp_id = get_computer_id()
+            key = f"processes_{comp_id}_{int(time.time())}"
+            outbox.enqueue(
+                event_type="processes",
+                payload={"processes": processes},
+                idempotency_key=key,
+                priority=OutboxPriority.TELEMETRY,
+            )
+            logger.info("Process inventory enqueued to durable outbox.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to enqueue processes to outbox: {e}")
+            return False
+
     try:
         send_process_inventory(processes, token_holder.token)
         logger.info("Process inventory sent successfully.")
@@ -143,12 +209,33 @@ def upload_processes(data: dict[str, Any], token_holder: TokenHolder) -> bool:
     return False
 
 
-def upload_usage(data: dict[str, Any], token_holder: TokenHolder) -> bool:
+def upload_usage(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+) -> bool:
     if not ENABLE_USAGE_INFO:
         return False
     usage = data.get("usage")
     if not usage:
         return False
+
+    if outbox is not None:
+        try:
+            comp_id = get_computer_id()
+            key = f"usage_{comp_id}_{int(time.time())}_{len(usage)}"
+            outbox.enqueue(
+                event_type="usage",
+                payload={"usage": usage},
+                idempotency_key=key,
+                priority=OutboxPriority.USAGE,
+            )
+            logger.info("Usage sessions enqueued to durable outbox.")
+            return True
+        except Exception as e:
+            logger.exception(f"Failed to enqueue usage to outbox: {e}")
+            return False
+
     try:
         send_usage_sessions(usage, token_holder.token)
         logger.info("Usage sessions sent successfully.")
@@ -168,19 +255,45 @@ def upload_usage(data: dict[str, Any], token_holder: TokenHolder) -> bool:
     return False
 
 
-def upload_issues(data: dict[str, Any], token_holder: TokenHolder) -> bool:
+def upload_issues(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+) -> bool:
     if not ENABLE_ISSUE_REPORTING:
         return False
     issues = data.get("issues")
     if not issues:
         return False
+
+    if outbox is not None:
+        all_enqueued = True
+        for issue in issues:
+            try:
+                comp_id = get_computer_id()
+                title_slug = issue.get("title", "").replace(" ", "_")[:32]
+                key = f"issue_{comp_id}_{title_slug}_{int(time.time())}"
+                outbox.enqueue(
+                    event_type="issue",
+                    payload=issue,
+                    idempotency_key=key,
+                    priority=OutboxPriority.ISSUE,
+                )
+                logger.info("Issue report enqueued to durable outbox.")
+            except Exception as e:
+                logger.exception(f"Failed to enqueue issue to outbox: {e}")
+                all_enqueued = False
+        return all_enqueued
+
+    all_sent = True
     for issue in issues:
         try:
             send_issue(issue, token_holder.token)
             logger.info("Issue report sent successfully.")
         except Exception as e:
             logger.exception(f"Issue upload failed: {e}")
-    return True
+            all_sent = False
+    return all_sent
 
 
 def display_console_data(data: dict[str, Any]) -> None:
@@ -213,13 +326,19 @@ class AgentRuntime:
         self,
         stop_event: threading.Event | None = None,
         is_service: bool = False,
+        outbox: DurableOutbox | None = None,
+        enable_outbox: bool = True,
     ):
         self.stop_event = stop_event or threading.Event()
         self.is_service = is_service
+        self.enable_outbox = enable_outbox
+        self.outbox = outbox if (outbox is not None or not enable_outbox) else DurableOutbox()
+        self.delivery_worker: OutboxDeliveryWorker | None = None
         self.ws_client: AgentWebSocketClient | None = None
         self.token_holder: TokenHolder | None = None
         self.computer_id: int | None = None
         self._is_running = False
+        self._lifecycle_lock = threading.Lock()
         self.started_count = 0
         self.stopped_count = 0
 
@@ -227,14 +346,22 @@ class AgentRuntime:
     def is_running(self) -> bool:
         return self._is_running
 
+    def _refresh_token_safe(self) -> str:
+        """Refresh JWT access token and update token holder in-memory."""
+        token = authenticate_agent()
+        if self.token_holder:
+            self.token_holder.token = token
+        return token
+
     def start(self) -> None:
         """
         Initialize credentials, authenticate, connect WebSocket, and execute
         the monitoring loop until the stop event is signaled.
         """
-        if self._is_running:
-            logger.warning("AgentRuntime is already running.")
-            return
+        with self._lifecycle_lock:
+            if self._is_running or self.stop_event.is_set():
+                logger.warning("AgentRuntime is already running or stopped.")
+                return
 
         logger.info("=" * 60)
         logger.info("SLMS Agent Runtime Starting")
@@ -265,15 +392,31 @@ class AgentRuntime:
 
         logger.info(f"Enrolled Computer ID: {self.computer_id}")
 
-        # Start WebSocket Client
-        self.ws_client = AgentWebSocketClient(
-            computer_id=self.computer_id,
-            get_token=lambda: self.token_holder.token if self.token_holder else "",
-        )
-        self.ws_client.start()
+        with self._lifecycle_lock:
+            if self.stop_event.is_set():
+                return
 
-        self._is_running = True
-        self.started_count += 1
+            # Start Outbox Delivery Worker
+            if self.enable_outbox and self.outbox:
+                self.delivery_worker = OutboxDeliveryWorker(
+                    outbox=self.outbox,
+                    get_token=lambda: self.token_holder.token if self.token_holder else "",
+                    refresh_token=self._refresh_token_safe,
+                    stop_event=self.stop_event,
+                )
+                self.delivery_worker.start()
+
+            # Start WebSocket Client
+            self.ws_client = AgentWebSocketClient(
+                computer_id=self.computer_id,
+                get_token=lambda: self.token_holder.token if self.token_holder else "",
+                outbox=self.outbox if self.enable_outbox else None,
+            )
+            self.ws_client.start()
+
+            self._is_running = True
+            self.started_count += 1
+
         token_acquired_at = time.monotonic()
 
         try:
@@ -310,11 +453,12 @@ class AgentRuntime:
                 # ----------------------------------------------------
                 # Uploads
                 # ----------------------------------------------------
-                upload_metrics(data, self.token_holder)
-                upload_software(data, self.token_holder)
-                upload_processes(data, self.token_holder)
-                upload_usage(data, self.token_holder)
-                upload_issues(data, self.token_holder)
+                active_outbox = self.outbox if self.enable_outbox else None
+                upload_metrics(data, self.token_holder, outbox=active_outbox)
+                upload_software(data, self.token_holder, outbox=active_outbox)
+                upload_processes(data, self.token_holder, outbox=active_outbox)
+                upload_usage(data, self.token_holder, outbox=active_outbox)
+                upload_issues(data, self.token_holder, outbox=active_outbox)
 
                 if EXPORT_JSON:
                     try:
@@ -343,14 +487,25 @@ class AgentRuntime:
         self._cleanup()
 
     def _cleanup(self) -> None:
-        """Release WebSocket and mark runtime as stopped."""
-        if self._is_running or self.ws_client:
+        """Release WebSocket, outbox delivery worker, and mark runtime as stopped."""
+        with self._lifecycle_lock:
+            was_running = self._is_running
             self._is_running = False
+
+            if self.delivery_worker:
+                try:
+                    self.delivery_worker.stop()
+                except Exception:
+                    pass
+                self.delivery_worker = None
+
             if self.ws_client:
                 try:
                     self.ws_client.stop()
                 except Exception:
                     pass
                 self.ws_client = None
-            self.stopped_count += 1
-            logger.info("SLMS Agent Runtime stopped cleanly.")
+
+            if was_running:
+                self.stopped_count += 1
+                logger.info("SLMS Agent Runtime stopped cleanly.")

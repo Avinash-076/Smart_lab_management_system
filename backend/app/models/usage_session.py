@@ -9,6 +9,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,5 +70,11 @@ class UsageSession(Base):
             "ix_usage_sessions_computer_started",
             "computer_id",
             "started_at",
+        ),
+        UniqueConstraint(
+            "computer_id",
+            "application_name",
+            "started_at",
+            name="uq_usage_sessions_computer_app_started",
         ),
     )
