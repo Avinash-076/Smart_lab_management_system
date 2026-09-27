@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import time
 
 from config import (
@@ -29,11 +30,12 @@ class SoftwareCache:
     """
     Explicit cache container for installed software inventory (D-07).
     Distinguishes valid empty inventory ([]) from missing, expired,
-    corrupted, or failed cache states.
+    corrupted, or failed cache states. Thread-safe for bounded worker access.
     """
 
     def __init__(self, ttl: float = SOFTWARE_SCAN_INTERVAL):
         self.ttl = ttl
+        self._lock = threading.Lock()
         self._items: list[dict] | None = None
         self._last_scan_time: float | None = None
         self._is_valid: bool = False
@@ -41,60 +43,71 @@ class SoftwareCache:
     @property
     def is_present(self) -> bool:
         """Returns True if the cache contains a valid scan, even if empty ([])."""
-        return self._is_valid and self._items is not None
+        with self._lock:
+            return self._is_valid and self._items is not None
 
     def is_expired(self, now: float | None = None) -> bool:
         """Check if the cache has exceeded its TTL."""
-        if not self._is_valid or self._last_scan_time is None:
-            return True
-        if now is None:
-            now = time.monotonic()
-        return (now - self._last_scan_time) >= self.ttl
+        with self._lock:
+            if not self._is_valid or self._last_scan_time is None:
+                return True
+            if now is None:
+                now = time.monotonic()
+            return (now - self._last_scan_time) >= self.ttl
 
     def get(self, now: float | None = None) -> list[dict] | None:
         """
         Return cached inventory if valid and not expired.
         Returns None if cache is missing, expired, or invalid.
         """
-        if not self._is_valid or self._items is None:
-            return None
-        # Integrity check: items must be a list
-        if not isinstance(self._items, list):
-            self.invalidate()
-            return None
-        if self.is_expired(now):
-            return None
-        return self._items
+        with self._lock:
+            if not self._is_valid or self._items is None:
+                return None
+            # Integrity check: items must be a list
+            if not isinstance(self._items, list):
+                self._items = None
+                self._last_scan_time = None
+                self._is_valid = False
+            check_now = time.monotonic() if now is None else now
+            if self._last_scan_time is None or (check_now - self._last_scan_time) >= self.ttl:
+                return None
+            return self._items
 
     def set(self, items: list[dict], now: float | None = None) -> None:
         """
         Store a valid scan result in cache (even if empty []).
         Validates that items is a list of dicts.
         """
-        if not isinstance(items, list):
-            self.invalidate()
-            return
-        if now is None:
-            now = time.monotonic()
-        self._items = items
-        self._last_scan_time = now
-        self._is_valid = True
+        with self._lock:
+            if not isinstance(items, list):
+                self._items = None
+                self._last_scan_time = None
+                self._is_valid = False
+                return
+            if now is None:
+                now = time.monotonic()
+            self._items = items
+            self._last_scan_time = now
+            self._is_valid = True
 
     def invalidate(self) -> None:
         """Mark cache as missing/invalid."""
-        self._items = None
-        self._last_scan_time = None
-        self._is_valid = False
+        with self._lock:
+            self._items = None
+            self._last_scan_time = None
+            self._is_valid = False
 
 
 class ProcessCache:
     """
     Explicit cache container for running processes inventory (E-01).
     Avoids expensive psutil.process_iter() enumeration on every 20s cycle.
+    Thread-safe for bounded worker access.
     """
 
     def __init__(self, ttl: float = PROCESS_COLLECTION_INTERVAL):
         self.ttl = ttl
+        self._lock = threading.Lock()
         self._items: list[dict] | None = None
         self._last_scan_time: float | None = None
         self._is_valid: bool = False
@@ -102,46 +115,56 @@ class ProcessCache:
     @property
     def is_present(self) -> bool:
         """Returns True if the cache contains a valid scan, even if empty ([])."""
-        return self._is_valid and self._items is not None
+        with self._lock:
+            return self._is_valid and self._items is not None
 
     def is_expired(self, now: float | None = None) -> bool:
         """Check if the cache has exceeded its TTL."""
-        if not self._is_valid or self._last_scan_time is None:
-            return True
-        if now is None:
-            now = time.monotonic()
-        return (now - self._last_scan_time) >= self.ttl
+        with self._lock:
+            if not self._is_valid or self._last_scan_time is None:
+                return True
+            if now is None:
+                now = time.monotonic()
+            return (now - self._last_scan_time) >= self.ttl
 
     def get(self, now: float | None = None) -> list[dict] | None:
         """
         Return cached inventory if valid and not expired.
         Returns None if cache is missing, expired, or invalid.
         """
-        if not self._is_valid or self._items is None:
-            return None
-        if not isinstance(self._items, list):
-            self.invalidate()
-            return None
-        if self.is_expired(now):
-            return None
-        return self._items
+        with self._lock:
+            if not self._is_valid or self._items is None:
+                return None
+            if not isinstance(self._items, list):
+                self._items = None
+                self._last_scan_time = None
+                self._is_valid = False
+                return None
+            check_now = time.monotonic() if now is None else now
+            if self._last_scan_time is None or (check_now - self._last_scan_time) >= self.ttl:
+                return None
+            return self._items
 
     def set(self, items: list[dict], now: float | None = None) -> None:
         """Store a valid process scan result in cache."""
-        if not isinstance(items, list):
-            self.invalidate()
-            return
-        if now is None:
-            now = time.monotonic()
-        self._items = items
-        self._last_scan_time = now
-        self._is_valid = True
+        with self._lock:
+            if not isinstance(items, list):
+                self._items = None
+                self._last_scan_time = None
+                self._is_valid = False
+                return
+            if now is None:
+                now = time.monotonic()
+            self._items = items
+            self._last_scan_time = now
+            self._is_valid = True
 
     def invalidate(self) -> None:
         """Mark cache as missing/invalid."""
-        self._items = None
-        self._last_scan_time = None
-        self._is_valid = False
+        with self._lock:
+            self._items = None
+            self._last_scan_time = None
+            self._is_valid = False
 
 
 _software_cache = SoftwareCache()

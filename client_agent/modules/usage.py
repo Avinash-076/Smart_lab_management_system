@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -49,6 +50,7 @@ MAX_GRACE_CYCLES = 2
 # Value: dict containing application_name, started_at, last_seen_at, consecutive_misses
 _ACTIVE_SESSIONS: dict[tuple[int, float], dict[str, Any]] = {}
 _INITIALIZED: bool = False
+_usage_lock = threading.Lock()
 
 
 def _utc_now() -> datetime:
@@ -129,7 +131,7 @@ def _get_running_applications() -> dict[tuple[int, float], dict[str, Any]]:
                 # Fallback: attempt direct call
                 create_time = _safe_create_time(process, default=now_ts)
 
-            create_time = round(float(create_time), 3)
+            create_time = round(float(create_time if create_time is not None else now_ts), 3)
 
             started_at: datetime | None = None
             try:
@@ -301,7 +303,7 @@ def load_usage_state(state_file: str | None = None) -> list[dict[str, Any]]:
     return completed_during_down
 
 
-def collect_usage_sessions(state_file: str | None = None) -> list[dict[str, Any]]:
+def _collect_usage_sessions_unlocked(state_file: str | None = None) -> list[dict[str, Any]]:
     """
     Detect completed application usage sessions.
 
@@ -411,21 +413,29 @@ def collect_usage_sessions(state_file: str | None = None) -> list[dict[str, Any]
     return completed_sessions
 
 
+def collect_usage_sessions(state_file: str | None = None) -> list[dict[str, Any]]:
+    """Thread-safe entry point for usage session collection."""
+    with _usage_lock:
+        return _collect_usage_sessions_unlocked(state_file)
+
+
 def get_active_usage_count() -> int:
     """
-    Return the number of currently tracked processes.
+    Return the number of currently tracked processes (thread-safe).
     """
-    return len(_ACTIVE_SESSIONS)
+    with _usage_lock:
+        return len(_ACTIVE_SESSIONS)
 
 
 def reset_usage_tracking(state_file: str | None = None) -> None:
     """
     Clear all currently tracked usage sessions and remove persisted state.
-    Mainly useful during testing or clean shutdown.
+    Mainly useful during testing or clean shutdown (thread-safe).
     """
     global _ACTIVE_SESSIONS, _INITIALIZED
-    _ACTIVE_SESSIONS.clear()
-    _INITIALIZED = False
+    with _usage_lock:
+        _ACTIVE_SESSIONS.clear()
+        _INITIALIZED = False
 
     path = state_file or _get_default_state_path()
     try:
