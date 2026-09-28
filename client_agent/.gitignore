@@ -8,3 +8,18 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Generated runtime data and state files (Phase 9 I-07)
+logs/
+output/
+cache/
+data/*
+!data/agent.json
+software_state.json
+usage_state.json
+issue_state.json
+client_data.json
+service_credentials.enc
+agent_credential.json
+*.log
+*.log.*

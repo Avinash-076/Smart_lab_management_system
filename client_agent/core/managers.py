@@ -263,7 +263,15 @@ class OutboxManager:
         issue_state_file: str | None = None,
     ):
         self.enabled = enable_outbox
-        self.outbox = outbox if (outbox is not None or not enable_outbox) else DurableOutbox()
+        if outbox is not None:
+            self.outbox = outbox
+        elif enable_outbox:
+            import paths
+            from core.outbox.migration import migrate_legacy_outbox
+            migrate_legacy_outbox()
+            self.outbox = DurableOutbox(db_path=paths.OUTBOX_DB_PATH)
+        else:
+            self.outbox = None
         self.delivery_worker: OutboxDeliveryWorker | None = None
         self.software_state_file = software_state_file
         self.issue_state_file = issue_state_file

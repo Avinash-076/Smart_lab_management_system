@@ -29,6 +29,22 @@ slms.db
 
 # Log files
 *.log
+*.log.*
+logs/
+client_agent/logs/
+
+# Generated runtime data and state files (Phase 9 I-07)
+output/
+client_agent/output/
+client_agent/cache/
+client_agent/data/*
+!client_agent/data/agent.json
+software_state.json
+usage_state.json
+issue_state.json
+client_data.json
+service_credentials.enc
+agent_credential.json
 
 # Build directories
 build/

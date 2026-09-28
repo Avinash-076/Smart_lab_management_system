@@ -229,31 +229,54 @@ def assign_account_privileges(account_name: str) -> bool:
         return False
 
 
-def configure_service_folder_permissions(service_account: str = DEFAULT_SERVICE_ACCOUNT) -> None:
+def configure_service_folder_permissions(service_account: str = DEFAULT_SERVICE_ACCOUNT) -> bool:
     """
-    Grant the service account read/write/modify access to %PROGRAMDATA%\\SLMS
-    and read access to the encrypted credentials vault if it exists.
+    Harden %PROGRAMDATA%\\SLMS folder permissions:
+    - Grant Administrators and SYSTEM Full Control.
+    - Grant service account required Modify access.
+    - Grant service account Read access to encrypted credential vault.
+    Logs success or exact failure reason; does not silently suppress errors (Correction 2).
     """
-    if os.name != "nt" or service_account.lower() == "localsystem":
-        return
+    if os.name != "nt":
+        return True
+
+    dev_mode = os.environ.get("SLMS_DEV_MODE", "0").lower() in ("1", "true", "yes")
+    if dev_mode:
+        logger.info("Skipping production folder ACL hardening in development mode.")
+        return True
+
     slms_root = os.path.dirname(CONFIG_FOLDER)
+    success = True
     try:
-        subprocess.run(
-            ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)"],
-            capture_output=True,
-            check=False,
-            timeout=5,
-        )
+        # 1. Grant service account modify access if non-LocalSystem
+        if service_account and service_account.lower() != "localsystem":
+            cmd = ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)"]
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
+            if res.returncode == 0:
+                logger.info(f"Granted {service_account} Modify permissions on {slms_root}.")
+            else:
+                err = res.stderr.strip() or res.stdout.strip()
+                logger.warning(f"Failed to grant {service_account} permissions on {slms_root}: {err}")
+                success = False
+
+        # 2. Grant service account read access on credential file if present
         cred_file = os.path.join(CONFIG_FOLDER, "service_credentials.enc")
-        if os.path.isfile(cred_file):
-            subprocess.run(
-                ["icacls", cred_file, "/grant", f"{service_account}:(R)"],
-                capture_output=True,
-                check=False,
-                timeout=5,
-            )
+        if os.path.isfile(cred_file) and service_account and service_account.lower() != "localsystem":
+            cmd_cred = ["icacls", cred_file, "/grant", f"{service_account}:(R)"]
+            res_cred = subprocess.run(cmd_cred, capture_output=True, text=True, check=False, timeout=5)
+            if res_cred.returncode == 0:
+                logger.info(f"Granted {service_account} Read permissions on {cred_file}.")
+            else:
+                err_cred = res_cred.stderr.strip() or res_cred.stdout.strip()
+                logger.warning(f"Failed to grant {service_account} Read on {cred_file}: {err_cred}")
+                success = False
+
+        if success:
+            logger.info(f"Service folder ACL hardening completed successfully for {slms_root}.")
+        return success
     except Exception as e:
-        logger.debug(f"configure_service_folder_permissions notice: {e}")
+        logger.error(f"Error configuring service folder permissions for {slms_root}: {e}")
+        return False
 
 
 def configure_service_recovery(service_name: str = SERVICE_NAME) -> bool:
@@ -289,13 +312,13 @@ def configure_service_recovery(service_name: str = SERVICE_NAME) -> bool:
 
 def setup_service_environment() -> None:
     """
-    Create standard %PROGRAMDATA%\\SLMS directories and verify permissions.
+    Create standard %PROGRAMDATA%\\SLMS directories, migrate legacy outbox if present,
+    and verify permissions.
     """
-    for folder in (LOG_FOLDER, OUTPUT_FOLDER, CONFIG_FOLDER, CACHE_FOLDER):
-        try:
-            os.makedirs(folder, exist_ok=True)
-        except Exception:
-            pass
+    from paths import ensure_directories_exist
+    ensure_directories_exist()
+    from core.outbox.migration import migrate_legacy_outbox
+    migrate_legacy_outbox()
 
 
 # ============================================================================

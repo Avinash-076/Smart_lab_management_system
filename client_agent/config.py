@@ -205,11 +205,25 @@ SHOW_PROCESS_LIST = False
 
 
 # ==========================================
-# Local JSON Export
+# Logging Configuration (Phase 9 I-01 / I-02)
+# ==========================================
+
+# Maximum active log size before rotation (default: 5 MB)
+LOG_MAX_BYTES: int = int(os.getenv("SLMS_LOG_MAX_BYTES", str(5 * 1024 * 1024)))
+
+# Retained rotated backup logs (default: 5 files)
+LOG_BACKUP_COUNT: int = int(os.getenv("SLMS_LOG_BACKUP_COUNT", "5"))
+
+
+# ==========================================
+# Local JSON Export (Phase 9 I-04 / I-06)
 # ==========================================
 
 # Diagnostic export disabled by default in production; opt-in via SLMS_EXPORT_JSON=1
-EXPORT_JSON = os.getenv("SLMS_EXPORT_JSON", "0").lower() in ("1", "true", "yes")
+EXPORT_JSON: bool = os.getenv("SLMS_EXPORT_JSON", "0").lower() in ("1", "true", "yes")
+
+# Diagnostic retention policy: 1 current snapshot only (Correction 1)
+DIAGNOSTIC_MAX_FILES: int = int(os.getenv("SLMS_DIAGNOSTIC_MAX_FILES", "1"))
 
 
 # ==========================================
@@ -218,6 +232,7 @@ EXPORT_JSON = os.getenv("SLMS_EXPORT_JSON", "0").lower() in ("1", "true", "yes")
 
 LOG_FILE = os.path.join(LOG_FOLDER, "client.log")
 OUTPUT_FILE = os.path.join(OUTPUT_FOLDER, "client_data.json")
+DIAGNOSTIC_FILE = OUTPUT_FILE
 
 
 # ==========================================

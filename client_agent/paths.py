@@ -36,22 +36,72 @@ def get_data_dir() -> str:
 
 DATA_DIR = get_data_dir()
 
+# Target Phase 9 Directory Structure:
+# %ProgramData%\SLMS\
+#     logs\
+#     data\
+#         outbox\
+#         software_state.json
+#         usage_state.json
+#         issue_state.json
+#         diagnostic\
+#             client_data.json
+#     cache\
+#     config\
 LOG_FOLDER = os.path.join(DATA_DIR, "logs")
-OUTPUT_FOLDER = os.path.join(DATA_DIR, "output")
-CONFIG_FOLDER = os.path.join(DATA_DIR, "config")
+DATA_FOLDER = os.path.join(DATA_DIR, "data")
 CACHE_FOLDER = os.path.join(DATA_DIR, "cache")
-OUTBOX_FOLDER = os.path.join(DATA_DIR, "outbox")
+CONFIG_FOLDER = os.path.join(DATA_DIR, "config")
+
+OUTBOX_FOLDER = os.path.join(DATA_FOLDER, "outbox")
 OUTBOX_DB_PATH = os.path.join(OUTBOX_FOLDER, "outbox.db")
-SOFTWARE_STATE_FILE = os.path.join(DATA_DIR, "software_state.json")
-USAGE_STATE_FILE = os.path.join(DATA_DIR, "usage_state.json")
-ISSUE_STATE_FILE = os.path.join(DATA_DIR, "issue_state.json")
+SOFTWARE_STATE_FILE = os.path.join(DATA_FOLDER, "software_state.json")
+USAGE_STATE_FILE = os.path.join(DATA_FOLDER, "usage_state.json")
+ISSUE_STATE_FILE = os.path.join(DATA_FOLDER, "issue_state.json")
+DIAGNOSTIC_FOLDER = os.path.join(DATA_FOLDER, "diagnostic")
+DIAGNOSTIC_FILE = os.path.join(DIAGNOSTIC_FOLDER, "client_data.json")
+
+# Backward compatibility aliases
+OUTPUT_FOLDER = DIAGNOSTIC_FOLDER
+OUTPUT_FILE = DIAGNOSTIC_FILE
 
 # Deprecated legacy path - preserved for backward compatibility
 CREDENTIAL_FILE = os.path.join(BASE_PATH, "agent_credential.json")
 
-# Ensure standard directories exist
-for folder in (LOG_FOLDER, OUTPUT_FOLDER, CONFIG_FOLDER, CACHE_FOLDER, OUTBOX_FOLDER):
-    try:
-        os.makedirs(folder, exist_ok=True)
-    except Exception:
-        pass
+
+def get_path_layout(data_dir: str | None = None) -> dict[str, str]:
+    """Return dictionary of path mappings for a given base data directory."""
+    base = data_dir or get_data_dir()
+    data = os.path.join(base, "data")
+    logs = os.path.join(base, "logs")
+    cache = os.path.join(base, "cache")
+    config = os.path.join(base, "config")
+    outbox = os.path.join(data, "outbox")
+    diagnostic = os.path.join(data, "diagnostic")
+    return {
+        "data_dir": base,
+        "logs": logs,
+        "data": data,
+        "cache": cache,
+        "config": config,
+        "outbox": outbox,
+        "outbox_db": os.path.join(outbox, "outbox.db"),
+        "diagnostic": diagnostic,
+        "diagnostic_file": os.path.join(diagnostic, "client_data.json"),
+        "software_state": os.path.join(data, "software_state.json"),
+        "usage_state": os.path.join(data, "usage_state.json"),
+        "issue_state": os.path.join(data, "issue_state.json"),
+    }
+
+
+def ensure_directories_exist(data_dir: str | None = None) -> None:
+    """
+    Explicitly ensure standard application directories exist before runtime use.
+    Avoids unintended import-time side-effects.
+    """
+    layout = get_path_layout(data_dir)
+    for key in ("logs", "data", "cache", "config", "outbox", "diagnostic"):
+        try:
+            os.makedirs(layout[key], exist_ok=True)
+        except OSError:
+            pass

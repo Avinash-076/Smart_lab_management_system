@@ -259,6 +259,9 @@ class RuntimeManager:
         logger.info(f"Execution Mode: {'Windows Service' if self.is_service else 'Interactive'}")
         logger.info("=" * 60)
 
+        from paths import ensure_directories_exist
+        ensure_directories_exist()
+
         # Enrollment Check
         import core.runtime as rt
         is_enrolled_fn = getattr(rt, "is_enrolled", is_enrolled)

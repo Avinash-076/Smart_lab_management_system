@@ -31,7 +31,7 @@ from typing import Any
 import psutil
 
 from core.logger import logger
-from paths import DATA_DIR
+from paths import DATA_DIR, USAGE_STATE_FILE
 
 # Obvious OS kernel/system pseudo-processes excluded from student application usage (D-12)
 _EXCLUDED_PROCESS_NAMES = {
@@ -58,7 +58,7 @@ def _utc_now() -> datetime:
 
 
 def _get_default_state_path() -> str:
-    return os.path.join(DATA_DIR, "usage_state.json")
+    return USAGE_STATE_FILE
 
 
 def _is_excluded_process(pid: int, name: str) -> bool:
