@@ -475,16 +475,20 @@ class TestMsgExeHandling:
 
 
 class TestVirtualServiceAccountPrivileges:
-    """Tests verifying least-privilege service account capabilities and configuration."""
+    """
+    Caller-environment checks and configuration generation tests.
+    NOTE: Direct OS query tests run in the active test runner process. Real virtual
+    service account token isolation is validated in the Windows SCM integration suite.
+    """
 
     def test_process_enumeration_permissions(self):
-        """Verify process enumeration capability (PROCESS_QUERY_LIMITED_INFORMATION)."""
+        """Caller check: Verify process enumeration capability in current environment."""
         import psutil
         procs = list(psutil.process_iter(["pid", "name"]))
         assert len(procs) > 0
 
     def test_software_inventory_hklm_read_permissions(self):
-        """Verify read access to HKLM uninstall registry key for software inventory."""
+        """Caller check: Verify read access to HKLM uninstall registry key in current environment."""
         import winreg
         key = winreg.OpenKey(
             winreg.HKEY_LOCAL_MACHINE,
@@ -497,7 +501,7 @@ class TestVirtualServiceAccountPrivileges:
             winreg.CloseKey(key)
 
     def test_programdata_slms_read_write(self, tmp_path):
-        """Verify read/write capability to %PROGRAMDATA%\\SLMS folders."""
+        """Unit check: Verify file creation and read/write within an isolated temporary data path."""
         test_file = tmp_path / "write_test.txt"
         test_file.write_text("privilege test", encoding="utf-8")
         assert test_file.read_text(encoding="utf-8") == "privilege test"

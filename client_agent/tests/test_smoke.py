@@ -4,7 +4,15 @@ client agent core modules can be imported and inspected without errors.
 """
 
 def test_test_environment_operational():
-    assert True
+    import sys
+    import psutil
+    import requests
+    import websocket
+
+    assert sys.version_info >= (3, 13), f"Python 3.13+ required, got {sys.version}"
+    assert hasattr(psutil, "__version__")
+    assert hasattr(requests, "__version__")
+    assert hasattr(websocket, "__version__")
 
 
 def test_core_config_importable():

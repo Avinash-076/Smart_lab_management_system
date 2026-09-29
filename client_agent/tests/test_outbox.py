@@ -75,6 +75,13 @@ def temp_outbox(tmp_path):
 
 class TestOutboxBasicOperations:
 
+    def test_00_sqlite_wal_journal_mode(self, temp_outbox):
+        """Verify outbox database connection is configured with WAL journal mode."""
+        with temp_outbox._get_connection() as conn:
+            cur = conn.execute("PRAGMA journal_mode;")
+            mode = cur.fetchone()[0]
+            assert str(mode).lower() == "wal"
+
     def test_01_enqueue_item(self, temp_outbox):
         """1. Verify enqueuing an item persists it in SQLite with PENDING status."""
         payload = {"cpu_usage": 55.0, "ram_usage": 40.0}

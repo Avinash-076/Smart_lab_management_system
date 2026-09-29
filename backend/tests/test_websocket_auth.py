@@ -20,9 +20,14 @@ def test_websocket_auth_via_authorization_header(client, registered_agent):
     url = f"/ws/client/{computer_id}"
     headers = {"Authorization": f"Bearer {token}"}
 
+    from app.websocket.connection_manager import manager
+
     with client.websocket_connect(url, headers=headers) as ws:
+        assert computer_id in manager.client_connections
+        assert manager.client_last_seen.get(computer_id) is not None
         ws.send_text("ping")
-        # Connection succeeds, heartbeat accepted without error
+        # Connection remains active and last_seen is recorded
+        assert computer_id in manager.client_connections
 
 
 def test_websocket_auth_via_legacy_query_param(client, registered_agent):
@@ -34,10 +39,13 @@ def test_websocket_auth_via_legacy_query_param(client, registered_agent):
     token = registered_agent["token"]
 
     url = f"/ws/client/{computer_id}?token={token}"
+    from app.websocket.connection_manager import manager
 
     with client.websocket_connect(url) as ws:
+        assert computer_id in manager.client_connections
+        assert manager.client_last_seen.get(computer_id) is not None
         ws.send_text("ping")
-        # Connection succeeds via query fallback
+        assert computer_id in manager.client_connections
 
 
 def test_websocket_missing_token_rejected(client, registered_agent):
