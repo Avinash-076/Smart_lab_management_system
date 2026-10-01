@@ -114,3 +114,29 @@ def test_ingest_endpoint_inactive_agent_rejected(client, db_session, registered_
         # Restore active status for registered_agent fixture cleanup
         cred.is_active = True
         db_session.commit()
+
+
+def test_delete_computer_with_dependent_records_succeeds(db_session, registered_agent):
+    """Verify deleting a computer cleanly cascades and deletes all dependent records."""
+    from app.services.computer_service import delete_computer, get_computer_by_id
+    from app.models.system_metric import SystemMetric
+
+    computer_id = registered_agent["computer_id"]
+    comp = get_computer_by_id(db_session, computer_id)
+    assert comp is not None
+
+    # Seed child records
+    metric = SystemMetric(
+        computer_id=computer_id,
+        cpu_usage=45.0,
+        ram_usage=55.0,
+        disk_usage=60.0,
+    )
+    db_session.add(metric)
+    db_session.commit()
+
+    # Deleting the computer should succeed without foreign key violation
+    delete_computer(db_session, comp)
+
+    assert get_computer_by_id(db_session, computer_id) is None
+    assert db_session.query(SystemMetric).filter_by(computer_id=computer_id).count() == 0

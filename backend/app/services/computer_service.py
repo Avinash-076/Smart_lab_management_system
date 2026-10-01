@@ -201,8 +201,49 @@ def delete_computer(
     db: Session,
     computer: Computer,
 ) -> None:
+    from sqlalchemy import delete
+    from app.models.agent_credential import AgentCredential
+    from app.models.client_status import ClientStatus
+    from app.models.command_result import CommandResult
+    from app.models.issue import Issue
+    from app.models.maintenance import MaintenanceRecord
+    from app.models.notification import Notification
+    from app.models.process import Process
+    from app.models.remote_command import RemoteCommand
+    from app.models.software import Software
+    from app.models.system_metric import SystemMetric
+    from app.models.usage_session import UsageSession
 
+    computer_id = computer.id
     try:
+        # Delete command results for this computer's remote commands
+        cmd_ids = [
+            row[0]
+            for row in db.execute(
+                select(RemoteCommand.id).where(
+                    RemoteCommand.computer_id == computer_id
+                )
+            ).all()
+        ]
+        if cmd_ids:
+            db.execute(
+                delete(CommandResult).where(
+                    CommandResult.command_id.in_(cmd_ids)
+                )
+            )
+
+        # Delete dependent rows across all tables referencing this computer
+        db.execute(delete(RemoteCommand).where(RemoteCommand.computer_id == computer_id))
+        db.execute(delete(SystemMetric).where(SystemMetric.computer_id == computer_id))
+        db.execute(delete(Software).where(Software.computer_id == computer_id))
+        db.execute(delete(Process).where(Process.computer_id == computer_id))
+        db.execute(delete(UsageSession).where(UsageSession.computer_id == computer_id))
+        db.execute(delete(Issue).where(Issue.computer_id == computer_id))
+        db.execute(delete(MaintenanceRecord).where(MaintenanceRecord.computer_id == computer_id))
+        db.execute(delete(Notification).where(Notification.computer_id == computer_id))
+        db.execute(delete(ClientStatus).where(ClientStatus.computer_id == computer_id))
+        db.execute(delete(AgentCredential).where(AgentCredential.computer_id == computer_id))
+
         db.delete(computer)
         db.commit()
 
