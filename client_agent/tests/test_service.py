@@ -50,6 +50,8 @@ from service.service import (
     get_failure_flag_command_args,
     get_privileges_command_args,
     get_recovery_command_args,
+    get_service_bin_path,
+    install_service,
 )
 
 
@@ -512,3 +514,51 @@ class TestVirtualServiceAccountPrivileges:
         assert privs_cmd == [
             "sc.exe", "privs", "SLMSService", "SeShutdownPrivilege/SeChangeNotifyPrivilege"
         ]
+
+
+class TestFrozenServiceConfiguration:
+    """Tests verifying service command and binpath construction in frozen and source modes."""
+
+    def test_non_frozen_bin_path_uses_python_executable_and_script(self):
+        """In non-frozen dev mode, bin_path points to python.exe and service.py."""
+        with patch("sys.frozen", False, create=True), \
+             patch("sys.executable", r"C:\Python313\python.exe"):
+            bin_path = get_service_bin_path()
+            assert r"C:\Python313\python.exe" in bin_path
+            assert "service.py" in bin_path
+            assert "_MEI" not in bin_path
+
+    def test_frozen_bin_path_uses_standalone_executable_with_run_dispatch(self):
+        """In frozen PyInstaller mode, bin_path points to compiled EXE with 'run' argument."""
+        with patch("sys.frozen", True, create=True), \
+             patch("sys.executable", r"C:\Program Files\SLMS\SLMS_Client_Agent.exe"):
+            bin_path = get_service_bin_path()
+            assert bin_path == r'"C:\Program Files\SLMS\SLMS_Client_Agent.exe" run'
+            assert "_MEI" not in bin_path
+            assert "__file__" not in bin_path
+            assert ".py" not in bin_path
+
+    def test_install_service_frozen_command_construction(self):
+        """Verify install_service constructs sc.exe create command with frozen binpath without touching SCM."""
+        with patch("sys.frozen", True, create=True), \
+             patch("sys.executable", r"C:\Program Files\SLMS\SLMS_Client_Agent.exe"), \
+             patch("service.service.setup_service_environment"), \
+             patch("service.service.assign_account_privileges"), \
+             patch("service.service.configure_service_folder_permissions"), \
+             patch("service.service.configure_service_recovery"), \
+             patch("subprocess.run") as mock_run:
+
+            mock_run.return_value = MagicMock(returncode=0)
+
+            result = install_service(service_account="NT SERVICE\\SLMSService", startup_type="auto")
+            assert result is True
+
+            # Verify the sc.exe create call
+            create_call = mock_run.call_args_list[0]
+            cmd = create_call[0][0]
+            assert cmd[0] == "sc.exe"
+            assert cmd[1] == "create"
+            assert cmd[2] == "SLMSService"
+            assert 'binpath= "C:\\Program Files\\SLMS\\SLMS_Client_Agent.exe" run' in cmd
+            assert "_MEI" not in str(cmd)
+            assert ".py" not in str(cmd)

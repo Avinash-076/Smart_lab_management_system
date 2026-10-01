@@ -20,3 +20,9 @@ dev = [
     "pytest-cov>=7.1.0",
     "ruff>=0.16.9",
 ]
+build = [
+    "pyinstaller>=6.11.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

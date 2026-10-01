@@ -1,25 +1,31 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+.pytest_cache/
+.ruff_cache/
 build/
 dist/
 wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
+venv/
 
 # Generated runtime data and state files (Phase 9 I-07)
 logs/
 output/
 cache/
 data/*
-!data/agent.json
+config/*
 software_state.json
 usage_state.json
 issue_state.json
 client_data.json
+server_config.json
 service_credentials.enc
+service_credentials.enc.tmp
 agent_credential.json
 *.log
 *.log.*
+*.tmp

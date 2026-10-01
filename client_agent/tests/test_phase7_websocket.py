@@ -297,14 +297,14 @@ def test_thread_safe_token_holder_concurrency():
 def test_reconnect_uses_current_token():
     """Verify that when token is updated, next connection attempt uses the updated token."""
     holder = TokenHolder("token_1")
-    tokens_used = []
 
     client = AgentWebSocketClient(
         computer_id=1,
         get_token=lambda: holder.token,
     )
 
-    with patch("websocket.WebSocketApp") as mock_app_cls:
+    with patch("server.communication.get_ws_base_url", return_value="wss://slms.example.com/ws/client"), \
+         patch("websocket.WebSocketApp") as mock_app_cls:
         mock_instance = MagicMock()
         mock_app_cls.return_value = mock_instance
 

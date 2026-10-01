@@ -29,7 +29,13 @@ from core.credentials import (
 
 CLIENT_NAME = "SLMS Client Agent"
 
-VERSION = "1.0.0"
+try:
+    from importlib.metadata import version as _get_version
+    __version__ = _get_version("client-agent")
+except Exception:
+    __version__ = "1.0.0"
+
+VERSION = __version__
 
 
 # ==========================================

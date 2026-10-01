@@ -6,8 +6,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environment directories
+.venv/
 venv/
 .env
 
@@ -38,21 +41,27 @@ output/
 client_agent/output/
 client_agent/cache/
 client_agent/data/*
-!client_agent/data/agent.json
+client_agent/config/*
 software_state.json
 usage_state.json
 issue_state.json
 client_data.json
+server_config.json
 service_credentials.enc
+service_credentials.enc.tmp
 agent_credential.json
+*.tmp
 
-# Build directories
+# Build and packaging directories
 build/
 dist/
+wheels/
+*.egg-info
 
 # Coverage reports
 htmlcov/
 .coverage
+.coverage.*
 
 # npm debug logs
 npm-debug.log

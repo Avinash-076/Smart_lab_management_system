@@ -357,6 +357,20 @@ def get_service_status(service_name: str = SERVICE_NAME) -> str:
         return f"ERROR: {e}"
 
 
+def get_service_bin_path() -> str:
+    """
+    Construct the service binary command line.
+    When running frozen (compiled executable), points directly to sys.executable
+    with the 'run' command without referencing temporary extraction folders (__file__).
+    When running in Python development mode, points to python.exe and service.py.
+    """
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" run'
+    python_exe = sys.executable
+    script_path = os.path.abspath(__file__)
+    return f'"{python_exe}" "{script_path}"'
+
+
 def install_service(
     service_account: str = DEFAULT_SERVICE_ACCOUNT,
     startup_type: str = "auto",
@@ -365,11 +379,7 @@ def install_service(
     Install the SLMS Windows Service and configure its failure recovery policy.
     """
     setup_service_environment()
-    python_exe = sys.executable
-
-    script_path = os.path.abspath(__file__)
-    # Service binpath pointing to Python running this service script
-    bin_path = f'"{python_exe}" "{script_path}"'
+    bin_path = get_service_bin_path()
 
     start_param = "auto" if startup_type.lower() in ("auto", "automatic") else "demand"
 
@@ -521,7 +531,7 @@ def main():
     subparsers.add_parser("debug", help="Run the service in interactive debug mode")
 
     # If run via win32serviceutil dispatch (e.g. pywin32 Service host)
-    if len(sys.argv) > 1 and sys.argv[1].lower() in ("--startup", "run"):
+    if len(sys.argv) > 1 and sys.argv[1].lower() in ("--startup", "run", "--service"):
         if HAVE_PYWIN32:
             win32serviceutil.HandleCommandLine(SLMSService)
             return

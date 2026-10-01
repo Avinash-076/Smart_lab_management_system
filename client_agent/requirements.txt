@@ -1,5 +1,0 @@
-requests
-psutil
-keyring
-websocket-client
-pywin32

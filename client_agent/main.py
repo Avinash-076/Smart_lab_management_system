@@ -16,7 +16,17 @@ from core.runtime import AgentRuntime
 
 
 def main() -> None:
-    """Launch the SLMS Client Agent in interactive CLI mode."""
+    """Launch the SLMS Client Agent in interactive CLI or Service mode."""
+    # Dispatch to service controller if invoked with SCM or service management arguments
+    if len(sys.argv) > 1 and sys.argv[1].lower() in (
+        "run", "--service", "--startup", "service", "install", "uninstall", "start", "stop", "status", "debug"
+    ):
+        if sys.argv[1].lower() == "service":
+            sys.argv.pop(1)
+        from service.service import main as service_main
+        service_main()
+        return
+
     logger.info("Initializing SLMS Client Agent (Interactive Mode)...")
     runtime = AgentRuntime(is_service=False)
     try:
