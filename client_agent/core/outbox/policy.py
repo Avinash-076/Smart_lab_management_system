@@ -100,6 +100,12 @@ def classify_exception(exc: Exception) -> tuple[ErrorClassification, str]:
         error_msg = f"HTTP {status_code}: {resp_text or str(exc)}"
         return classification, error_msg
 
+    from core.security import InsecureHttpProhibitedError, InvalidServerUrlError
+    if isinstance(exc, InsecureHttpProhibitedError):
+        return ErrorClassification.RETRYABLE_FAILURE, f"Transport security policy: {exc}"
+    if isinstance(exc, InvalidServerUrlError):
+        return ErrorClassification.PERMANENT_FAILURE, f"Invalid server URL configuration: {exc}"
+
     if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
         return ErrorClassification.RETRYABLE_FAILURE, f"Network error: {exc}"
 

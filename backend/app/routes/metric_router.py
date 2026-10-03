@@ -33,15 +33,10 @@ async def upload_metric(
             detail="This credential has not registered with a computer"
         )
 
-    try: 
+    try:
         return await metric_service.create_metric(db, agent_credential.computer_id, metric_data)
-        
-
     except IntegrityError:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Failed to save metrics - invaid computer reference"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,detail="Failed to save metrics - invaid computer reference")
 
     except SQLAlchemyError:
         raise HTTPException(

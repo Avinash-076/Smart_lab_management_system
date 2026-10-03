@@ -212,6 +212,24 @@ class TestOutboxBasicOperations:
         assert stats["status_counts"].get(OutboxStatus.DEAD_LETTER.value) == 1
         assert stats["status_counts"].get(OutboxStatus.PENDING.value, 0) == 0
 
+    def test_classify_transport_security_exceptions(self):
+        """Verify InsecureHttpProhibitedError is RETRYABLE_FAILURE and InvalidServerUrlError is PERMANENT_FAILURE."""
+        from core.security import InsecureHttpProhibitedError, InvalidServerUrlError
+
+        insecure_err = InsecureHttpProhibitedError("Insecure HTTP URL is prohibited in production.")
+        cls_insecure, msg_insecure = classify_exception(insecure_err)
+        assert cls_insecure == ErrorClassification.RETRYABLE_FAILURE
+        assert "Transport security policy" in msg_insecure
+
+        invalid_url_err = InvalidServerUrlError("Server URL cannot be empty.")
+        cls_invalid, msg_invalid = classify_exception(invalid_url_err)
+        assert cls_invalid == ErrorClassification.PERMANENT_FAILURE
+        assert "Invalid server URL configuration" in msg_invalid
+
+        net_err = requests.ConnectionError("Connection timed out")
+        cls_net, msg_net = classify_exception(net_err)
+        assert cls_net == ErrorClassification.RETRYABLE_FAILURE
+
 
 # ============================================================================
 # 8-12: Idempotency & Persistence Across Restarts
@@ -878,3 +896,140 @@ class TestOutboxRegressions:
 
         # Queue size must strictly remain capped at max_records (no unbounded fallback)
         assert small_outbox.get_stats()["total_count"] == 3
+
+
+# ============================================================================
+# Regression Tests: Outbox PROCESSING Recovery & Offline Token Drainage
+# ============================================================================
+
+class TestOutboxProcessingRecoveryAndOfflineDrain:
+    """Regression tests for Task 4 & Task 1 outbox delivery invariants."""
+
+    def test_33_worker_startup_recovers_stale_processing_immediately(self, tmp_path):
+        """
+        Verify that when OutboxDeliveryWorker starts up, any records stranded
+        in PROCESSING status (from a previous crashed process) are recovered to PENDING
+        immediately, even if less than 60 seconds have elapsed.
+        """
+        db_file = str(tmp_path / "proc_recovery.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        # 1. Enqueue 5 items
+        for i in range(5):
+            outbox.enqueue("metrics", {"i": i}, f"key_rec_{i}")
+
+        # 2. Claim all 5 into PROCESSING
+        batch = outbox.get_pending_batch(limit=10)
+        assert len(batch) == 5
+        assert all(item.status == OutboxStatus.PROCESSING for item in batch)
+        assert outbox.get_stats()["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 5
+        assert outbox.get_stats()["status_counts"].get(OutboxStatus.PENDING.value, 0) == 0
+
+        # 3. Start a new worker (simulating service restart after crash)
+        stop_event = threading.Event()
+        delivered_count = 0
+
+        def mock_delivered(item):
+            nonlocal delivered_count
+            delivered_count += 1
+
+        worker = OutboxDeliveryWorker(
+            outbox=outbox,
+            get_token=lambda: "valid.jwt.token",
+            stop_event=stop_event,
+            on_delivered=mock_delivered,
+            poll_interval=0.05,
+        )
+
+        with patch("core.outbox.worker.send_metrics") as mock_send:
+            worker.start()
+            # Give worker brief time to run loop startup recovery and drain
+            time.sleep(0.3)
+            worker.stop()
+
+        # All 5 items should have been recovered and delivered
+        assert delivered_count == 5
+        assert mock_send.call_count == 5
+        stats = outbox.get_stats()
+        assert stats["total_count"] == 0
+        assert stats["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 0
+
+    def test_34_outbox_offline_token_recovery_drains_pending(self, tmp_path):
+        """
+        Verify that items enqueued while token is empty are held with backoff,
+        and as soon as refresh_token succeeds, the outbox worker drains all buffered items.
+        """
+        db_file = str(tmp_path / "offline_token_drain.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        # Enqueue 3 items
+        for i in range(3):
+            outbox.enqueue("metrics", {"val": i}, f"offline_key_{i}")
+
+        token_state = {"token": "", "backend_online": False}
+
+        def get_token():
+            return token_state["token"]
+
+        def refresh_token():
+            if not token_state["backend_online"]:
+                raise requests.ConnectionError("Backend still offline")
+            token_state["token"] = "recovered.token.123"
+            return token_state["token"]
+
+        worker = OutboxDeliveryWorker(
+            outbox=outbox,
+            get_token=get_token,
+            refresh_token=refresh_token,
+        )
+
+        # First drain: backend offline -> items marked for retry
+        with patch("core.outbox.worker.send_metrics"):
+            worker.drain_once()
+
+        stats = outbox.get_stats()
+        assert stats["total_count"] == 3
+
+        # Simulate backend returning online
+        token_state["backend_online"] = True
+
+        with patch("core.outbox.worker.send_metrics") as mock_send, \
+             patch("time.time", return_value=time.time() + 1000.0):
+            worker.drain_once()
+
+        assert mock_send.call_count == 3
+        assert token_state["token"] == "recovered.token.123"
+        assert outbox.get_stats()["total_count"] == 0
+
+    def test_35_historical_dead_letter_records_preserved_during_recovery(self, tmp_path):
+        """
+        Verify recover_stale_processing strictly preserves existing DEAD_LETTER records
+        and only affects PROCESSING rows.
+        """
+        db_file = str(tmp_path / "dead_letter_preserve.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        # Create 2 DEAD_LETTER items
+        rec1 = outbox.enqueue("metrics", {"a": 1}, "dl_1")
+        rec2 = outbox.enqueue("metrics", {"a": 2}, "dl_2")
+        outbox.mark_dead_letter(rec1.id, "Permanent 400 Bad Request")
+        outbox.mark_dead_letter(rec2.id, "Permanent 404 Not Found")
+
+        # Create 1 PROCESSING item
+        outbox.enqueue("metrics", {"a": 3}, "proc_1")
+        claimed = outbox.get_pending_batch(limit=1)
+        assert len(claimed) == 1
+
+        stats_before = outbox.get_stats()
+        assert stats_before["status_counts"].get(OutboxStatus.DEAD_LETTER.value, 0) == 2
+        assert stats_before["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 1
+
+        # Run recovery
+        recovered = outbox.recover_stale_processing(stale_threshold_seconds=0.0)
+        assert recovered == 1
+
+        stats_after = outbox.get_stats()
+        # DEAD_LETTER count must remain untouched at 2
+        assert stats_after["status_counts"].get(OutboxStatus.DEAD_LETTER.value, 0) == 2
+        assert stats_after["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 0
+        assert stats_after["status_counts"].get(OutboxStatus.PENDING.value, 0) == 1

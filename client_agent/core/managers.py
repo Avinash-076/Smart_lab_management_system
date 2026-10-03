@@ -207,7 +207,7 @@ class TokenManager:
     ):
         self.token_holder = token_holder or TokenHolder("")
         self.refresh_interval = refresh_interval
-        self._last_refresh: float = time.monotonic()
+        self._last_refresh: float = time.monotonic() if self.token_holder.token else 0.0
         self._lock = threading.Lock()
 
     @property
@@ -228,11 +228,11 @@ class TokenManager:
             return token
 
     def refresh_if_due(self, now: float | None = None) -> bool:
-        """Check if token refresh interval has elapsed and refresh if needed."""
+        """Check if token refresh interval has elapsed (or token is empty) and refresh if needed."""
         if now is None:
             now = time.monotonic()
         with self._lock:
-            if now - self._last_refresh > self.refresh_interval:
+            if not self.token_holder.token or (now - self._last_refresh > self.refresh_interval):
                 try:
                     logger.info("Refreshing access token on scheduled cadence...")
                     token = _resolve_authenticate_agent()
@@ -240,7 +240,7 @@ class TokenManager:
                     self._last_refresh = now
                     return True
                 except Exception as exc:
-                    logger.exception(f"Scheduled token refresh failed: {exc}")
+                    logger.warning(f"Token refresh attempt failed: {exc}")
                     return False
         return False
 

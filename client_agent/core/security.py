@@ -13,6 +13,21 @@ from urllib.parse import urlparse
 import requests
 
 
+class TransportSecurityError(ValueError):
+    """Base exception for transport security and URL policy violations."""
+    pass
+
+
+class InsecureHttpProhibitedError(TransportSecurityError):
+    """Raised when an insecure HTTP URL is used in production mode."""
+    pass
+
+
+class InvalidServerUrlError(TransportSecurityError):
+    """Raised when a server URL is malformed or invalid."""
+    pass
+
+
 def is_insecure_http_allowed() -> bool:
     """
     Check if plaintext HTTP/WS communication is permitted.
@@ -36,21 +51,21 @@ def validate_and_normalize_server_url(
     - Enforces HTTPS in production unless allow_insecure is True.
     """
     if not url or not isinstance(url, str):
-        raise ValueError("Server URL cannot be empty.")
+        raise InvalidServerUrlError("Server URL cannot be empty.")
 
     clean_url = url.strip().rstrip("/")
     if not clean_url:
-        raise ValueError("Server URL cannot be empty.")
+        raise InvalidServerUrlError("Server URL cannot be empty.")
 
     parsed = urlparse(clean_url)
     if not parsed.scheme:
-        raise ValueError(
+        raise InvalidServerUrlError(
             f"Invalid server URL '{url}': Missing URL scheme (expected https://)."
         )
 
     scheme = parsed.scheme.lower()
     if scheme not in ("http", "https"):
-        raise ValueError(
+        raise InvalidServerUrlError(
             f"Invalid server URL scheme '{scheme}': Only HTTP and HTTPS are supported."
         )
 
@@ -58,14 +73,14 @@ def validate_and_normalize_server_url(
         allow_insecure = is_insecure_http_allowed()
 
     if scheme == "http" and not allow_insecure:
-        raise ValueError(
+        raise InsecureHttpProhibitedError(
             f"Insecure HTTP URL '{url}' is prohibited in production. "
             "Production SLMS communication requires HTTPS. "
             "Set SLMS_ALLOW_INSECURE_HTTP=1 only for local development."
         )
 
     if not parsed.netloc:
-        raise ValueError(
+        raise InvalidServerUrlError(
             f"Invalid server URL '{url}': Must contain a valid hostname or IP address."
         )
 

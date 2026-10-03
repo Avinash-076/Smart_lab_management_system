@@ -229,13 +229,17 @@ def assign_account_privileges(account_name: str) -> bool:
         return False
 
 
-def configure_service_folder_permissions(service_account: str = DEFAULT_SERVICE_ACCOUNT) -> bool:
+def configure_service_folder_permissions(
+    service_account: str = DEFAULT_SERVICE_ACCOUNT,
+    data_dir: str | None = None,
+) -> bool:
     """
     Harden %PROGRAMDATA%\\SLMS folder permissions:
-    - Grant Administrators and SYSTEM Full Control.
-    - Grant service account required Modify access.
-    - Grant service account Read access to encrypted credential vault.
-    Logs success or exact failure reason; does not silently suppress errors (Correction 2).
+    - Grant Administrators and SYSTEM Full Control (OI)(CI)(F).
+    - Grant service account required Modify access with recursive inheritance (OI)(CI)(M).
+    - Grant service account Read access to encrypted credential vault if present.
+    - Preserves security without granting excessive permissions to Everyone or standard users.
+    Logs success or exact failure reason; does not silently suppress errors.
     """
     if os.name != "nt":
         return True
@@ -245,13 +249,17 @@ def configure_service_folder_permissions(service_account: str = DEFAULT_SERVICE_
         logger.info("Skipping production folder ACL hardening in development mode.")
         return True
 
-    slms_root = os.path.dirname(CONFIG_FOLDER)
+    from paths import ensure_directories_exist, get_data_dir
+
+    slms_root = data_dir or get_data_dir()
+    ensure_directories_exist(slms_root)
+
     success = True
     try:
-        # 1. Grant service account modify access if non-LocalSystem
+        # 1. Grant service account modify access if non-LocalSystem with recursive inheritance
         if service_account and service_account.lower() != "localsystem":
-            cmd = ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)"]
-            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
+            cmd = ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)", "/t"]
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
             if res.returncode == 0:
                 logger.info(f"Granted {service_account} Modify permissions on {slms_root}.")
             else:
@@ -260,7 +268,8 @@ def configure_service_folder_permissions(service_account: str = DEFAULT_SERVICE_
                 success = False
 
         # 2. Grant service account read access on credential file if present
-        cred_file = os.path.join(CONFIG_FOLDER, "service_credentials.enc")
+        config_folder = os.path.join(slms_root, "config")
+        cred_file = os.path.join(config_folder, "service_credentials.enc")
         if os.path.isfile(cred_file) and service_account and service_account.lower() != "localsystem":
             cmd_cred = ["icacls", cred_file, "/grant", f"{service_account}:(R)"]
             res_cred = subprocess.run(cmd_cred, capture_output=True, text=True, check=False, timeout=5)
@@ -310,13 +319,14 @@ def configure_service_recovery(service_name: str = SERVICE_NAME) -> bool:
         return False
 
 
-def setup_service_environment() -> None:
+def setup_service_environment(service_account: str = DEFAULT_SERVICE_ACCOUNT) -> None:
     """
-    Create standard %PROGRAMDATA%\\SLMS directories, migrate legacy outbox if present,
-    and verify permissions.
+    Create standard %PROGRAMDATA%\\SLMS directories, configure permissions,
+    and migrate legacy outbox if present.
     """
     from paths import ensure_directories_exist
     ensure_directories_exist()
+    configure_service_folder_permissions(service_account)
     from core.outbox.migration import migrate_legacy_outbox
     migrate_legacy_outbox()
 
@@ -371,6 +381,37 @@ def get_service_bin_path() -> str:
     return f'"{python_exe}" "{script_path}"'
 
 
+def get_install_command_args(
+    service_name: str = SERVICE_NAME,
+    bin_path: str | None = None,
+    startup_type: str = "auto",
+    display_name: str = SERVICE_DISPLAY_NAME,
+    service_account: str = DEFAULT_SERVICE_ACCOUNT,
+) -> list[str]:
+    """
+    Construct the command line arguments for sc.exe create.
+    In Windows sc.exe, option keys and values are separate tokens:
+    e.g. ['binpath=', bin_path, 'start=', 'auto', 'DisplayName=', display_name, 'obj=', service_account]
+    """
+    if bin_path is None:
+        bin_path = get_service_bin_path()
+    start_param = "auto" if startup_type.lower() in ("auto", "automatic") else "demand"
+    cmd = [
+        "sc.exe",
+        "create",
+        service_name,
+        "binpath=",
+        bin_path,
+        "start=",
+        start_param,
+        "DisplayName=",
+        display_name,
+    ]
+    if service_account and service_account.lower() != "localsystem":
+        cmd.extend(["obj=", service_account])
+    return cmd
+
+
 def install_service(
     service_account: str = DEFAULT_SERVICE_ACCOUNT,
     startup_type: str = "auto",
@@ -378,21 +419,16 @@ def install_service(
     """
     Install the SLMS Windows Service and configure its failure recovery policy.
     """
-    setup_service_environment()
+    setup_service_environment(service_account)
     bin_path = get_service_bin_path()
 
-    start_param = "auto" if startup_type.lower() in ("auto", "automatic") else "demand"
-
-    cmd = [
-        "sc.exe",
-        "create",
-        SERVICE_NAME,
-        f"binpath= {bin_path}",
-        f"start= {start_param}",
-        f"DisplayName= {SERVICE_DISPLAY_NAME}",
-    ]
-    if service_account and service_account.lower() != "localsystem":
-        cmd.append(f"obj= {service_account}")
+    cmd = get_install_command_args(
+        service_name=SERVICE_NAME,
+        bin_path=bin_path,
+        startup_type=startup_type,
+        display_name=SERVICE_DISPLAY_NAME,
+        service_account=service_account,
+    )
 
     logger.info(f"Creating service {SERVICE_NAME}...")
     try:
@@ -501,16 +537,47 @@ def debug_service() -> None:
         print("Debug service terminated.")
 
 
+def run_service() -> None:
+    """
+    Run the Windows Service under Service Control Manager (SCM).
+    Initializes pywin32 servicemanager and starts the Service Control Dispatcher.
+    Invoked when the service binary is executed with the 'run' command by SCM.
+    """
+    if not HAVE_PYWIN32:
+        logger.error("pywin32 is not available; cannot start Windows Service.")
+        sys.exit(1)
+
+    try:
+        import servicemanager
+        servicemanager.Initialize()
+        servicemanager.PrepareToHostSingle(SLMSService)
+        servicemanager.StartServiceCtrlDispatcher()
+    except Exception as e:
+        winerror = getattr(e, "winerror", None)
+        if winerror == 1063 or "1063" in str(e):
+            print("Note: 'run' is invoked by Windows SCM when starting the service. For interactive debugging, use 'SLMS_Client_Agent.exe debug'.")
+            sys.exit(1)
+            return
+        logger.exception(f"Service dispatcher error: {e}")
+        sys.exit(1)
+
+
 # ============================================================================
 # CLI Dispatcher
 # ============================================================================
 
 def main():
+    # If run via Windows SCM dispatch (e.g. 'run', '--service', '--startup')
+    if len(sys.argv) > 1 and sys.argv[1].lower() in ("run", "--service", "--startup"):
+        run_service()
+        return
+
     parser = argparse.ArgumentParser(
         description=f"{SERVICE_DISPLAY_NAME} Management Utility",
     )
     subparsers = parser.add_subparsers(dest="command", help="Service command")
 
+    subparsers.add_parser("run", help="Run the Windows service under SCM")
     install_parser = subparsers.add_parser("install", help="Install the Windows service")
     install_parser.add_argument(
         "--account",
@@ -530,15 +597,11 @@ def main():
     subparsers.add_parser("status", help="Query the Windows service status")
     subparsers.add_parser("debug", help="Run the service in interactive debug mode")
 
-    # If run via win32serviceutil dispatch (e.g. pywin32 Service host)
-    if len(sys.argv) > 1 and sys.argv[1].lower() in ("--startup", "run", "--service"):
-        if HAVE_PYWIN32:
-            win32serviceutil.HandleCommandLine(SLMSService)
-            return
-
     args = parser.parse_args()
 
-    if args.command == "install":
+    if args.command == "run":
+        run_service()
+    elif args.command == "install":
         install_service(service_account=args.account, startup_type=args.startup)
     elif args.command == "uninstall":
         uninstall_service()
@@ -552,11 +615,7 @@ def main():
     elif args.command == "debug":
         debug_service()
     else:
-        # Default fallback: if pywin32 command line passed
-        if HAVE_PYWIN32 and len(sys.argv) > 1:
-            win32serviceutil.HandleCommandLine(SLMSService)
-        else:
-            parser.print_help()
+        parser.print_help()
 
 
 if __name__ == "__main__":

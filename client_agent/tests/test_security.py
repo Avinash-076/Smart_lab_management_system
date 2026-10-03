@@ -51,14 +51,31 @@ class TestUrlValidation:
         assert normalized == "http://localhost:8000"
 
     def test_empty_or_invalid_urls_rejected(self):
-        with pytest.raises(ValueError, match="cannot be empty"):
-            validate_and_normalize_server_url("")
+        from core.security import InvalidServerUrlError, TransportSecurityError
 
-        with pytest.raises(ValueError, match="Missing URL scheme"):
+        with pytest.raises(InvalidServerUrlError, match="cannot be empty") as exc_info:
+            validate_and_normalize_server_url("")
+        assert isinstance(exc_info.value, TransportSecurityError)
+        assert isinstance(exc_info.value, ValueError)
+
+        with pytest.raises(InvalidServerUrlError, match="Missing URL scheme"):
             validate_and_normalize_server_url("slms.university.edu")
 
-        with pytest.raises(ValueError, match="Only HTTP and HTTPS are supported"):
+        with pytest.raises(InvalidServerUrlError, match="Only HTTP and HTTPS are supported"):
             validate_and_normalize_server_url("ftp://slms.university.edu")
+
+    def test_http_url_raises_insecure_http_prohibited_error(self, monkeypatch):
+        from core.security import InsecureHttpProhibitedError, TransportSecurityError
+
+        monkeypatch.delenv("SLMS_ALLOW_INSECURE_HTTP", raising=False)
+        monkeypatch.delenv("SLMS_DEV_MODE", raising=False)
+
+        with pytest.raises(InsecureHttpProhibitedError, match="Insecure HTTP URL.*is prohibited in production") as exc_info:
+            validate_and_normalize_server_url("http://169.254.234.45:8000")
+
+        # Must inherit from TransportSecurityError and ValueError for backwards compatibility
+        assert isinstance(exc_info.value, TransportSecurityError)
+        assert isinstance(exc_info.value, ValueError)
 
 
 class TestWebSocketUrlAndHeaders:

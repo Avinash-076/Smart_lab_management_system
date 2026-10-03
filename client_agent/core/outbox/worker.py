@@ -91,12 +91,24 @@ class OutboxDeliveryWorker:
 
     def _run_loop(self) -> None:
         """Main loop: recover stale processing items and periodically drain queue."""
+        # On worker startup, immediately recover any stranded PROCESSING records from prior crashed process
         try:
-            self.outbox.recover_stale_processing()
+            self.outbox.recover_stale_processing(stale_threshold_seconds=0.0)
         except Exception as e:
             logger.exception(f"Error recovering stale outbox records on startup: {e}")
 
+        last_stale_check = time.monotonic()
+
         while not self.stop_event.is_set():
+            now = time.monotonic()
+            # Periodically recover any stuck PROCESSING items (e.g. every 60s)
+            if now - last_stale_check >= 60.0:
+                try:
+                    self.outbox.recover_stale_processing(stale_threshold_seconds=60.0)
+                    last_stale_check = now
+                except Exception as e:
+                    logger.exception(f"Error checking stale outbox records: {e}")
+
             try:
                 has_more = self.drain_once()
                 if has_more:

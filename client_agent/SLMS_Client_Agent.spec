@@ -55,6 +55,7 @@ hidden_imports = list(set([
     "certifi",
     "sqlite3",
     # Windows API and Service Framework (pywin32)
+    "servicemanager",
     "win32service",
     "win32serviceutil",
     "win32event",
@@ -68,6 +69,7 @@ hidden_imports = list(set([
     "core.runtime",
     "core.security",
     "core.credentials",
+    "core.single_instance",
     "core.outbox",
     "core.outbox.migration",
     "core.outbox.models",

@@ -35,7 +35,13 @@ from modules.network import (
     evaluate_interface,
     get_canonical_network_identity,
     get_network_info,
+    is_ics_or_hotspot_ipv4,
+    is_link_local_ipv4,
+    is_physical_ethernet,
+    is_physical_wifi,
+    is_valid_ipv4,
     is_valid_routable_ipv4,
+    is_virtual_or_hotspot_interface,
     normalize_mac_address,
 )
 from modules.system_info import get_lan_ip, get_mac_address, get_system_info
@@ -381,6 +387,123 @@ class TestCanonicalNetworkIdentityD03D04D05:
             assert sys_info["mac_address"] == "12:34:56:78:9A:BC"
             assert get_lan_ip() == "192.168.1.88"
             assert get_mac_address() == "12:34:56:78:9A:BC"
+
+    def test_physical_ethernet_with_link_local_apipa_selected(self):
+        """Physical Ethernet with 169.254.x.x (link-local/APIPA) is selected when active."""
+        addrs = {
+            "Ethernet": [
+                make_mac_addr("AA:BB:CC:DD:EE:01"),
+                make_ipv4_addr("169.254.60.157"),
+            ],
+        }
+        stats = {
+            "Ethernet": make_stat(isup=True, speed=1000),
+        }
+        ident = get_canonical_network_identity(addrs=addrs, stats=stats)
+        assert ident["status"] == "success"
+        assert ident["interface"] == "Ethernet"
+        assert ident["ip_address"] == "169.254.60.157"
+        assert ident["mac_address"] == "AA:BB:CC:DD:EE:01"
+
+    def test_physical_ethernet_link_local_wins_over_windows_ics_hotspot(self):
+        """
+        CRITICAL Phase C: Physical Ethernet with link-local (169.254.60.157)
+        MUST win over Windows Mobile Hotspot / ICS virtual adapter (192.168.137.1).
+        """
+        addrs = {
+            "Local Area Connection* 2": [
+                make_mac_addr("00:15:5D:AA:BB:CC"),
+                make_ipv4_addr("192.168.137.1"),
+            ],
+            "Ethernet": [
+                make_mac_addr("AA:BB:CC:DD:EE:01"),
+                make_ipv4_addr("169.254.60.157"),
+            ],
+        }
+        stats = {
+            "Local Area Connection* 2": make_stat(isup=True, speed=0),
+            "Ethernet": make_stat(isup=True, speed=1000),
+        }
+        ident = get_canonical_network_identity(addrs=addrs, stats=stats)
+        assert ident["status"] == "success"
+        assert ident["interface"] == "Ethernet"
+        assert ident["ip_address"] == "169.254.60.157"
+        assert ident["mac_address"] == "AA:BB:CC:DD:EE:01"
+
+    def test_windows_mobile_hotspot_deprioritized_when_wifi_present(self):
+        """Windows Mobile Hotspot / Wi-Fi Direct (Local Area Connection* 2) deprioritized vs Wi-Fi."""
+        addrs = {
+            "Local Area Connection* 2": [
+                make_mac_addr("00:15:5D:AA:BB:CC"),
+                make_ipv4_addr("192.168.137.1"),
+            ],
+            "Wi-Fi": [
+                make_mac_addr("11:22:33:44:55:66"),
+                make_ipv4_addr("192.168.1.105"),
+            ],
+        }
+        stats = {
+            "Local Area Connection* 2": make_stat(isup=True, speed=0),
+            "Wi-Fi": make_stat(isup=True, speed=300),
+        }
+        ident = get_canonical_network_identity(addrs=addrs, stats=stats)
+        assert ident["status"] == "success"
+        assert ident["interface"] == "Wi-Fi"
+        assert ident["ip_address"] == "192.168.1.105"
+        assert ident["mac_address"] == "11:22:33:44:55:66"
+
+    def test_virtual_adapter_with_link_local_deprioritized(self):
+        """Virtual adapter with link-local IP is severely deprioritized and loses to physical."""
+        addrs = {
+            "vEthernet (Default Switch)": [
+                make_mac_addr("00:15:5D:01:02:03"),
+                make_ipv4_addr("169.254.10.1"),
+            ],
+            "Wi-Fi": [
+                make_mac_addr("CE:30:A6:2B:D9:DB"),
+                make_ipv4_addr("192.168.1.20"),
+            ],
+        }
+        stats = {
+            "vEthernet (Default Switch)": make_stat(isup=True, speed=10000),
+            "Wi-Fi": make_stat(isup=True, speed=200),
+        }
+        ident = get_canonical_network_identity(addrs=addrs, stats=stats)
+        assert ident["status"] == "success"
+        assert ident["interface"] == "Wi-Fi"
+        assert ident["ip_address"] == "192.168.1.20"
+        assert ident["mac_address"] == "CE:30:A6:2B:D9:DB"
+
+    def test_virtual_and_physical_classification_helpers(self):
+        """Verify interface and IP classification helper functions."""
+        # Virtual / Hotspot detection
+        assert is_virtual_or_hotspot_interface("Local Area Connection* 2") is True
+        assert is_virtual_or_hotspot_interface("Wi-Fi* 1") is True
+        assert is_virtual_or_hotspot_interface("Ethernet* 2") is True
+        assert is_virtual_or_hotspot_interface("vEthernet (Default Switch)") is True
+        assert is_virtual_or_hotspot_interface("Tailscale") is True
+        assert is_virtual_or_hotspot_interface("Ethernet") is False
+        assert is_virtual_or_hotspot_interface("Wi-Fi") is False
+
+        # Physical LAN / Wi-Fi
+        assert is_physical_ethernet("Ethernet") is True
+        assert is_physical_ethernet("Local Area Connection") is True
+        assert is_physical_ethernet("Local Area Connection* 2") is False
+        assert is_physical_wifi("Wi-Fi") is True
+        assert is_physical_wifi("Wi-Fi* 1") is False
+
+        # Link-local & ICS detection
+        assert is_link_local_ipv4("169.254.60.157") is True
+        assert is_link_local_ipv4("192.168.1.1") is False
+        assert is_ics_or_hotspot_ipv4("192.168.137.1") is True
+        assert is_ics_or_hotspot_ipv4("192.168.1.1") is False
+
+        # is_valid_ipv4 with allow_link_local flag
+        assert is_valid_ipv4("169.254.60.157", allow_link_local=True) is True
+        assert is_valid_ipv4("169.254.60.157", allow_link_local=False) is False
+        assert is_valid_ipv4("127.0.0.1", allow_link_local=True) is False
+        assert is_valid_ipv4("0.0.0.0", allow_link_local=True) is False
+
 
 
 # ============================================================================

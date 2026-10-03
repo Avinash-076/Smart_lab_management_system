@@ -44,6 +44,16 @@ _VIRTUAL_ADAPTER_KEYWORDS = (
     "pseudo",
     "teredo",
     "isatap",
+    "hotspot",
+    "hosted",
+    "wifi direct",
+    "wi-fi direct",
+    "p2p",
+    "bluetooth",
+    "ndis",
+    "direct",
+    "ics",
+    "npcap",
 )
 
 # Keywords indicating preferred physical LAN adapters
@@ -85,26 +95,86 @@ def normalize_mac_address(raw_mac: str | None) -> str | None:
     return cleaned
 
 
-def is_valid_routable_ipv4(ip_str: str | None) -> bool:
+def is_link_local_ipv4(ip_str: str | None) -> bool:
+    """Check if an IPv4 address belongs to the 169.254.0.0/16 link-local (APIPA) range."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        return ipaddress.IPv4Address(ip_str.strip()).is_link_local
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
+def is_ics_or_hotspot_ipv4(ip_str: str | None) -> bool:
+    """Check if an IPv4 address belongs to the default Windows ICS / Mobile Hotspot subnet (192.168.137.0/24)."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        return ipaddress.IPv4Address(ip_str.strip()) in ipaddress.IPv4Network("192.168.137.0/24")
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
+def is_valid_ipv4(ip_str: str | None, allow_link_local: bool = True) -> bool:
     """
-    Check whether an IP string is a valid non-loopback, non-link-local, non-unspecified IPv4.
+    Check whether an IP string is a valid non-loopback, non-unspecified, non-reserved IPv4.
+    If allow_link_local is False, link-local (169.254.0.0/16) addresses are rejected.
     """
     if not ip_str or not isinstance(ip_str, str):
         return False
 
     try:
         ip_obj = ipaddress.IPv4Address(ip_str.strip())
-        if ip_obj.is_loopback:
-            return False
-        if ip_obj.is_link_local:  # 169.254.0.0/16 APIPA
+        if ip_obj.is_loopback:  # 127.0.0.0/8
             return False
         if ip_obj.is_unspecified:  # 0.0.0.0
             return False
-        if ip_obj.is_reserved:
+        if ip_obj.is_reserved or ip_obj.is_multicast:
+            return False
+        if not allow_link_local and ip_obj.is_link_local:  # 169.254.0.0/16 APIPA
             return False
         return True
     except (ValueError, ipaddress.AddressValueError):
         return False
+
+
+def is_valid_routable_ipv4(ip_str: str | None, allow_link_local: bool = False) -> bool:
+    """
+    Check whether an IP string is a valid non-loopback, non-link-local, non-unspecified IPv4.
+    Preserved for backward compatibility.
+    """
+    return is_valid_ipv4(ip_str, allow_link_local=allow_link_local)
+
+
+def is_virtual_or_hotspot_interface(iface_name: str) -> bool:
+    """
+    Identify virtual, tunnel, container, or Windows Wi-Fi Direct / Mobile Hotspot interfaces.
+
+    Windows assigns names with '*' for virtual Wi-Fi Direct and Hosted Network miniport adapters
+    (e.g., 'Local Area Connection* 2', 'Wi-Fi* 1').
+    """
+    if not iface_name:
+        return False
+    if "*" in iface_name:
+        return True
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _VIRTUAL_ADAPTER_KEYWORDS)
+
+
+def is_physical_ethernet(iface_name: str) -> bool:
+    """Check if interface is a physical Ethernet / LAN adapter."""
+    if is_virtual_or_hotspot_interface(iface_name):
+        return False
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _PHYSICAL_LAN_KEYWORDS)
+
+
+def is_physical_wifi(iface_name: str) -> bool:
+    """Check if interface is a physical Wi-Fi / WLAN adapter."""
+    if is_virtual_or_hotspot_interface(iface_name):
+        return False
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _PHYSICAL_WIFI_KEYWORDS)
 
 
 def evaluate_interface(
@@ -125,9 +195,16 @@ def evaluate_interface(
     if "loopback" in name_lower or "pseudo" in name_lower:
         return 0, None, None
 
+    # Check operational status (UP)
+    if stat is not None and not getattr(stat, "isup", True):
+        # Interface is down
+        return 0, None, None
+
     # Extract IPv4 addresses and MAC address from this interface
     found_ipv4: str | None = None
     found_mac: str | None = None
+    is_link_local: bool = False
+    is_ics: bool = False
 
     for addr in addresses:
         try:
@@ -138,9 +215,19 @@ def evaluate_interface(
 
             # Check for IPv4
             if family == socket.AF_INET:
-                if is_valid_routable_ipv4(address_str):
+                if is_valid_ipv4(address_str, allow_link_local=True):
+                    candidate_ll = is_link_local_ipv4(address_str)
+                    candidate_ics = is_ics_or_hotspot_ipv4(address_str)
+
                     if found_ipv4 is None:
                         found_ipv4 = address_str.strip()
+                        is_link_local = candidate_ll
+                        is_ics = candidate_ics
+                    elif is_link_local and not candidate_ll:
+                        # Prefer non-link-local if multiple IPs on same adapter
+                        found_ipv4 = address_str.strip()
+                        is_link_local = False
+                        is_ics = candidate_ics
 
             # Check for MAC address (AF_LINK on Windows is -1, AF_PACKET on Linux is 17)
             # Or any non-IP address matching standard MAC format
@@ -152,40 +239,50 @@ def evaluate_interface(
         except Exception:
             continue
 
-    # Interface without a valid routable IPv4 cannot be the primary LAN identity
+    # Interface without a valid IPv4 cannot be the primary LAN identity
     if not found_ipv4:
         return 0, None, None
 
     # Scoring criteria:
     score = 100
 
-    # 1. Operational status (UP)
+    # 1. Operational speed bonus
     if stat is not None:
-        if not getattr(stat, "isup", True):
-            # Interface is down
-            return 0, None, None
-        # Bonus for link speed
         speed = getattr(stat, "speed", 0) or 0
         if speed > 0:
             score += min(20, speed // 100)
 
-    # 2. Prefer physical adapters over virtual
-    is_virtual = any(kw in name_lower for kw in _VIRTUAL_ADAPTER_KEYWORDS)
+    # 2. Interface type classification
+    is_virtual = is_virtual_or_hotspot_interface(iface_name)
     if is_virtual:
-        score -= 60
+        score -= 80
+    elif is_physical_ethernet(iface_name):
+        score += 60
+    elif is_physical_wifi(iface_name):
+        score += 40
     else:
-        # Physical Ethernet preferred
-        if any(kw in name_lower for kw in _PHYSICAL_LAN_KEYWORDS):
-            score += 50
-        # Physical Wi-Fi
-        elif any(kw in name_lower for kw in _PHYSICAL_WIFI_KEYWORDS):
-            score += 40
+        score += 20
 
-    # 3. Has corresponding valid hardware MAC address
+    # 3. IP address suitability
+    if is_link_local:
+        if not is_virtual:
+            # Valid link-local on physical Ethernet/LAN (e.g. lab peer-to-peer 169.254.60.157)
+            score += 10
+        else:
+            score -= 30
+    elif is_ics:
+        # Penalize Windows ICS / Mobile Hotspot subnet
+        score -= 40
+    else:
+        # Standard routable LAN/WAN IPv4
+        score += 30
+
+    # 4. Has corresponding valid hardware MAC address
     if found_mac:
         score += 30
 
-    return score, found_ipv4, found_mac
+    return max(0, score), found_ipv4, found_mac
+
 
 
 def get_canonical_network_identity(

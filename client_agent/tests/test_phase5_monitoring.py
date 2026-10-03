@@ -15,6 +15,7 @@ Verifies:
 from __future__ import annotations
 
 import collections
+from datetime import datetime
 import hashlib
 import json
 import os
@@ -275,6 +276,38 @@ class TestProcessUsernamePrivacyE03:
             # Deserialization check
             deserialized = json.loads(serialized)
             assert deserialized["processes"][0]["user"] is None
+
+
+class TestProcessTimestampSerialization:
+    """Verify process start_time extraction, timezone-aware ISO serialization, and bounds."""
+
+    def test_process_start_time_iso_serialization(self):
+        """Verify create_time float converts to valid ISO-8601 UTC timestamp <= 64 chars."""
+        mock_processes = [
+            MockProcessInfo(100, "python.exe", create_time=1700000000.123456),
+        ]
+        with patch("modules.processes.psutil.process_iter", return_value=mock_processes):
+            results = get_running_processes()
+            assert len(results) == 1
+            st = results[0]["start_time"]
+            assert st is not None
+            assert len(st) <= 64
+            assert "+00:00" in st or "Z" in st
+            # Check ISO parse
+            dt = datetime.fromisoformat(st)
+            assert dt.tzinfo is not None
+
+    def test_process_start_time_none_on_invalid_timestamp(self):
+        """Verify invalid or missing create_time produces None for start_time."""
+        mock_processes = [
+            MockProcessInfo(101, "proc1.exe", create_time=0),
+            MockProcessInfo(102, "proc2.exe", create_time=None),
+        ]
+        with patch("modules.processes.psutil.process_iter", return_value=mock_processes):
+            results = get_running_processes()
+            assert len(results) == 2
+            assert results[0]["start_time"] is None
+            assert results[1]["start_time"] is None
 
 
 # ============================================================================

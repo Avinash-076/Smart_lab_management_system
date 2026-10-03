@@ -12,6 +12,12 @@ wheels/
 .venv/
 venv/
 
+# SQLite database files
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
 # Generated runtime data and state files (Phase 9 I-07)
 logs/
 output/

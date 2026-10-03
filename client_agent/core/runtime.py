@@ -37,6 +37,7 @@ from core.managers import (
     UploadManager,
     WebSocketManager,
 )
+from core.single_instance import SingleInstanceMutex
 from core.outbox import DurableOutbox, OutboxDeliveryWorker, OutboxPriority
 from core.scheduler import Scheduler
 from server.auth import get_access_token
@@ -71,6 +72,27 @@ def authenticate_agent() -> str:
     return token
 
 
+def is_transient_auth_error(exc: Exception) -> bool:
+    """
+    Check if an authentication exception represents transient network or backend
+    unavailability, or an insecure HTTP policy violation (retryable offline mode)
+    versus a fatal application/configuration error (e.g. malformed URL or invalid credentials).
+    """
+    from core.security import InsecureHttpProhibitedError
+    import requests
+
+    if isinstance(exc, InsecureHttpProhibitedError):
+        return True
+    if isinstance(exc, requests.HTTPError):
+        status_code = exc.response.status_code if exc.response is not None else 0
+        return status_code == 429 or status_code >= 500 or status_code == 408
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout, ConnectionError, TimeoutError, OSError)):
+        return True
+    if isinstance(exc, requests.RequestException):
+        return True
+    return False
+
+
 # ============================================================================
 # RuntimeManager (H-01)
 # ============================================================================
@@ -92,6 +114,8 @@ class RuntimeManager:
         software_interval: float = SOFTWARE_SCAN_INTERVAL,
         software_state_file: str | None = None,
         issue_state_file: str | None = None,
+        single_instance: SingleInstanceMutex | None = None,
+        enable_single_instance: bool = True,
     ):
         self.stop_event = stop_event or threading.Event()
         self.is_service = is_service
@@ -100,6 +124,8 @@ class RuntimeManager:
         self.software_interval = software_interval
         self.software_state_file = software_state_file
         self.issue_state_file = issue_state_file
+        self.enable_single_instance = enable_single_instance
+        self.single_instance = single_instance or SingleInstanceMutex()
 
         # Sub-managers
         self.token_manager = TokenManager(refresh_interval=TOKEN_REFRESH_INTERVAL)
@@ -259,6 +285,14 @@ class RuntimeManager:
         logger.info(f"Execution Mode: {'Windows Service' if self.is_service else 'Interactive'}")
         logger.info("=" * 60)
 
+        # Single-Instance Protection (Phase E)
+        if self.enable_single_instance and not self.single_instance.acquire():
+            logger.warning(
+                "Another instance of SLMS Client Agent is already active. "
+                "Exiting cleanly to prevent duplicate execution."
+            )
+            return
+
         from paths import ensure_directories_exist
         ensure_directories_exist()
 
@@ -280,11 +314,32 @@ class RuntimeManager:
                 if not is_enrolled_fn():
                     raise RuntimeError("SLMS enrollment was not completed.")
 
-        # Authenticate & Acquire Computer ID
-        self.token_manager.refresh()
+        # Acquire Computer ID (offline safe from credential store)
         comp_id_fn = getattr(rt, "get_computer_id", get_computer_id)
         self.computer_id = comp_id_fn()
         logger.info(f"Enrolled Computer ID: {self.computer_id}")
+
+        # Authenticate & Acquire Access Token (graceful offline degradation)
+        try:
+            self.token_manager.refresh()
+        except Exception as auth_err:
+            if is_transient_auth_error(auth_err):
+                from core.security import InsecureHttpProhibitedError
+                if isinstance(auth_err, InsecureHttpProhibitedError):
+                    logger.warning(
+                        f"Authentication currently unavailable due to transport security policy: {auth_err} "
+                        "Entering offline/degraded mode. Telemetry will be buffered in durable outbox "
+                        "and authentication will retry automatically when configuration/endpoint is updated."
+                    )
+                else:
+                    logger.warning(
+                        f"Backend server is currently unavailable during initial startup authentication ({auth_err}). "
+                        "Entering offline/degraded mode. Telemetry will be buffered in durable outbox "
+                        "and authentication will retry automatically in the background."
+                    )
+            else:
+                logger.critical(f"Fatal error during initial authentication: {auth_err}")
+                raise
 
         with self._lifecycle_lock:
             if self.stop_event.is_set():
@@ -331,6 +386,10 @@ class RuntimeManager:
                 outbox_manager=self.outbox_manager,
                 websocket_manager=self.websocket_manager,
             )
+
+            # Release single-instance mutex
+            if self.enable_single_instance and self.single_instance.is_acquired:
+                self.single_instance.release()
 
             if was_running:
                 self.stopped_count += 1

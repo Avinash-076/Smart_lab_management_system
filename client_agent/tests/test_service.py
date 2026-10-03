@@ -559,6 +559,557 @@ class TestFrozenServiceConfiguration:
             assert cmd[0] == "sc.exe"
             assert cmd[1] == "create"
             assert cmd[2] == "SLMSService"
-            assert 'binpath= "C:\\Program Files\\SLMS\\SLMS_Client_Agent.exe" run' in cmd
+            assert "binpath=" in cmd
+            assert r'"C:\Program Files\SLMS\SLMS_Client_Agent.exe" run' in cmd
+            assert "start=" in cmd
+            assert "auto" in cmd
+            assert "DisplayName=" in cmd
+            assert "obj=" in cmd
+            assert "NT SERVICE\\SLMSService" in cmd
             assert "_MEI" not in str(cmd)
             assert ".py" not in str(cmd)
+
+
+# ============================================================================
+# Phase F: Windows Service Deployment & Lifecycle Hardening Tests
+# ============================================================================
+
+class TestPhaseFServiceDeploymentLifecycle:
+
+    def test_service_runtime_data_paths_resolution(self, monkeypatch):
+        """Verify service mode resolves runtime paths to %ProgramData%\\SLMS."""
+        import paths
+        monkeypatch.delenv("SLMS_DATA_DIR", raising=False)
+        monkeypatch.setenv("SLMS_DEV_MODE", "0")
+        monkeypatch.setenv("ProgramData", r"C:\ProgramData")
+
+        data_dir = paths.get_data_dir()
+        assert data_dir == r"C:\ProgramData\SLMS"
+
+        layout = paths.get_path_layout()
+        assert layout["logs"] == r"C:\ProgramData\SLMS\logs"
+        assert layout["data"] == r"C:\ProgramData\SLMS\data"
+        assert layout["outbox"] == r"C:\ProgramData\SLMS\data\outbox"
+        assert layout["config"] == r"C:\ProgramData\SLMS\config"
+
+    def test_session_0_no_gui_enrollment_dialog(self):
+        """
+        Verify that in Session 0 / Service mode, if not enrolled,
+        RuntimeManager logs a critical error and raises RuntimeError without opening Tkinter GUI.
+        """
+        from core.runtime import RuntimeManager
+        with patch("server.enroll.is_enrolled", return_value=False), \
+             patch("gui.enrollment_window.show_enrollment_window") as mock_gui:
+
+            stop_event = threading.Event()
+            runtime = RuntimeManager(stop_event=stop_event, is_service=True, enable_single_instance=False)
+
+            with pytest.raises(RuntimeError) as exc_info:
+                runtime.start()
+
+            assert "not enrolled" in str(exc_info.value)
+            mock_gui.assert_not_called()
+
+    def test_service_shutdown_staged_resource_cleanup(self):
+        """
+        Verify that service shutdown stops scheduler, outbox, websocket,
+        and releases the single-instance mutex cleanly.
+        """
+        from core.runtime import AgentRuntime
+        from core.single_instance import SingleInstanceMutex
+
+        mock_mutex = MagicMock(spec=SingleInstanceMutex)
+        mock_mutex.acquire.return_value = True
+        mock_mutex.is_acquired = True
+
+        stop_event = threading.Event()
+        runtime = AgentRuntime(
+            stop_event=stop_event,
+            is_service=True,
+            single_instance=mock_mutex,
+            enable_single_instance=True,
+        )
+        runtime._is_running = True
+
+        # Stop runtime
+        runtime.stop()
+
+        assert runtime.is_running is False
+        assert stop_event.is_set()
+        mock_mutex.release.assert_called_once()
+
+    def test_service_and_interactive_single_instance_coordination(self):
+        """
+        Verify that when a service instance is active, interactive launch is rejected,
+        and when service stops, interactive launch can acquire.
+        """
+        from core.single_instance import SingleInstanceMutex
+
+        test_mutex = f"Local\\SLMS_Service_Coord_{os.getpid()}"
+        svc_mutex = SingleInstanceMutex(name=test_mutex)
+        cli_mutex = SingleInstanceMutex(name=test_mutex)
+
+        # Service starts and acquires mutex
+        assert svc_mutex.acquire() is True
+        assert svc_mutex.is_acquired is True
+
+        # Interactive launch attempts to acquire -> rejected
+        assert cli_mutex.acquire() is False
+        assert cli_mutex.is_acquired is False
+
+        # Service stops and releases mutex
+        svc_mutex.release()
+        assert svc_mutex.is_acquired is False
+
+        # Interactive launch can now acquire
+        assert cli_mutex.acquire() is True
+        assert cli_mutex.is_acquired is True
+        cli_mutex.release()
+
+
+class TestServiceSCMDispatcher:
+    """Tests verifying deterministic Windows SCM service invocation and CLI dispatch."""
+
+    def test_run_service_invokes_servicemanager_dispatcher(self):
+        """Verify run_service initializes pywin32 servicemanager and starts the control dispatcher."""
+        from service.service import run_service
+        with patch("service.service.HAVE_PYWIN32", True), \
+             patch("servicemanager.Initialize") as mock_init, \
+             patch("servicemanager.PrepareToHostSingle") as mock_prep, \
+             patch("servicemanager.StartServiceCtrlDispatcher") as mock_start:
+
+            run_service()
+
+            mock_init.assert_called_once()
+            mock_prep.assert_called_once_with(SLMSService)
+            mock_start.assert_called_once()
+
+    def test_main_cli_dispatches_run_to_run_service(self):
+        """Verify passing 'run' argument dispatches directly to run_service without unknown command error."""
+        import sys
+        from service.service import main as service_main
+        with patch.object(sys, "argv", ["SLMS_Client_Agent.exe", "run"]), \
+             patch("service.service.run_service") as mock_run:
+
+            service_main()
+            mock_run.assert_called_once()
+
+    def test_main_cli_dispatches_service_flags_to_run_service(self):
+        """Verify passing '--service' or '--startup' dispatches directly to run_service."""
+        import sys
+        from service.service import main as service_main
+
+        for flag in ("--service", "--startup"):
+            with patch.object(sys, "argv", ["SLMS_Client_Agent.exe", flag]), \
+                 patch("service.service.run_service") as mock_run:
+
+                service_main()
+                mock_run.assert_called_once()
+
+    def test_client_agent_main_routes_to_service_main(self):
+        """Verify client_agent.main entry point routes 'run' to service.service.main."""
+        import sys
+        from main import main as cli_main
+
+        with patch.object(sys, "argv", ["SLMS_Client_Agent.exe", "run"]), \
+             patch("service.service.main") as mock_svc_main:
+
+            cli_main()
+            mock_svc_main.assert_called_once()
+
+    def test_run_service_handles_1063_error_gracefully(self, capsys):
+        """Verify run_service outside SCM (error 1063) prints a diagnostic message and exits 1."""
+        from service.service import run_service
+        import pywintypes
+
+        err_1063 = pywintypes.error(1063, "StartServiceCtrlDispatcher", "The service process could not connect")
+
+        with patch("service.service.HAVE_PYWIN32", True), \
+             patch("servicemanager.Initialize"), \
+             patch("servicemanager.PrepareToHostSingle"), \
+             patch("servicemanager.StartServiceCtrlDispatcher", side_effect=err_1063), \
+             patch("sys.exit") as mock_exit:
+
+            run_service()
+
+            mock_exit.assert_called_once_with(1)
+            captured = capsys.readouterr()
+            assert "Note: 'run' is invoked by Windows SCM" in captured.out
+
+
+# ============================================================================
+# Regression Tests: Startup Authentication Resilience & Installer Architecture
+# ============================================================================
+
+class TestStartupAuthenticationResilience:
+    """
+    Regression tests for Task 1:
+    Verifies that backend/network unavailability during Windows service startup
+    does NOT crash the service, transitions to offline/degraded mode, and recovers
+    cleanly when the backend returns.
+    """
+
+    def test_transient_auth_error_classification(self):
+        """Verify transient network/server errors are classified correctly."""
+        from core.runtime import is_transient_auth_error
+        import requests
+
+        # Transient network / timeout errors
+        assert is_transient_auth_error(requests.ConnectionError("Connection refused")) is True
+        assert is_transient_auth_error(requests.ConnectTimeout("Connect timeout")) is True
+        assert is_transient_auth_error(requests.ReadTimeout("Read timeout")) is True
+        assert is_transient_auth_error(ConnectionRefusedError("Refused")) is True
+        assert is_transient_auth_error(TimeoutError("Timed out")) is True
+        assert is_transient_auth_error(OSError("Network unreachable")) is True
+
+        # HTTP Server errors (5xx) and rate limits (429)
+        mock_503 = MagicMock()
+        mock_503.status_code = 503
+        assert is_transient_auth_error(requests.HTTPError(response=mock_503)) is True
+
+        mock_500 = MagicMock()
+        mock_500.status_code = 500
+        assert is_transient_auth_error(requests.HTTPError(response=mock_500)) is True
+
+        mock_429 = MagicMock()
+        mock_429.status_code = 429
+        assert is_transient_auth_error(requests.HTTPError(response=mock_429)) is True
+
+        # Transport security policy errors
+        from core.security import (
+            InsecureHttpProhibitedError,
+            InvalidServerUrlError,
+            TransportSecurityError,
+        )
+        assert is_transient_auth_error(InsecureHttpProhibitedError("Insecure HTTP prohibited in production")) is True
+        assert is_transient_auth_error(InvalidServerUrlError("Server URL cannot be empty")) is False
+        assert is_transient_auth_error(TransportSecurityError("Generic transport security error")) is False
+
+        # Fatal / non-transient errors
+        assert is_transient_auth_error(RuntimeError("Computer not enrolled")) is False
+        assert is_transient_auth_error(ValueError("Invalid config")) is False
+
+        mock_401 = MagicMock()
+        mock_401.status_code = 401
+        assert is_transient_auth_error(requests.HTTPError(response=mock_401)) is False
+
+        mock_400 = MagicMock()
+        mock_400.status_code = 400
+        assert is_transient_auth_error(requests.HTTPError(response=mock_400)) is False
+
+    def test_startup_backend_unavailable_leaves_runtime_running_and_offline(self, tmp_path):
+        """
+        Verify that when the backend is offline (ConnectionError / ConnectTimeout)
+        during RuntimeManager.start(), the runtime starts in degraded offline mode,
+        does NOT raise or crash, and starts outbox and scheduler.
+        """
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+        import requests
+
+        db_path = str(tmp_path / "offline_startup.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+        stop_event = threading.Event()
+
+        runtime = AgentRuntime(
+            stop_event=stop_event,
+            is_service=True,
+            outbox=test_outbox,
+            enable_outbox=True,
+            enable_single_instance=False,
+        )
+
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=requests.ConnectionError("Connection refused")), \
+             patch("core.runtime.AgentWebSocketClient"), \
+             patch("paths.ensure_directories_exist"):
+
+            def stop_after_startup():
+                for _ in range(50):
+                    if runtime.is_running:
+                        break
+                    time.sleep(0.01)
+                runtime.stop()
+
+            stopper = threading.Thread(target=stop_after_startup, daemon=True)
+            stopper.start()
+
+            # start() should succeed without throwing unhandled exceptions
+            runtime.start()
+            stopper.join(timeout=2.0)
+
+        assert runtime.started_count == 1
+        assert runtime.stopped_count == 1
+        assert runtime.computer_id == 101
+        assert runtime.token_manager.token == ""
+
+    def test_startup_fatal_error_still_raises_and_does_not_mask_bug(self, tmp_path):
+        """Verify genuinely fatal programming/configuration errors are not masked."""
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+
+        db_path = str(tmp_path / "fatal_startup.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+        stop_event = threading.Event()
+
+        runtime = AgentRuntime(
+            stop_event=stop_event,
+            is_service=True,
+            outbox=test_outbox,
+            enable_outbox=True,
+            enable_single_instance=False,
+        )
+
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=ValueError("Corrupted credential secret")), \
+             patch("paths.ensure_directories_exist"):
+
+            with pytest.raises(ValueError, match="Corrupted credential secret"):
+                runtime.start()
+
+            assert runtime.is_running is False
+            assert runtime.started_count == 0
+
+    def test_service_lifecycle_survives_offline_startup(self, tmp_path):
+        """Verify ServiceLifecycle worker thread remains RUNNING when backend is offline."""
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+        import requests
+
+        db_path = str(tmp_path / "svc_offline.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+
+        def mock_runtime_factory(stop_ev):
+            return AgentRuntime(
+                stop_event=stop_ev,
+                is_service=True,
+                outbox=test_outbox,
+                enable_outbox=True,
+                enable_single_instance=False,
+            )
+
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=requests.ConnectionError("Offline backend")), \
+             patch("core.runtime.AgentWebSocketClient"), \
+             patch("paths.ensure_directories_exist"):
+
+            lifecycle = ServiceLifecycle(runtime_factory=mock_runtime_factory)
+            lifecycle.start()
+
+            # Wait for state to transition to RUNNING
+            time.sleep(0.15)
+            assert lifecycle.state == ServiceState.RUNNING
+            assert lifecycle.is_healthy() is True
+            assert lifecycle.last_error is None
+
+            # Clean shutdown
+            lifecycle.stop(timeout=2.0)
+            assert lifecycle.state == ServiceState.STOPPED
+
+
+class TestServiceInstallerCommandGeneration:
+    """Regression tests for Task 3: Service installer sc.exe argument formatting."""
+
+    def test_get_install_command_args_exact_tokens(self):
+        """Verify get_install_command_args produces discrete tokens without invalid combined arguments."""
+        from service.service import get_install_command_args
+
+        cmd = get_install_command_args(
+            service_name="SLMSService",
+            bin_path=r'"C:\Program Files\SLMS\SLMS_Client_Agent.exe" run',
+            startup_type="auto",
+            display_name="Smart Lab Management System (SLMS) Client Agent",
+            service_account="NT SERVICE\\SLMSService",
+        )
+
+        expected = [
+            "sc.exe",
+            "create",
+            "SLMSService",
+            "binpath=",
+            r'"C:\Program Files\SLMS\SLMS_Client_Agent.exe" run',
+            "start=",
+            "auto",
+            "DisplayName=",
+            "Smart Lab Management System (SLMS) Client Agent",
+            "obj=",
+            "NT SERVICE\\SLMSService",
+        ]
+        assert cmd == expected
+
+        # Ensure no accidental "start= auto" single token is present
+        assert "start= auto" not in cmd
+        assert "binpath= " not in str(cmd)
+
+    def test_get_install_command_args_demand_and_localsystem(self):
+        """Verify get_install_command_args handles demand startup and localsystem account without obj= parameter."""
+        from service.service import get_install_command_args
+
+        cmd = get_install_command_args(
+            service_name="SLMSService",
+            bin_path=r"C:\SLMS\agent.exe run",
+            startup_type="demand",
+            display_name="SLMS Agent",
+            service_account="LocalSystem",
+        )
+
+        assert "start=" in cmd
+        assert "demand" in cmd
+        # LocalSystem does not need obj= parameter in sc create
+        assert "obj=" not in cmd
+
+
+class TestServiceTransportSecurityResilience:
+    """Regression tests for Service resilience against transport security violations."""
+
+    def test_service_lifecycle_survives_insecure_http_in_production(self, tmp_path, monkeypatch):
+        """
+        CRITICAL TEST: When enrolled URL is plaintext HTTP and production mode prohibits it,
+        ServiceLifecycle must enter degraded offline mode, remain in RUNNING state,
+        buffer telemetry to outbox, and NOT crash or terminate the worker thread.
+        """
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+        from core.security import InsecureHttpProhibitedError
+
+        monkeypatch.delenv("SLMS_ALLOW_INSECURE_HTTP", raising=False)
+        monkeypatch.delenv("SLMS_DEV_MODE", raising=False)
+
+        db_path = str(tmp_path / "svc_insecure_http.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+
+        def mock_runtime_factory(stop_ev):
+            return AgentRuntime(
+                stop_event=stop_ev,
+                is_service=True,
+                outbox=test_outbox,
+                enable_outbox=True,
+                enable_single_instance=False,
+            )
+
+        insecure_err = InsecureHttpProhibitedError(
+            "Insecure HTTP URL 'http://169.254.234.45:8000' is prohibited in production. "
+            "Production SLMS communication requires HTTPS. "
+            "Set SLMS_ALLOW_INSECURE_HTTP=1 only for local development."
+        )
+
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=insecure_err), \
+             patch("core.runtime.AgentWebSocketClient"), \
+             patch("paths.ensure_directories_exist"):
+
+            lifecycle = ServiceLifecycle(runtime_factory=mock_runtime_factory)
+            lifecycle.start()
+
+            # Wait for state to transition to RUNNING
+            time.sleep(0.15)
+            assert lifecycle.state == ServiceState.RUNNING
+            assert lifecycle.is_healthy() is True
+            assert lifecycle.last_error is None
+
+            # Clean shutdown
+            lifecycle.stop(timeout=2.0)
+            assert lifecycle.state == ServiceState.STOPPED
+
+    def test_service_survives_http_5xx_429_408_errors(self, tmp_path):
+        """Verify 500, 502, 503, 504, 429, 408 HTTP errors result in graceful degraded startup."""
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+        import requests
+
+        db_path = str(tmp_path / "svc_http_transient.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+
+        for status in [408, 429, 500, 502, 503, 504]:
+            mock_resp = requests.Response()
+            mock_resp.status_code = status
+            http_err = requests.HTTPError(f"HTTP {status}", response=mock_resp)
+
+            runtime = AgentRuntime(
+                is_service=True,
+                outbox=test_outbox,
+                enable_outbox=True,
+                enable_single_instance=False,
+            )
+
+            with patch("core.runtime.is_enrolled", return_value=True), \
+                 patch("core.runtime.get_computer_id", return_value=101), \
+                 patch("core.runtime.authenticate_agent", side_effect=http_err), \
+                 patch("core.runtime.AgentWebSocketClient"), \
+                 patch("paths.ensure_directories_exist"):
+
+                # Should start in degraded mode without raising
+                runtime_thread = threading.Thread(target=runtime.start, daemon=True)
+                runtime_thread.start()
+
+                time.sleep(0.1)
+                assert runtime.is_running is True
+                assert not runtime.token_manager.token
+
+                runtime.stop()
+                runtime_thread.join(timeout=2.0)
+                assert runtime.is_running is False
+
+    def test_insecure_http_prohibited_does_not_perform_http_requests(self, tmp_path, monkeypatch):
+        """Verify production security policy strictly prevents HTTP requests from being made."""
+        from core.security import validate_and_normalize_server_url, InsecureHttpProhibitedError
+        import requests
+
+        monkeypatch.delenv("SLMS_ALLOW_INSECURE_HTTP", raising=False)
+        monkeypatch.delenv("SLMS_DEV_MODE", raising=False)
+
+        with patch.object(requests.Session, "post") as mock_post:
+            with pytest.raises(InsecureHttpProhibitedError):
+                validate_and_normalize_server_url("http://169.254.234.45:8000")
+
+            # Must never have attempted any network dispatch
+            mock_post.assert_not_called()
+
+    def test_token_manager_background_refresh_handles_insecure_http_error(self, monkeypatch):
+        """Verify background token refresh handles InsecureHttpProhibitedError without killing the process."""
+        from core.managers import TokenManager
+        from core.security import InsecureHttpProhibitedError
+
+        monkeypatch.delenv("SLMS_ALLOW_INSECURE_HTTP", raising=False)
+        monkeypatch.delenv("SLMS_DEV_MODE", raising=False)
+
+        tm = TokenManager(refresh_interval=60.0)
+
+        insecure_err = InsecureHttpProhibitedError("Insecure HTTP prohibited")
+        with patch("core.managers._resolve_authenticate_agent", side_effect=insecure_err):
+            # refresh_if_due must catch and log, not crash
+            result = tm.refresh_if_due()
+            assert result is False
+            assert not tm.token
+
+    def test_invalid_server_url_error_is_fatal_and_raises(self, tmp_path):
+        """Verify InvalidServerUrlError (configuration error) is NOT transient and raises fatally on startup."""
+        from core.runtime import AgentRuntime
+        from core.outbox import DurableOutbox
+        from core.security import InvalidServerUrlError
+
+        db_path = str(tmp_path / "svc_invalid_url.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+
+        runtime = AgentRuntime(
+            is_service=True,
+            outbox=test_outbox,
+            enable_outbox=True,
+            enable_single_instance=False,
+        )
+
+        invalid_url_err = InvalidServerUrlError("Server URL cannot be empty.")
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=invalid_url_err), \
+             patch("paths.ensure_directories_exist"):
+
+            with pytest.raises(InvalidServerUrlError, match="Server URL cannot be empty"):
+                runtime.start()
+
+            assert runtime.is_running is False
+            assert runtime.started_count == 0

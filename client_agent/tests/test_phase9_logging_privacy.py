@@ -1,7 +1,9 @@
+from datetime import datetime, timezone
 import json
 import logging
 import os
 import subprocess
+import time
 from logging.handlers import RotatingFileHandler
 from unittest.mock import MagicMock, patch
 
@@ -444,3 +446,124 @@ def test_migration_fails_safely_when_old_db_locked_in_use(tmp_path):
         del conn, old_box
         import gc
         gc.collect()
+
+
+# ============================================================================
+# Phase D: SQLite Outbox & ProgramData Permission Hardening Tests
+# ============================================================================
+
+def test_phase_d_fresh_programdata_directory_structure_creation(tmp_path):
+    """Verify ensure_directories_exist creates the full runtime layout on clean installation."""
+    clean_base = tmp_path / "fresh_slms"
+    assert not clean_base.exists()
+
+    paths.ensure_directories_exist(str(clean_base))
+
+    layout = paths.get_path_layout(str(clean_base))
+    assert os.path.isdir(layout["logs"])
+    assert os.path.isdir(layout["data"])
+    assert os.path.isdir(layout["cache"])
+    assert os.path.isdir(layout["config"])
+    assert os.path.isdir(layout["outbox"])
+    assert os.path.isdir(layout["diagnostic"])
+
+
+def test_phase_d_configure_service_folder_permissions_command_structure(tmp_path):
+    """Verify configure_service_folder_permissions constructs correct recursive icacls command."""
+    mock_run = MagicMock()
+    mock_run.returncode = 0
+    mock_run.stdout = "successfully processed 1 files"
+    mock_run.stderr = ""
+
+    with patch("service.service.subprocess.run", return_value=mock_run) as patched_run:
+        with patch.dict(os.environ, {"SLMS_DEV_MODE": "0"}):
+            with patch("service.service.os.name", "nt"):
+                success = configure_service_folder_permissions(
+                    service_account="NT SERVICE\\SLMSService",
+                    data_dir=str(tmp_path),
+                )
+                assert success is True
+                assert patched_run.call_count >= 1
+
+                first_cmd = patched_run.call_args_list[0][0][0]
+                assert first_cmd[0] == "icacls"
+                assert first_cmd[1] == str(tmp_path)
+                assert first_cmd[2] == "/grant"
+                assert "NT SERVICE\\SLMSService:(OI)(CI)(M)" in first_cmd[3]
+                assert "/t" in first_cmd
+
+
+def test_phase_d_fresh_sqlite_outbox_wal_lifecycle(tmp_path):
+    """
+    Verify SQLite outbox initialization and WAL operation on a completely fresh directory
+    where outbox.db, outbox.db-wal, and outbox.db-shm do not previously exist.
+    """
+    fresh_db = tmp_path / "data" / "outbox" / "outbox.db"
+    assert not fresh_db.parent.exists()
+
+    # Initialize fresh outbox
+    box = DurableOutbox(db_path=str(fresh_db))
+    assert fresh_db.exists()
+
+    # Enqueue multiple items with different priorities
+    rec1 = box.enqueue("telemetry_metric", {"cpu": 45.2}, idempotency_key="fresh_key_1")
+    rec2 = box.enqueue("issue_event", {"error": "test"}, idempotency_key="fresh_key_2")
+    assert rec1.id == 1
+    assert rec2.id == 2
+
+    # Verify pending batch retrieval (transitions to PROCESSING)
+    batch = box.get_pending_batch(limit=10)
+    assert len(batch) == 2
+
+    # Mark first item delivered (deletes from SQLite)
+    box.mark_delivered(rec1.id)
+    stats = box.get_stats()
+    assert stats["total_count"] == 1
+
+    # Mark second item retry
+    box.mark_retry(rec2.id, "Connection refused", time.time() + 60)
+    stats_after_retry = box.get_stats()
+    assert stats_after_retry["status_counts"].get("PENDING", 0) == 1
+
+    # Close and reopen outbox to verify persistence across restarts
+    del box
+    import gc
+    gc.collect()
+
+    box2 = DurableOutbox(db_path=str(fresh_db))
+    stats_reopened = box2.get_stats()
+    assert stats_reopened["total_count"] == 1
+    rec = box2.get_record_by_idempotency_key("fresh_key_2")
+    assert rec is not None
+    assert rec.attempt_count == 1
+
+
+def test_phase_d_usage_state_atomic_write_on_fresh_dir(tmp_path):
+    """Verify save_usage_state and load_usage_state operate atomically on fresh data directory."""
+    from modules.usage import save_usage_state, load_usage_state, _ACTIVE_SESSIONS
+
+    state_file = str(tmp_path / "data" / "usage_state.json")
+    assert not os.path.exists(state_file)
+
+    # Populate in-memory active session
+    now = datetime.now(timezone.utc)
+    _ACTIVE_SESSIONS[(9999, 1700000000.0)] = {
+        "pid": 9999,
+        "create_time": 1700000000.0,
+        "application_name": "lab_tool.exe",
+        "started_at": now,
+        "last_seen_at": now,
+        "consecutive_misses": 0,
+    }
+
+    # Save to fresh path (atomic write creates dir if needed)
+    save_usage_state(state_file)
+    assert os.path.isfile(state_file)
+
+    with open(state_file, "r", encoding="utf-8") as f:
+        saved_json = json.load(f)
+    assert "9999_1700000000.0" in saved_json
+
+    # Clean in-memory and reload
+    _ACTIVE_SESSIONS.clear()
+    load_usage_state(state_file)
