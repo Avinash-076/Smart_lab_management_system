@@ -117,7 +117,9 @@ def get_processes_for_computer(
             )
             .order_by(
                 Process.cpu_percent.desc(),
+                Process.memory_percent.desc(),
                 Process.name.asc(),
+                Process.pid.asc(),
             )
             .limit(limit)
             .offset(offset)

@@ -256,4 +256,8 @@ export async function getComputerSoftware(id) {
   return fetchWithAuth(`/clients/${id}/software`);
 }
 
+export async function getComputerProcesses(id) {
+  return fetchWithAuth(`/clients/${id}/processes`);
+}
+
 

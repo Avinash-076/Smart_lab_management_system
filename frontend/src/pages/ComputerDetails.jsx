@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getComputer, getComputerMetrics, getComputerSoftware } from "../services/api";
+import { getComputer, getComputerMetrics, getComputerSoftware, getComputerProcesses } from "../services/api";
 import StatCard from "../components/StatCard";
 import Icon from "../components/Icon";
 import MetricChart from "../components/MetricChart";
@@ -38,6 +38,12 @@ function ComputerDetails({ computer, onBack }) {
   const [softwareLoading, setSoftwareLoading] = useState(false);
   const [softwareError, setSoftwareError] = useState("");
   const [softwareSearch, setSoftwareSearch] = useState("");
+
+  // Running processes state (V3.2)
+  const [processList, setProcessList] = useState([]);
+  const [processLoading, setProcessLoading] = useState(false);
+  const [processError, setProcessError] = useState("");
+  const [processSearch, setProcessSearch] = useState("");
 
   const loadHistoricalMetrics = useCallback(
     async (range = timeRange) => {
@@ -96,6 +102,26 @@ function ComputerDetails({ computer, onBack }) {
     }
   }, [computerId]);
 
+  const loadProcesses = useCallback(async () => {
+    if (!computerId) return;
+    try {
+      setProcessLoading(true);
+      setProcessError("");
+      const data = await getComputerProcesses(computerId);
+      if (Array.isArray(data)) {
+        setProcessList(data);
+      } else {
+        setProcessList([]);
+      }
+    } catch (err) {
+      console.warn("Could not fetch running processes:", err);
+      setProcessError(err.message || "Failed to load running processes.");
+      setProcessList([]);
+    } finally {
+      setProcessLoading(false);
+    }
+  }, [computerId]);
+
   const loadDetails = useCallback(async () => {
     if (!computerId) return;
 
@@ -120,6 +146,7 @@ function ComputerDetails({ computer, onBack }) {
 
       await loadHistoricalMetrics(timeRange);
       await loadSoftware();
+      await loadProcesses();
     } catch (err) {
       console.error("Failed to load computer details:", err);
       setError(err.message || "Failed to load computer details.");
@@ -128,7 +155,7 @@ function ComputerDetails({ computer, onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [computerId, timeRange, loadHistoricalMetrics, loadSoftware]);
+  }, [computerId, timeRange, loadHistoricalMetrics, loadSoftware, loadProcesses]);
 
   useEffect(() => {
     if (!computerId) {
@@ -167,6 +194,18 @@ function ComputerDetails({ computer, onBack }) {
           if (!ignore) {
             setSoftwareError(swErr.message || "Failed to load software inventory.");
             setSoftwareList([]);
+          }
+        }
+
+        try {
+          const procs = await getComputerProcesses(computerId);
+          if (!ignore) {
+            setProcessList(Array.isArray(procs) ? procs : []);
+          }
+        } catch (procErr) {
+          if (!ignore) {
+            setProcessError(procErr.message || "Failed to load running processes.");
+            setProcessList([]);
           }
         }
       } catch (err) {
@@ -393,6 +432,16 @@ function ComputerDetails({ computer, onBack }) {
       (item.name && item.name.toLowerCase().includes(q)) ||
       (item.publisher && item.publisher.toLowerCase().includes(q)) ||
       (item.version && item.version.toLowerCase().includes(q))
+    );
+  });
+
+  const filteredProcesses = processList.filter((item) => {
+    if (!processSearch.trim()) return true;
+    const q = processSearch.toLowerCase();
+    return (
+      (item.name && item.name.toLowerCase().includes(q)) ||
+      (item.pid !== undefined && item.pid !== null && String(item.pid).includes(q)) ||
+      (item.status && item.status.toLowerCase().includes(q))
     );
   });
 
@@ -877,6 +926,195 @@ function ComputerDetails({ computer, onBack }) {
           >
             Showing <strong>{filteredSoftware.length}</strong> of{" "}
             <strong>{softwareList.length}</strong> installed applications
+          </div>
+        )}
+      </div>
+
+      {/* =================================================
+          RUNNING PROCESSES (V3.2)
+      ================================================= */}
+      <div className="table-card" style={{ marginTop: "24px" }}>
+        <div
+          className="page-section-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "18px 22px",
+            borderBottom: "1px solid #edf0f4",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#07144a" }}>
+              Running Processes
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#68748b" }}>
+              Active system processes and resource utilization on this computer.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              className="table-search"
+              style={{ width: "240px", height: "36px" }}
+            >
+              <input
+                value={processSearch}
+                onChange={(e) => setProcessSearch(e.target.value)}
+                placeholder="Search process, PID..."
+                style={{ fontSize: "12px" }}
+              />
+              <Icon type="search" size={16} />
+            </div>
+
+            <button
+              className="export"
+              onClick={loadProcesses}
+              disabled={processLoading}
+              title="Refresh running processes from server"
+              style={{ width: "auto", height: "36px", padding: "0 14px" }}
+            >
+              <Icon type="refresh" size={14} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {processLoading && processList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <Icon type="refresh" size={32} />
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>Loading running processes...</h4>
+            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>Fetching active process table from server.</p>
+          </div>
+        ) : processError && processList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#dc2626" }}>Failed to load running processes</h4>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>{processError}</p>
+            <button
+              className="refresh"
+              onClick={loadProcesses}
+              style={{ display: "inline-flex" }}
+            >
+              Try Again
+            </button>
+          </div>
+        ) : processList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <Icon type="details" size={36} />
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No running processes recorded</h4>
+            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>The client agent has not reported active processes for this computer yet.</p>
+          </div>
+        ) : filteredProcesses.length === 0 ? (
+          <div className="empty-state" style={{ padding: "30px 20px" }}>
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No matching processes found</h4>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>No active processes match &quot;{processSearch}&quot;.</p>
+            <button
+              className="export"
+              onClick={() => setProcessSearch("")}
+              style={{ display: "inline-flex" }}
+            >
+              Clear Search
+            </button>
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "35%" }}>Process Name</th>
+                  <th style={{ width: "15%" }}>PID</th>
+                  <th style={{ width: "20%" }}>CPU %</th>
+                  <th style={{ width: "20%" }}>Memory %</th>
+                  <th style={{ width: "10%" }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProcesses.map((proc) => (
+                  <tr key={proc.id || `${proc.pid}-${proc.name}`}>
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        <strong style={{ color: "#1e293b", fontSize: "12px", fontFamily: "monospace" }}>
+                          {proc.name}
+                        </strong>
+                      </div>
+                    </td>
+                    <td>
+                      <code
+                        style={{
+                          fontSize: "12px",
+                          color: "#475569",
+                          background: "#f1f5f9",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {proc.pid}
+                      </code>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: proc.cpu_percent > 50 ? "#dc2626" : proc.cpu_percent > 20 ? "#d97706" : "#2563eb",
+                        }}
+                      >
+                        {proc.cpu_percent.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          color: proc.memory_percent > 50 ? "#dc2626" : proc.memory_percent > 20 ? "#d97706" : "#16a34a",
+                        }}
+                      >
+                        {proc.memory_percent.toFixed(1)}%
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          padding: "2px 8px",
+                          borderRadius: "12px",
+                          background: proc.status === "running" ? "#dcfce7" : "#f1f5f9",
+                          color: proc.status === "running" ? "#15803d" : "#64748b",
+                          textTransform: "capitalize",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {proc.status || "active"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {processList.length > 0 && (
+          <div
+            style={{
+              padding: "12px 20px",
+              fontSize: "12px",
+              color: "#64748b",
+              borderTop: "1px solid #edf0f4",
+              background: "#f8fafc",
+            }}
+          >
+            Showing <strong>{filteredProcesses.length}</strong> of{" "}
+            <strong>{processList.length}</strong> running processes
           </div>
         )}
       </div>
