@@ -381,6 +381,43 @@ class DurableOutbox:
                 conn.commit()
                 logger.warning(f"Outbox record {record_id} marked DEAD_LETTER: {error_message}")
 
+    def release_pending_batch(
+        self,
+        record_ids: list[int],
+        next_attempt_at: float | None = None,
+        last_error: str | None = None,
+    ) -> None:
+        """
+        Release claimed PROCESSING records back to PENDING without incrementing
+        attempt_count (e.g. when global authentication or network is unavailable).
+        """
+        if not record_ids:
+            return
+        now = time.time()
+        sched_time = next_attempt_at if next_attempt_at is not None else now
+        placeholders = ",".join("?" for _ in record_ids)
+        with self._lock:
+            with self._get_connection() as conn:
+                if last_error is not None:
+                    conn.execute(
+                        f"""
+                        UPDATE outbox_items
+                        SET status = ?, next_attempt_at = ?, last_error = ?, updated_at = ?
+                        WHERE id IN ({placeholders}) AND status = ?;
+                        """,
+                        [OutboxStatus.PENDING.value, sched_time, last_error, now] + record_ids + [OutboxStatus.PROCESSING.value],
+                    )
+                else:
+                    conn.execute(
+                        f"""
+                        UPDATE outbox_items
+                        SET status = ?, next_attempt_at = ?, updated_at = ?
+                        WHERE id IN ({placeholders}) AND status = ?;
+                        """,
+                        [OutboxStatus.PENDING.value, sched_time, now] + record_ids + [OutboxStatus.PROCESSING.value],
+                    )
+                conn.commit()
+
     def recover_stale_processing(self, stale_threshold_seconds: float = 60.0) -> int:
         """
         Recover records that were stuck in PROCESSING status due to an ungraceful

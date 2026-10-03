@@ -14,6 +14,7 @@ bounded, isolated, single-responsibility components:
 from __future__ import annotations
 
 import concurrent.futures
+import random
 import threading
 import time
 from typing import Any, Callable
@@ -194,53 +195,152 @@ class TokenHolder:
             self._token = value
 
 
+AUTH_RETRY_INITIAL_DELAY: float = 2.0
+AUTH_RETRY_MAX_DELAY: float = 300.0
+AUTH_RETRY_BACKOFF_FACTOR: float = 2.0
+AUTH_RETRY_JITTER_RATIO: float = 0.2
+
+
 class TokenManager:
     """
     Manages authentication token acquisition, thread-safe access,
-    periodic refresh, and on-demand refresh coordination.
+    periodic refresh, and on-demand refresh coordination with controlled backoff.
     """
 
     def __init__(
         self,
         token_holder: TokenHolder | None = None,
         refresh_interval: float = TOKEN_REFRESH_INTERVAL,
+        initial_backoff: float = AUTH_RETRY_INITIAL_DELAY,
+        max_backoff: float = AUTH_RETRY_MAX_DELAY,
+        backoff_factor: float = AUTH_RETRY_BACKOFF_FACTOR,
+        jitter_ratio: float = AUTH_RETRY_JITTER_RATIO,
     ):
         self.token_holder = token_holder or TokenHolder("")
         self.refresh_interval = refresh_interval
+        self.initial_backoff = initial_backoff
+        self.max_backoff = max_backoff
+        self.backoff_factor = backoff_factor
+        self.jitter_ratio = jitter_ratio
+
         self._last_refresh: float = time.monotonic() if self.token_holder.token else 0.0
+        self._consecutive_failures: int = 0
+        self._cooldown_until: float = 0.0
+        self._last_auth_error: Exception | None = None
         self._lock = threading.Lock()
 
     @property
     def token(self) -> str:
         return self.token_holder.token
 
+    @property
+    def consecutive_failures(self) -> int:
+        with self._lock:
+            return self._consecutive_failures
+
+    @property
+    def last_auth_error(self) -> Exception | None:
+        with self._lock:
+            return self._last_auth_error
+
+    def is_in_cooldown(self, now: float | None = None) -> bool:
+        """Check if TokenManager is currently within an authentication failure cooldown window."""
+        if now is None:
+            now = time.monotonic()
+        with self._lock:
+            return now < self._cooldown_until
+
+    def cooldown_remaining(self, now: float | None = None) -> float:
+        """Return the remaining seconds of the active cooldown, or 0.0 if not in cooldown."""
+        if now is None:
+            now = time.monotonic()
+        with self._lock:
+            return max(0.0, self._cooldown_until - now)
+
     def set_token(self, new_token: str) -> None:
+        """Explicitly set a new token and reset failure/cooldown state."""
         with self._lock:
             self.token_holder.token = new_token
             self._last_refresh = time.monotonic()
+            self._consecutive_failures = 0
+            self._cooldown_until = 0.0
+            self._last_auth_error = None
 
-    def refresh(self) -> str:
-        """Force synchronous authentication and update token holder."""
+    def refresh(self, force: bool = False) -> str:
+        """
+        Force synchronous authentication and update token holder.
+        If under backoff cooldown from a recent failure and not forced,
+        raises the previous authentication error without issuing a new HTTP request.
+        """
+        now = time.monotonic()
         with self._lock:
-            token = _resolve_authenticate_agent()
-            self.token_holder.token = token
-            self._last_refresh = time.monotonic()
-            return token
+            if not force and now < self._cooldown_until:
+                remaining = self._cooldown_until - now
+                logger.debug(
+                    f"TokenManager in auth cooldown for another {remaining:.1f}s. "
+                    "Skipping duplicate authentication request."
+                )
+                if self._last_auth_error is not None:
+                    raise self._last_auth_error
+                raise RuntimeError(f"Authentication is in cooldown for {remaining:.1f}s.")
+
+            try:
+                token = _resolve_authenticate_agent()
+                self.token_holder.token = token
+                self._last_refresh = now
+                self._consecutive_failures = 0
+                self._cooldown_until = 0.0
+                self._last_auth_error = None
+                return token
+            except Exception as exc:
+                self._consecutive_failures += 1
+                self._last_auth_error = exc
+                base = min(
+                    self.initial_backoff * (self.backoff_factor ** (self._consecutive_failures - 1)),
+                    self.max_backoff,
+                )
+                jitter = base * self.jitter_ratio * random.uniform(-1.0, 1.0)
+                delay = min(self.max_backoff, max(0.5, round(base + jitter, 2)))
+                self._cooldown_until = now + delay
+                logger.warning(
+                    f"Authentication failed (failure #{self._consecutive_failures}): {exc}. "
+                    f"Entering auth cooldown for {delay:.1f}s."
+                )
+                raise
 
     def refresh_if_due(self, now: float | None = None) -> bool:
         """Check if token refresh interval has elapsed (or token is empty) and refresh if needed."""
         if now is None:
             now = time.monotonic()
         with self._lock:
+            # If in cooldown, do not attempt
+            if now < self._cooldown_until:
+                return False
+
             if not self.token_holder.token or (now - self._last_refresh > self.refresh_interval):
                 try:
                     logger.info("Refreshing access token on scheduled cadence...")
                     token = _resolve_authenticate_agent()
                     self.token_holder.token = token
                     self._last_refresh = now
+                    self._consecutive_failures = 0
+                    self._cooldown_until = 0.0
+                    self._last_auth_error = None
                     return True
                 except Exception as exc:
-                    logger.warning(f"Token refresh attempt failed: {exc}")
+                    self._consecutive_failures += 1
+                    self._last_auth_error = exc
+                    base = min(
+                        self.initial_backoff * (self.backoff_factor ** (self._consecutive_failures - 1)),
+                        self.max_backoff,
+                    )
+                    jitter = base * self.jitter_ratio * random.uniform(-1.0, 1.0)
+                    delay = min(self.max_backoff, max(0.5, round(base + jitter, 2)))
+                    self._cooldown_until = now + delay
+                    logger.warning(
+                        f"Token refresh attempt failed (failure #{self._consecutive_failures}): {exc}. "
+                        f"Entering auth cooldown for {delay:.1f}s."
+                    )
                     return False
         return False
 

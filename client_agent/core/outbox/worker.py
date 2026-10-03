@@ -125,8 +125,20 @@ class OutboxDeliveryWorker:
         """
         Attempt to process one batch of pending items.
         Returns True if a batch was processed (indicating more work may be available),
-        or False if no items were due.
+        or False if no items were due or delivery is paused.
         """
+        # Ensure we have an access token before fetching or claiming records
+        token = self.get_token()
+        if not token and self.refresh_token:
+            try:
+                token = self.refresh_token()
+            except Exception as e:
+                logger.debug(f"Outbox delivery waiting for valid token: {e}")
+                return False
+
+        if not token:
+            return False
+
         try:
             batch = self.outbox.get_pending_batch(limit=self.batch_size)
         except Exception as e:
@@ -136,30 +148,39 @@ class OutboxDeliveryWorker:
         if not batch:
             return False
 
-        for item in batch:
+        for idx, item in enumerate(batch):
             if self.stop_event.is_set():
+                remaining_ids = [b.id for b in batch[idx:]]
+                self.outbox.release_pending_batch(remaining_ids)
                 break
-            self._process_single_item(item)
+
+            delivery_ok = self._process_single_item(item, token)
+            if not delivery_ok:
+                # If item delivery encountered an authentication loss and re-auth failed,
+                # stop batch processing and release remaining items without incrementing attempt count
+                remaining_ids = [b.id for b in batch[idx + 1:]]
+                if remaining_ids:
+                    self.outbox.release_pending_batch(remaining_ids)
+                return False
 
         return len(batch) >= self.batch_size
 
-    def _process_single_item(self, item: OutboxRecord) -> None:
+    def _process_single_item(self, item: OutboxRecord, token: str | None = None) -> bool:
         """Deliver a single outbox record to the appropriate endpoint."""
-        token = self.get_token()
+        if not token:
+            token = self.get_token()
 
         if not token and self.refresh_token:
             try:
                 token = self.refresh_token()
             except Exception as e:
                 logger.warning(f"Failed to obtain token for outbox delivery: {e}")
-                delay = calculate_backoff_delay(item.attempt_count + 1)
-                self.outbox.mark_retry(item.id, "No valid access token available", time.time() + delay)
-                return
+                self.outbox.release_pending_batch([item.id], last_error="No valid access token available")
+                return False
 
         if not token:
-            delay = calculate_backoff_delay(item.attempt_count + 1)
-            self.outbox.mark_retry(item.id, "No access token configured", time.time() + delay)
-            return
+            self.outbox.release_pending_batch([item.id], last_error="No access token configured")
+            return False
 
         try:
             self._dispatch_event(item, token)
@@ -170,8 +191,9 @@ class OutboxDeliveryWorker:
                 except Exception as cb_err:
                     logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
             logger.debug(f"Outbox item {item.id} ({item.event_type}) delivered successfully.")
+            return True
         except Exception as exc:
-            self._handle_delivery_failure(item, exc, token)
+            return self._handle_delivery_failure(item, exc, token)
 
     def _dispatch_event(self, item: OutboxRecord, token: str) -> None:
         """Call the appropriate sender function based on event_type."""
@@ -218,7 +240,7 @@ class OutboxDeliveryWorker:
         item: OutboxRecord,
         exc: Exception,
         current_token: str,
-    ) -> None:
+    ) -> bool:
         """Analyze failure and apply retry, dead-letter, or idempotent resolution."""
         classification, error_msg = classify_exception(exc)
 
@@ -233,37 +255,42 @@ class OutboxDeliveryWorker:
                     self.on_delivered(item)
                 except Exception as cb_err:
                     logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
-            return
+            return True
 
         # 2. Authentication Expired (HTTP 401)
         if classification == ErrorClassification.AUTH_EXPIRED and self.refresh_token:
             logger.warning(f"Outbox delivery received 401 Unauthorized for item {item.id}. Re-authenticating...")
             try:
                 new_token = self.refresh_token()
-                # Retry immediately with refreshed token
-                self._dispatch_event(item, new_token)
-                self.outbox.mark_delivered(item.id)
-                if self.on_delivered:
-                    try:
-                        self.on_delivered(item)
-                    except Exception as cb_err:
-                        logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
-                logger.info(f"Outbox item {item.id} delivered successfully after re-authentication.")
-                return
+                if new_token:
+                    # Retry immediately with refreshed token
+                    self._dispatch_event(item, new_token)
+                    self.outbox.mark_delivered(item.id)
+                    if self.on_delivered:
+                        try:
+                            self.on_delivered(item)
+                        except Exception as cb_err:
+                            logger.warning(f"Error in on_delivered callback for item {item.id}: {cb_err}")
+                    logger.info(f"Outbox item {item.id} delivered successfully after re-authentication.")
+                    return True
             except Exception as retry_exc:
-                logger.warning(f"Immediate retry after re-authentication failed: {retry_exc}")
-                exc = retry_exc
-                classification, error_msg = classify_exception(retry_exc)
+                logger.warning(f"Re-authentication failed after 401 for item {item.id}: {retry_exc}")
+                # Auth failure is a global dependency failure: release item back to PENDING without incrementing attempt count
+                self.outbox.release_pending_batch(
+                    [item.id],
+                    last_error=f"401 Unauthorized (re-auth failed: {retry_exc})",
+                )
+                return False
 
-        # 3. Permanent Client Error (400, 403, 404, 422)
+        # 3. Permanent Client Error (400, 403, 404, 422, InvalidServerUrlError)
         if classification == ErrorClassification.PERMANENT_FAILURE:
             logger.error(
                 f"Outbox item {item.id} ({item.event_type}) non-retryable failure: {error_msg}. Moving to DEAD_LETTER."
             )
             self.outbox.mark_dead_letter(item.id, error_msg)
-            return
+            return True
 
-        # 4. Retryable Error (Network, Timeout, 429, 5xx)
+        # 4. Retryable Error (Network, Timeout, 429, 5xx, TransportSecurityError)
         delay = calculate_backoff_delay(item.attempt_count + 1)
         next_attempt = time.time() + delay
         self.outbox.mark_retry(item.id, error_msg, next_attempt)
@@ -271,3 +298,4 @@ class OutboxDeliveryWorker:
             f"Outbox item {item.id} ({item.event_type}) temporary failure: {error_msg}. "
             f"Attempt {item.attempt_count + 1}/{item.max_attempts}. Retrying in {delay}s."
         )
+        return True

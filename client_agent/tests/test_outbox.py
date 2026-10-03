@@ -1033,3 +1033,204 @@ class TestOutboxProcessingRecoveryAndOfflineDrain:
         assert stats_after["status_counts"].get(OutboxStatus.DEAD_LETTER.value, 0) == 2
         assert stats_after["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 0
         assert stats_after["status_counts"].get(OutboxStatus.PENDING.value, 0) == 1
+
+
+class TestAuthenticationRetryStormPrevention:
+    """Tests verifying prevention of authentication retry storms and attempt count preservation."""
+
+    def test_token_manager_exponential_backoff_and_cooldown(self):
+        """Verify TokenManager throttles failed authentications with exponential backoff."""
+        from core.managers import TokenManager
+        from core.security import InsecureHttpProhibitedError
+
+        tm = TokenManager(
+            refresh_interval=60.0,
+            initial_backoff=2.0,
+            max_backoff=30.0,
+            backoff_factor=2.0,
+            jitter_ratio=0.0,  # deterministic for test
+        )
+
+        auth_mock = MagicMock(side_effect=InsecureHttpProhibitedError("Insecure HTTP prohibited"))
+
+        with patch("core.managers._resolve_authenticate_agent", auth_mock):
+            # Attempt 1: Fails
+            with pytest.raises(InsecureHttpProhibitedError):
+                tm.refresh()
+
+            assert tm.consecutive_failures == 1
+            assert tm.is_in_cooldown() is True
+            assert 1.5 <= tm.cooldown_remaining() <= 2.5
+            assert auth_mock.call_count == 1
+
+            # Immediate repeat: Blocked by cooldown without calling auth again
+            with pytest.raises(InsecureHttpProhibitedError):
+                tm.refresh()
+            assert auth_mock.call_count == 1  # Still 1!
+
+            # Advance past first cooldown (2s)
+            with patch("time.monotonic", return_value=time.monotonic() + 3.0):
+                assert tm.is_in_cooldown() is False
+                with pytest.raises(InsecureHttpProhibitedError):
+                    tm.refresh()
+                assert auth_mock.call_count == 2
+                assert tm.consecutive_failures == 2
+                # Next backoff: ~4s
+                assert 3.5 <= tm.cooldown_remaining() <= 4.5
+
+    def test_successful_auth_resets_backoff(self):
+        """Verify successful authentication resets consecutive failures and cooldown."""
+        from core.managers import TokenManager
+
+        tm = TokenManager(initial_backoff=2.0, jitter_ratio=0.0)
+
+        # Trigger failure
+        with patch("core.managers._resolve_authenticate_agent", side_effect=RuntimeError("Auth error")):
+            with pytest.raises(RuntimeError):
+                tm.refresh()
+            assert tm.consecutive_failures == 1
+            assert tm.is_in_cooldown() is True
+
+        # Successful auth
+        with patch("core.managers._resolve_authenticate_agent", return_value="fresh.jwt.token"):
+            token = tm.refresh(force=True)
+            assert token == "fresh.jwt.token"
+            assert tm.token == "fresh.jwt.token"
+            assert tm.consecutive_failures == 0
+            assert tm.is_in_cooldown() is False
+            assert tm.cooldown_remaining() == 0.0
+
+    def test_multiple_outbox_items_no_token_single_auth_and_no_attempt_burn(self, tmp_path):
+        """
+        CRITICAL TEST: When token is missing, multiple pending outbox items must NOT
+        cause multiple auth requests or burn individual item attempt_count counters.
+        """
+        from core.managers import TokenManager
+        from core.security import InsecureHttpProhibitedError
+
+        db_file = str(tmp_path / "no_storm.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        # Enqueue 10 telemetry items
+        for i in range(10):
+            outbox.enqueue("metrics", {"metric_idx": i}, f"key_{i}")
+
+        tm = TokenManager(initial_backoff=5.0, jitter_ratio=0.0)
+        auth_mock = MagicMock(side_effect=InsecureHttpProhibitedError("HTTP URL prohibited"))
+
+        worker = OutboxDeliveryWorker(
+            outbox=outbox,
+            get_token=lambda: tm.token,
+            refresh_token=tm.refresh,
+        )
+
+        with patch("core.managers._resolve_authenticate_agent", auth_mock), \
+             patch("core.outbox.worker.send_metrics") as mock_send:
+
+            # Drain once
+            has_more = worker.drain_once()
+            assert has_more is False
+            # Exactly 1 auth request attempted despite 10 items in queue
+            assert auth_mock.call_count == 1
+            assert mock_send.call_count == 0
+
+            # Drain again immediately (cooldown active)
+            worker.drain_once()
+            assert auth_mock.call_count == 1  # Still exactly 1!
+
+        # Verify ALL 10 items remain in PENDING status with attempt_count == 0 (NO BURNING)
+        stats = outbox.get_stats()
+        assert stats["total_count"] == 10
+        assert stats["status_counts"].get(OutboxStatus.PENDING.value) == 10
+        assert stats["status_counts"].get(OutboxStatus.DEAD_LETTER.value, 0) == 0
+
+        batch = outbox.get_pending_batch(limit=10)
+        for item in batch:
+            assert item.attempt_count == 0
+
+    def test_auth_recovery_delivers_all_buffered_items(self, tmp_path):
+        """Verify that once auth recovers, all buffered outbox items are delivered cleanly."""
+        from core.managers import TokenManager
+
+        db_file = str(tmp_path / "recovery.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        for i in range(5):
+            outbox.enqueue("metrics", {"data": i}, f"rec_key_{i}")
+
+        tm = TokenManager()
+        worker = OutboxDeliveryWorker(
+            outbox=outbox,
+            get_token=lambda: tm.token,
+            refresh_token=tm.refresh,
+        )
+
+        # 1. Auth fails
+        with patch("core.managers._resolve_authenticate_agent", side_effect=ConnectionError("Offline")):
+            worker.drain_once()
+            assert outbox.get_stats()["total_count"] == 5
+
+        # 2. Auth recovers
+        with patch("core.managers._resolve_authenticate_agent", return_value="valid.jwt.token"), \
+             patch("core.outbox.worker.send_metrics") as mock_send:
+            tm.refresh(force=True)
+            worker.drain_once()
+            assert mock_send.call_count == 5
+
+        assert outbox.get_stats()["total_count"] == 0
+
+    def test_http_401_mid_batch_auth_failure_releases_all_items_without_attempt_burn(self, tmp_path):
+        """
+        Regression test: When an item delivery encounters HTTP 401 and re-authentication
+        fails, the failed item and all remaining batch items must be released back to
+        PENDING without incrementing attempt_count, and batch processing must stop immediately.
+        """
+        from core.managers import TokenManager
+
+        db_file = str(tmp_path / "mid_batch_401.db")
+        outbox = DurableOutbox(db_path=db_file)
+
+        # Enqueue 3 items
+        for i in range(3):
+            outbox.enqueue("metrics", {"idx": i}, f"key_401_{i}")
+
+        tm = TokenManager()
+        tm.set_token("initial.valid.token")
+
+        worker = OutboxDeliveryWorker(
+            outbox=outbox,
+            get_token=lambda: tm.token,
+            refresh_token=tm.refresh,
+            batch_size=10,
+        )
+
+        # First item raises 401 Unauthorized
+        mock_401_resp = requests.Response()
+        mock_401_resp.status_code = 401
+        http_401_err = requests.HTTPError("401 Unauthorized", response=mock_401_resp)
+
+        send_mock = MagicMock(side_effect=http_401_err)
+        auth_mock = MagicMock(side_effect=ConnectionError("Backend unreachable during re-auth"))
+
+        with patch("core.outbox.worker.send_metrics", send_mock), \
+             patch("core.managers._resolve_authenticate_agent", auth_mock):
+
+            has_more = worker.drain_once()
+            assert has_more is False
+
+            # Exactly 1 send attempt made (for first item)
+            assert send_mock.call_count == 1
+            # Exactly 1 re-auth attempt made
+            assert auth_mock.call_count == 1
+
+        # Verify all 3 items are returned to PENDING and attempt_count is 0 for ALL of them
+        stats = outbox.get_stats()
+        assert stats["total_count"] == 3
+        assert stats["status_counts"].get(OutboxStatus.PENDING.value) == 3
+        assert stats["status_counts"].get(OutboxStatus.PROCESSING.value, 0) == 0
+        assert stats["status_counts"].get(OutboxStatus.DEAD_LETTER.value, 0) == 0
+
+        batch = outbox.get_pending_batch(limit=10)
+        assert len(batch) == 3
+        for item in batch:
+            assert item.attempt_count == 0
