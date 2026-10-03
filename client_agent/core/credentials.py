@@ -20,7 +20,11 @@ from typing import Any
 
 import keyring
 
-from paths import CONFIG_FOLDER
+import logging
+
+from paths import get_data_dir, CONFIG_FOLDER
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SERVICE_NAME = "SLMS"
 DEFAULT_ENTROPY = b"SLMS_AGENT_SERVICE_DPAPI_ENTROPY_V2"
@@ -202,9 +206,10 @@ class KeyringCredentialStore(BaseCredentialStore):
     Suitable for interactive desktop execution and local development.
     """
 
-    def __init__(self, service_name: str = DEFAULT_SERVICE_NAME):
+    def __init__(self, service_name: str = DEFAULT_SERVICE_NAME, config_folder: str | None = None):
         self.service_name = service_name
-        self._server_config_file = os.path.join(CONFIG_FOLDER, "server_config.json")
+        self.config_folder = config_folder if config_folder is not None else os.path.join(get_data_dir(), "config")
+        self._server_config_file = os.path.join(self.config_folder, "server_config.json")
 
     def get_credential(self, key: str) -> str | None:
         return keyring.get_password(self.service_name, key)
@@ -301,10 +306,10 @@ class ServiceCredentialStore(BaseCredentialStore):
 
     def __init__(
         self,
-        config_folder: str = CONFIG_FOLDER,
+        config_folder: str | None = None,
         entropy: bytes = DEFAULT_ENTROPY,
     ):
-        self.config_folder = config_folder
+        self.config_folder = config_folder if config_folder is not None else os.path.join(get_data_dir(), "config")
         self.entropy = entropy
         self.credential_file = os.path.join(self.config_folder, "service_credentials.enc")
         self._server_config_file = os.path.join(self.config_folder, "server_config.json")
@@ -322,7 +327,14 @@ class ServiceCredentialStore(BaseCredentialStore):
 
             plaintext = dpapi_decrypt(ciphertext, self.entropy)
             return json.loads(plaintext.decode("utf-8"))
-        except Exception:
+        except PermissionError as pe:
+            logger.error(
+                f"Permission denied reading service credential file '{self.credential_file}': {pe}. "
+                "Ensure NT SERVICE\\SLMSService (or the active service account) has Read permissions."
+            )
+            return {}
+        except Exception as e:
+            logger.warning(f"Failed to read/decrypt service credentials from '{self.credential_file}': {e}")
             return {}
 
     def _write_payload(self, data: dict[str, Any]) -> None:
@@ -370,14 +382,52 @@ class ServiceCredentialStore(BaseCredentialStore):
                 check=False,
                 timeout=5,
             )
-            subprocess.run(
+            # Attempt to grant service account Read permission if service already exists in SCM.
+            # If the service does not exist yet (as during pre-service fresh headless enrollment),
+            # this step safely proceeds; the subsequent service install lifecycle will establish
+            # the mandatory service ACL after sc.exe create succeeds.
+            res_svc = subprocess.run(
                 ["icacls", filepath, "/grant", r"NT SERVICE\SLMSService:(R)"],
                 capture_output=True,
+                text=True,
                 check=False,
                 timeout=5,
             )
-        except Exception:
-            pass
+            if res_svc.returncode == 0:
+                logger.debug(f"Granted NT SERVICE\\SLMSService Read permission on {filepath}.")
+            else:
+                logger.debug(
+                    f"Notice: Pre-service creation ACL assignment for NT SERVICE\\SLMSService exited with {res_svc.returncode}. "
+                    "Service installation lifecycle will apply mandatory credential ACL after service creation."
+                )
+        except Exception as e:
+            logger.debug(f"_set_restricted_permissions notice: {e}")
+
+    def grant_service_account_access(self, service_account: str = "NT SERVICE\\SLMSService") -> bool:
+        """
+        Explicitly grant the specified Windows service account Read permission on the credential file.
+        Returns True on success, False if icacls fails.
+        """
+        if os.name != "nt" or not service_account or service_account.lower() == "localsystem":
+            return True
+
+        if not os.path.isfile(self.credential_file):
+            logger.warning(f"Cannot grant service ACL: credential file does not exist at {self.credential_file}")
+            return False
+
+        try:
+            cmd = ["icacls", self.credential_file, "/grant", f"{service_account}:(R)"]
+            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=5)
+            if res.returncode == 0:
+                logger.info(f"Granted {service_account} Read permission on {self.credential_file}.")
+                return True
+            else:
+                err = res.stderr.strip() or res.stdout.strip()
+                logger.error(f"Failed to grant {service_account} Read on {self.credential_file}: {err}")
+                return False
+        except Exception as e:
+            logger.error(f"Error executing icacls on {self.credential_file}: {e}")
+            return False
 
     def get_credential(self, key: str) -> str | None:
         payload = self._read_payload()
@@ -515,32 +565,23 @@ def get_credential_store() -> BaseCredentialStore:
     """
     Resolve the active CredentialStore instance with the following priority:
     1. Explicitly configured test or runtime store (via set_credential_store).
-    2. KeyringCredentialStore if SLMS_DEV_MODE=1 or SLMS_USE_KEYRING=1 (unless in explicit service mode).
-    3. ServiceCredentialStore if service credentials file exists.
-    4. ServiceCredentialStore if SLMS_SERVICE_MODE=1.
-    5. KeyringCredentialStore if enrolled via Keyring (Phase 1 backward compatibility).
-    6. ServiceCredentialStore by default in Windows production.
+    2. KeyringCredentialStore if SLMS_USE_KEYRING=1 (unless in explicit service mode).
+    3. ServiceCredentialStore by default for Windows Service, headless enrollment, and production.
+
+    Note: SLMS_DEV_MODE strictly controls logging/debugging behavior and MUST NOT
+    determine credential-store selection.
     """
     global _store_instance
     if _store_instance is not None:
         return _store_instance
 
-    dev_mode = os.environ.get("SLMS_DEV_MODE", "0").lower() in ("1", "true", "yes")
     use_keyring = os.environ.get("SLMS_USE_KEYRING", "0").lower() in ("1", "true", "yes")
     service_mode = os.environ.get("SLMS_SERVICE_MODE", "0").lower() in ("1", "true", "yes")
 
-    if (dev_mode or use_keyring) and not service_mode:
+    if use_keyring and not service_mode:
         return KeyringCredentialStore()
 
-    service_store = ServiceCredentialStore()
-    if service_store.is_enrolled() or service_mode:
-        return service_store
-
-    keyring_store = KeyringCredentialStore()
-    if keyring_store.is_enrolled():
-        return keyring_store
-
-    return service_store
+    return ServiceCredentialStore()
 
 
 def set_credential_store(store: BaseCredentialStore | None) -> None:

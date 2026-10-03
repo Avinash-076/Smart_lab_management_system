@@ -229,24 +229,22 @@ def assign_account_privileges(account_name: str) -> bool:
         return False
 
 
-def configure_service_folder_permissions(
+def apply_mandatory_service_acls(
     service_account: str = DEFAULT_SERVICE_ACCOUNT,
     data_dir: str | None = None,
 ) -> bool:
     """
-    Harden %PROGRAMDATA%\\SLMS folder permissions:
-    - Grant Administrators and SYSTEM Full Control (OI)(CI)(F).
-    - Grant service account required Modify access with recursive inheritance (OI)(CI)(M).
-    - Grant service account Read access to encrypted credential vault if present.
-    - Preserves security without granting excessive permissions to Everyone or standard users.
-    Logs success or exact failure reason; does not silently suppress errors.
+    Apply mandatory filesystem ACLs required for Windows service operation:
+    1. Grant service account Modify access with container/object inheritance (OI)(CI)(M)
+       on the data directory (%PROGRAMDATA%\\SLMS).
+    2. Grant service account Read access (R) on service_credentials.enc if present.
+
+    CRITICAL ARCHITECTURAL RULE:
+    This function is MANDATORY for service functionality and MUST execute regardless
+    of SLMS_DEV_MODE (0 or 1). Development mode must never disable mandatory service ACLs.
+    Returns True on success, False if any mandatory ACL could not be established.
     """
     if os.name != "nt":
-        return True
-
-    dev_mode = os.environ.get("SLMS_DEV_MODE", "0").lower() in ("1", "true", "yes")
-    if dev_mode:
-        logger.info("Skipping production folder ACL hardening in development mode.")
         return True
 
     from paths import ensure_directories_exist, get_data_dir
@@ -254,38 +252,143 @@ def configure_service_folder_permissions(
     slms_root = data_dir or get_data_dir()
     ensure_directories_exist(slms_root)
 
+    if not service_account or service_account.lower() == "localsystem":
+        logger.debug("LocalSystem service account does not require explicit ACL grants.")
+        return True
+
     success = True
     try:
-        # 1. Grant service account modify access if non-LocalSystem with recursive inheritance
-        if service_account and service_account.lower() != "localsystem":
-            cmd = ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)", "/t"]
-            res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
-            if res.returncode == 0:
-                logger.info(f"Granted {service_account} Modify permissions on {slms_root}.")
-            else:
-                err = res.stderr.strip() or res.stdout.strip()
-                logger.warning(f"Failed to grant {service_account} permissions on {slms_root}: {err}")
-                success = False
+        # 1. Grant service account Modify access with recursive inheritance
+        cmd_root = ["icacls", slms_root, "/grant", f"{service_account}:(OI)(CI)(M)", "/t"]
+        res_root = subprocess.run(cmd_root, capture_output=True, text=True, check=False, timeout=15)
+        if res_root.returncode == 0:
+            logger.info(f"Mandatory ACL: Granted {service_account} Modify permissions on {slms_root}.")
+        else:
+            err = res_root.stderr.strip() or res_root.stdout.strip()
+            logger.error(f"Mandatory ACL FAILED: Could not grant {service_account} Modify on {slms_root}: {err}")
+            success = False
 
-        # 2. Grant service account read access on credential file if present
+        # 2. Grant service account Read access on credential file if present
         config_folder = os.path.join(slms_root, "config")
         cred_file = os.path.join(config_folder, "service_credentials.enc")
-        if os.path.isfile(cred_file) and service_account and service_account.lower() != "localsystem":
+        if os.path.isfile(cred_file):
             cmd_cred = ["icacls", cred_file, "/grant", f"{service_account}:(R)"]
             res_cred = subprocess.run(cmd_cred, capture_output=True, text=True, check=False, timeout=5)
             if res_cred.returncode == 0:
-                logger.info(f"Granted {service_account} Read permissions on {cred_file}.")
+                logger.info(f"Mandatory ACL: Granted {service_account} Read permissions on {cred_file}.")
             else:
                 err_cred = res_cred.stderr.strip() or res_cred.stdout.strip()
-                logger.warning(f"Failed to grant {service_account} Read on {cred_file}: {err_cred}")
+                logger.error(f"Mandatory ACL FAILED: Could not grant {service_account} Read on {cred_file}: {err_cred}")
                 success = False
 
-        if success:
-            logger.info(f"Service folder ACL hardening completed successfully for {slms_root}.")
         return success
     except Exception as e:
-        logger.error(f"Error configuring service folder permissions for {slms_root}: {e}")
+        logger.error(f"Exception while applying mandatory service ACLs: {e}")
         return False
+
+
+def harden_production_folder_permissions(data_dir: str | None = None) -> bool:
+    """
+    Optional production folder ACL hardening.
+    In development mode (SLMS_DEV_MODE=1), optional hardening is skipped,
+    while mandatory service account ACLs remain strictly enforced.
+    """
+    if os.name != "nt":
+        return True
+
+    dev_mode = os.environ.get("SLMS_DEV_MODE", "0").lower() in ("1", "true", "yes")
+    if dev_mode:
+        logger.info("Skipping optional production folder ACL hardening in development mode.")
+        return True
+
+    from paths import ensure_directories_exist, get_data_dir
+
+    slms_root = data_dir or get_data_dir()
+    ensure_directories_exist(slms_root)
+
+    try:
+        cmd = [
+            "icacls",
+            slms_root,
+            "/grant",
+            "*S-1-5-32-544:(OI)(CI)(F)",  # Builtin Administrators
+            "/grant",
+            "*S-1-5-18:(OI)(CI)(F)",      # LocalSystem
+        ]
+        res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=10)
+        if res.returncode == 0:
+            logger.info(f"Optional production hardening applied on {slms_root}.")
+            return True
+        else:
+            logger.warning(f"Production hardening notice on {slms_root}: {res.stderr.strip() or res.stdout.strip()}")
+            return True  # Non-fatal for optional hardening
+    except Exception as e:
+        logger.warning(f"Production hardening notice: {e}")
+        return True
+
+
+def configure_service_folder_permissions(
+    service_account: str = DEFAULT_SERVICE_ACCOUNT,
+    data_dir: str | None = None,
+) -> bool:
+    """
+    Configure %PROGRAMDATA%\\SLMS folder permissions:
+    - Applies mandatory service account Modify and Credential Read permissions (regardless of SLMS_DEV_MODE).
+    - Applies optional production hardening if not in development mode.
+    Returns True if mandatory permissions succeeded, False otherwise.
+    """
+    mandatory_ok = apply_mandatory_service_acls(service_account=service_account, data_dir=data_dir)
+    if not mandatory_ok:
+        logger.error("Mandatory service ACL configuration failed.")
+        return False
+
+    harden_production_folder_permissions(data_dir=data_dir)
+    return True
+
+
+def verify_service_credentials_accessible(
+    service_account: str = DEFAULT_SERVICE_ACCOUNT,
+    data_dir: str | None = None,
+) -> tuple[bool, str]:
+    """
+    Verify that service credentials exist, can be decrypted via DPAPI,
+    and that the service account has explicit Read access on Windows.
+    Returns (True, message) or (False, error_message).
+    """
+    from paths import get_data_dir
+    slms_root = data_dir or get_data_dir()
+    config_folder = os.path.join(slms_root, "config")
+    cred_file = os.path.join(config_folder, "service_credentials.enc")
+
+    if not os.path.isfile(cred_file):
+        return False, f"Credential file does not exist: {cred_file}"
+
+    # Test decryption and enrollment data validity
+    try:
+        from core.credentials import ServiceCredentialStore
+        store = ServiceCredentialStore(config_folder=config_folder)
+        creds = store.get_enrolled_credentials()
+        if not creds or not creds.get("agent_id") or not creds.get("client_secret"):
+            return False, f"Credential file at {cred_file} is unreadable or does not contain valid enrollment keys."
+    except PermissionError as pe:
+        return False, f"Access denied reading credential file {cred_file}: {pe}"
+    except Exception as e:
+        return False, f"Decryption failed for credential file {cred_file}: {e}"
+
+    # On Windows, verify ACL contains service_account
+    if os.name == "nt" and service_account and service_account.lower() != "localsystem":
+        try:
+            res = subprocess.run(["icacls", cred_file], capture_output=True, text=True, check=False, timeout=5)
+            if res.returncode == 0:
+                account_needle = service_account.lower()
+                unqualified_needle = account_needle.split("\\")[-1]
+                stdout_lower = res.stdout.lower()
+                if account_needle not in stdout_lower and unqualified_needle not in stdout_lower:
+                    return False, f"Service account '{service_account}' is not granted access in ACL for {cred_file}."
+        except Exception as e:
+            logger.warning(f"Could not inspect icacls for {cred_file}: {e}")
+
+    return True, f"Service credentials at {cred_file} verified and accessible by {service_account}."
 
 
 def configure_service_recovery(service_name: str = SERVICE_NAME) -> bool:
@@ -460,7 +563,21 @@ def install_service(
         assign_account_privileges(service_account)
 
         # Grant service account permissions on %PROGRAMDATA%\SLMS
-        configure_service_folder_permissions(service_account)
+        if not configure_service_folder_permissions(service_account):
+            logger.error("Failed to apply mandatory service folder and credential ACLs.")
+            print("Failed to apply mandatory service folder and credential ACLs.")
+            return False
+
+        # Verify credential file accessibility if present
+        from paths import get_data_dir
+        cred_file = os.path.join(get_data_dir(), "config", "service_credentials.enc")
+        if os.path.isfile(cred_file):
+            verified, vmsg = verify_service_credentials_accessible(service_account)
+            if not verified:
+                logger.error(f"Credential verification failed after service installation: {vmsg}")
+                print(f"Credential verification failed: {vmsg}")
+                return False
+            logger.info(vmsg)
 
         # Configure recovery policy
         configure_service_recovery(SERVICE_NAME)
@@ -591,29 +708,109 @@ def main():
         help="Startup type (default: auto)",
     )
 
+    acl_parser = subparsers.add_parser(
+        "configure-acl",
+        help="Apply mandatory service account permissions to data directory and credentials",
+    )
+    acl_parser.add_argument(
+        "--account",
+        default=DEFAULT_SERVICE_ACCOUNT,
+        help=f"Service account (default: {DEFAULT_SERVICE_ACCOUNT})",
+    )
+
+    verify_cred_parser = subparsers.add_parser(
+        "verify-credentials",
+        help="Verify service credential existence, decryption, and service account ACL",
+    )
+    verify_cred_parser.add_argument(
+        "--account",
+        default=DEFAULT_SERVICE_ACCOUNT,
+        help=f"Service account (default: {DEFAULT_SERVICE_ACCOUNT})",
+    )
+
     subparsers.add_parser("uninstall", help="Uninstall the Windows service")
     subparsers.add_parser("start", help="Start the Windows service")
     subparsers.add_parser("stop", help="Stop the Windows service")
     subparsers.add_parser("status", help="Query the Windows service status")
     subparsers.add_parser("debug", help="Run the service in interactive debug mode")
 
+    enroll_parser = subparsers.add_parser(
+        "enroll",
+        help="Enroll this computer with the SLMS backend (headless / non-interactive)",
+    )
+    enroll_parser.add_argument(
+        "--url",
+        default=None,
+        help="SLMS Server Base URL (e.g. https://slms.lab.edu:8000)",
+    )
+    key_group = enroll_parser.add_mutually_exclusive_group()
+    key_group.add_argument(
+        "--key",
+        default=None,
+        help="Workstation Enrollment Key",
+    )
+    key_group.add_argument(
+        "--stdin-key",
+        "--key-stdin",
+        dest="stdin_key",
+        action="store_true",
+        help="Read enrollment key from standard input",
+    )
+    key_group.add_argument(
+        "--key-file",
+        default=None,
+        help="Path to file containing enrollment key",
+    )
+    enroll_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Force overwrite existing enrollment credentials",
+    )
+
     args = parser.parse_args()
 
     if args.command == "run":
         run_service()
     elif args.command == "install":
-        install_service(service_account=args.account, startup_type=args.startup)
+        success = install_service(service_account=args.account, startup_type=args.startup)
+        if not success:
+            sys.exit(1)
+    elif args.command == "configure-acl":
+        success = configure_service_folder_permissions(service_account=args.account)
+        if not success:
+            sys.exit(1)
+    elif args.command == "verify-credentials":
+        ok, msg = verify_service_credentials_accessible(service_account=args.account)
+        print(msg)
+        if not ok:
+            sys.exit(1)
     elif args.command == "uninstall":
-        uninstall_service()
+        success = uninstall_service()
+        if not success:
+            sys.exit(1)
     elif args.command == "start":
-        start_service()
+        success = start_service()
+        if not success:
+            sys.exit(1)
     elif args.command == "stop":
-        stop_service()
+        success = stop_service()
+        if not success:
+            sys.exit(1)
     elif args.command == "status":
         status = get_service_status()
         print(f"Service '{SERVICE_NAME}' status: {status}")
     elif args.command == "debug":
         debug_service()
+    elif args.command == "enroll":
+        from server.enroll import handle_enroll_cli
+        exit_code = handle_enroll_cli(
+            url=args.url,
+            key=args.key,
+            stdin_key=args.stdin_key,
+            key_file=args.key_file,
+            force=args.force,
+        )
+        sys.exit(exit_code)
     else:
         parser.print_help()
 

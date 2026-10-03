@@ -19,7 +19,7 @@ def main() -> None:
     """Launch the SLMS Client Agent in interactive CLI or Service mode."""
     # Dispatch to service controller if invoked with SCM or service management arguments
     if len(sys.argv) > 1 and sys.argv[1].lower() in (
-        "run", "--service", "--startup", "service", "install", "uninstall", "start", "stop", "status", "debug", "--help", "-h", "help"
+        "run", "--service", "--startup", "service", "install", "uninstall", "start", "stop", "status", "debug", "enroll", "configure-acl", "verify-credentials", "--help", "-h", "help"
     ):
         if sys.argv[1].lower() == "service":
             sys.argv.pop(1)

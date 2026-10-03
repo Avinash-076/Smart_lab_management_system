@@ -524,6 +524,7 @@ def test_17_full_startup_shutdown_lifecycle(tmp_path):
         is_service=True,
         outbox=test_outbox,
         enable_outbox=True,
+        enable_single_instance=False,
     )
 
     with patch("core.runtime.is_enrolled", return_value=True), \

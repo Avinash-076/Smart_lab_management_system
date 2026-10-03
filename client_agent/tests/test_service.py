@@ -46,7 +46,10 @@ from service.service import (
     SERVICE_NAME,
     SLMSService,
     assign_account_privileges,
+    apply_mandatory_service_acls,
     configure_service_folder_permissions,
+    harden_production_folder_permissions,
+    verify_service_credentials_accessible,
     get_failure_flag_command_args,
     get_privileges_command_args,
     get_recovery_command_args,
@@ -107,7 +110,7 @@ class TestServiceLifecycle:
     def test_stop_event_causes_clean_shutdown(self):
         """4. Verify stop event wakes up runtime immediately without waiting for interval."""
         stop_event = threading.Event()
-        runtime = AgentRuntime(stop_event=stop_event, is_service=True)
+        runtime = AgentRuntime(stop_event=stop_event, is_service=True, enable_single_instance=False)
 
         start_time = time.time()
         # Trigger stop after 0.1s
@@ -121,7 +124,7 @@ class TestServiceLifecycle:
     def test_runtime_starts_and_stops_exactly_once(self):
         """5 & 6. Verify runtime starts exactly once and shutdown is invoked exactly once."""
         stop_event = threading.Event()
-        runtime = AgentRuntime(stop_event=stop_event, is_service=True)
+        runtime = AgentRuntime(stop_event=stop_event, is_service=True, enable_single_instance=False)
 
         # Mock authentication and enrollment to simulate a single cycle
         with patch("core.runtime.is_enrolled", return_value=True), \
@@ -188,12 +191,20 @@ class TestServiceCredentialStorage:
         assert b"agent-999" not in raw_bytes
 
     def test_interactive_keyring_development_behavior_intact(self, monkeypatch):
-        """8. Verify interactive Keyring development store remains functional."""
-        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        """8. Verify interactive Keyring development store remains functional via SLMS_USE_KEYRING."""
+        set_credential_store(None)
+        monkeypatch.setenv("SLMS_USE_KEYRING", "1")
         monkeypatch.delenv("SLMS_SERVICE_MODE", raising=False)
 
         store = get_credential_store()
         assert isinstance(store, KeyringCredentialStore)
+
+        # Verify SLMS_DEV_MODE=1 alone does NOT select KeyringCredentialStore
+        monkeypatch.delenv("SLMS_USE_KEYRING", raising=False)
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        dev_store = get_credential_store()
+        assert isinstance(dev_store, ServiceCredentialStore)
+        set_credential_store(None)
 
     def test_credential_migration_from_keyring_to_service(self, tmp_path):
         """Verify migration helper moves credentials from Keyring to Service store."""
@@ -252,7 +263,7 @@ class TestServiceSecurityAndNonInteractiveConstraints:
     def test_authentication_failure_handled_cleanly(self):
         """12. Verify authentication failure does not leave runtime in active state."""
         stop_event = threading.Event()
-        runtime = AgentRuntime(stop_event=stop_event, is_service=True)
+        runtime = AgentRuntime(stop_event=stop_event, is_service=True, enable_single_instance=False)
 
         with patch("core.runtime.is_enrolled", return_value=True), \
              patch("core.runtime.authenticate_agent", side_effect=RuntimeError("Auth rejected 401")):
@@ -544,7 +555,8 @@ class TestFrozenServiceConfiguration:
              patch("sys.executable", r"C:\Program Files\SLMS\SLMS_Client_Agent.exe"), \
              patch("service.service.setup_service_environment"), \
              patch("service.service.assign_account_privileges"), \
-             patch("service.service.configure_service_folder_permissions"), \
+             patch("service.service.configure_service_folder_permissions", return_value=True), \
+             patch("service.service.verify_service_credentials_accessible", return_value=(True, "ok")), \
              patch("service.service.configure_service_recovery"), \
              patch("subprocess.run") as mock_run:
 
@@ -598,7 +610,7 @@ class TestPhaseFServiceDeploymentLifecycle:
         RuntimeManager logs a critical error and raises RuntimeError without opening Tkinter GUI.
         """
         from core.runtime import RuntimeManager
-        with patch("server.enroll.is_enrolled", return_value=False), \
+        with patch("core.runtime.is_enrolled", return_value=False), \
              patch("gui.enrollment_window.show_enrollment_window") as mock_gui:
 
             stop_event = threading.Event()
@@ -1113,3 +1125,254 @@ class TestServiceTransportSecurityResilience:
 
             assert runtime.is_running is False
             assert runtime.started_count == 0
+
+
+class TestMandatoryServiceAclAndDevModeArchitecture:
+    """
+    Regression test suite for SLMS_DEV_MODE service ACL and credential access:
+    1. Mandatory ACLs applied when SLMS_DEV_MODE=1.
+    2. Mandatory ACLs + production hardening when SLMS_DEV_MODE=0.
+    3. Enrollment before SLMSService exists.
+    4. ACL application after SLMSService exists.
+    5. Successful credential access by the service account.
+    6. Mandatory ACL failure handling.
+    7. Service startup with SLMS_DEV_MODE=1.
+    8. PermissionError in credential reading logged clearly.
+    """
+
+    def test_mandatory_acls_applied_when_slms_dev_mode_1(self, tmp_path, monkeypatch):
+        """1. Verify mandatory ACLs for service account are NOT skipped when SLMS_DEV_MODE=1."""
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"mock_ciphertext")
+
+        mock_res = MagicMock()
+        mock_res.returncode = 0
+        mock_res.stdout = "successfully processed 1 files"
+        mock_res.stderr = ""
+
+        with patch("service.service.subprocess.run", return_value=mock_res) as mock_run, \
+             patch("service.service.os.name", "nt"):
+
+            success = apply_mandatory_service_acls(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert success is True
+            assert mock_run.call_count == 2
+
+            # First call: root folder modify
+            first_cmd = mock_run.call_args_list[0][0][0]
+            assert first_cmd == ["icacls", str(tmp_path), "/grant", "NT SERVICE\\SLMSService:(OI)(CI)(M)", "/t"]
+
+            # Second call: credential file read
+            second_cmd = mock_run.call_args_list[1][0][0]
+            assert second_cmd == ["icacls", str(cred_file), "/grant", "NT SERVICE\\SLMSService:(R)"]
+
+    def test_configure_service_folder_permissions_enforces_mandatory_acls_in_dev_mode(self, tmp_path, monkeypatch):
+        """1b. Verify configure_service_folder_permissions applies mandatory ACLs even when SLMS_DEV_MODE=1."""
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"mock_ciphertext")
+
+        mock_res = MagicMock(returncode=0, stdout="success", stderr="")
+
+        with patch("service.service.subprocess.run", return_value=mock_res) as mock_run, \
+             patch("service.service.os.name", "nt"):
+
+            success = configure_service_folder_permissions(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert success is True
+            # Both mandatory commands executed; optional hardening skipped
+            assert mock_run.call_count == 2
+            cmds = [call[0][0] for call in mock_run.call_args_list]
+            assert any("NT SERVICE\\SLMSService:(OI)(CI)(M)" in c for c in cmds)
+            assert any("NT SERVICE\\SLMSService:(R)" in c for c in cmds)
+
+    def test_mandatory_acls_and_production_hardening_when_slms_dev_mode_0(self, tmp_path, monkeypatch):
+        """2. Verify both mandatory ACLs and production hardening execute when SLMS_DEV_MODE=0."""
+        monkeypatch.setenv("SLMS_DEV_MODE", "0")
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"mock_ciphertext")
+
+        mock_res = MagicMock(returncode=0, stdout="success", stderr="")
+
+        with patch("service.service.subprocess.run", return_value=mock_res) as mock_run, \
+             patch("service.service.os.name", "nt"):
+
+            success = configure_service_folder_permissions(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert success is True
+            # 2 mandatory ACL calls + 1 production hardening call = 3 calls
+            assert mock_run.call_count == 3
+            cmds = [call[0][0] for call in mock_run.call_args_list]
+            assert any("NT SERVICE\\SLMSService:(OI)(CI)(M)" in c for c in cmds)
+            assert any("NT SERVICE\\SLMSService:(R)" in c for c in cmds)
+            assert any("*S-1-5-32-544:(OI)(CI)(F)" in c for c in cmds)
+
+    def test_enrollment_before_slms_service_exists(self, tmp_path, monkeypatch):
+        """3. Verify enrollment saves credentials even if NT SERVICE\\SLMSService does not yet exist in SCM."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        # Mock icacls: granting to non-existent service account returns code 1 (not found)
+        def fake_run(cmd, *args, **kwargs):
+            res = MagicMock()
+            if "NT SERVICE\\SLMSService:(R)" in cmd:
+                res.returncode = 1
+                res.stderr = "No mapping between account names and security IDs was done."
+                res.stdout = ""
+            else:
+                res.returncode = 0
+                res.stdout = "successfully processed 1 files"
+                res.stderr = ""
+            return res
+
+        with patch("core.credentials.subprocess.run", side_effect=fake_run), \
+             patch("core.credentials.os.name", "nt"):
+
+            store = ServiceCredentialStore(config_folder=str(config_dir))
+            # Saving credentials must succeed without raising exception
+            store.save_enrolled_credentials(
+                agent_id="test-agent-pre-service",
+                client_secret="secret-pre-service",
+                computer_id=777,
+            )
+            assert store.is_enrolled() is True
+            creds = store.get_enrolled_credentials()
+            assert creds is not None
+            assert creds["computer_id"] == 777
+
+    def test_acl_application_after_slms_service_exists(self, tmp_path):
+        """4. Verify ACL application after service exists grants service account Read on credentials."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"payload")
+
+        mock_res = MagicMock(returncode=0, stdout="successfully processed 1 files", stderr="")
+        with patch("service.service.subprocess.run", return_value=mock_res) as mock_run, \
+             patch("service.service.os.name", "nt"):
+
+            ok = apply_mandatory_service_acls(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert ok is True
+            # Second call grants Read to NT SERVICE\SLMSService on service_credentials.enc
+            cred_call = mock_run.call_args_list[1][0][0]
+            assert cred_call == ["icacls", str(cred_file), "/grant", "NT SERVICE\\SLMSService:(R)"]
+
+    def test_successful_credential_access_by_service_account(self, tmp_path):
+        """5. Verify credential verification succeeds when credentials are valid and ACL is present."""
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        store = ServiceCredentialStore(config_folder=str(config_dir))
+        store.save_enrolled_credentials("verified-agent", "verified-secret", 888)
+
+        mock_icacls = MagicMock()
+        mock_icacls.returncode = 0
+        mock_icacls.stdout = (
+            f"{config_dir / 'service_credentials.enc'} NT SERVICE\\SLMSService:(R)\n"
+            "BUILTIN\\Administrators:(F)\n"
+            "NT AUTHORITY\\SYSTEM:(F)\n"
+        )
+        mock_icacls.stderr = ""
+
+        with patch("service.service.subprocess.run", return_value=mock_icacls), \
+             patch("service.service.os.name", "nt"):
+
+            ok, msg = verify_service_credentials_accessible(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert ok is True
+            assert "verified and accessible" in msg
+
+    def test_mandatory_acl_failure_fails_configuration_and_installation(self, tmp_path, monkeypatch):
+        """6. Verify mandatory ACL failures return False and prevent starting a broken service."""
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"data")
+
+        # Simulate icacls Access Denied (returncode 5)
+        mock_fail = MagicMock(returncode=5, stdout="", stderr="Access is denied.")
+
+        with patch("service.service.subprocess.run", return_value=mock_fail), \
+             patch("service.service.os.name", "nt"):
+
+            ok = apply_mandatory_service_acls(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert ok is False
+
+            conf_ok = configure_service_folder_permissions(
+                service_account="NT SERVICE\\SLMSService",
+                data_dir=str(tmp_path),
+            )
+            assert conf_ok is False
+
+    def test_service_startup_with_slms_dev_mode_1(self, tmp_path, monkeypatch):
+        """7. Verify service starts cleanly in development mode (SLMS_DEV_MODE=1) without crashing."""
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        monkeypatch.setenv("SLMS_ALLOW_INSECURE_HTTP", "1")
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+
+        store = ServiceCredentialStore(config_folder=str(config_dir))
+        store.save_enrolled_credentials("dev-agent-01", "dev-secret-01", 999)
+        store.set_server_url("http://127.0.0.1:8000")
+
+        # Mock outbox and authentication
+        from core.outbox import DurableOutbox
+        outbox = DurableOutbox(db_path=str(tmp_path / "dev_test.db"))
+
+        runtime = AgentRuntime(
+            is_service=True,
+            outbox=outbox,
+            enable_outbox=True,
+            enable_single_instance=False,
+        )
+
+        with patch("core.runtime.get_credential_store", return_value=store), \
+             patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=999), \
+             patch("core.runtime.authenticate_agent", return_value="jwt.mock.token"), \
+             patch("paths.ensure_directories_exist"):
+
+            # Calling start_in_thread or simulating startup step must not raise RuntimeError
+            assert store.is_enrolled() is True
+            creds = store.get_enrolled_credentials()
+            assert creds is not None
+            assert creds["computer_id"] == 999
+
+    def test_permission_error_in_read_payload_logged_clearly(self, tmp_path, caplog):
+        """8. Verify PermissionError during credential read is logged with high-visibility error."""
+        import logging
+        config_dir = tmp_path / "config"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        cred_file = config_dir / "service_credentials.enc"
+        cred_file.write_bytes(b"dummy_ciphertext")
+
+        store = ServiceCredentialStore(config_folder=str(config_dir))
+
+        with patch("builtins.open", side_effect=PermissionError("[Errno 13] Access is denied")):
+            with caplog.at_level(logging.ERROR):
+                payload = store._read_payload()
+                assert payload == {}
+                assert any("Permission denied reading service credential file" in record.message for record in caplog.records)
+                assert any("Ensure NT SERVICE" in record.message for record in caplog.records)

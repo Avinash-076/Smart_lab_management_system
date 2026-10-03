@@ -112,9 +112,9 @@ class TestKeyringCredentialStoreServerConfig:
         """
         config_dir = tmp_path / "config"
         config_dir.mkdir()
-        monkeypatch.setattr("core.credentials.CONFIG_FOLDER", str(config_dir))
+        monkeypatch.setenv("SLMS_DATA_DIR", str(tmp_path))
 
-        store = KeyringCredentialStore(service_name="TEST_SLMS")
+        store = KeyringCredentialStore(service_name="TEST_SLMS", config_folder=str(config_dir))
         monkeypatch.setattr(store, "get_credential", lambda key: None)
 
         # Before writing, server_url is None
@@ -125,3 +125,49 @@ class TestKeyringCredentialStoreServerConfig:
 
         # Now get_server_url should read from the file
         assert store.get_server_url() == "https://slms.test.edu:8443"
+
+
+class TestCredentialStoreResolution:
+    """Verify get_credential_store resolution priority and decoupling from SLMS_DEV_MODE."""
+
+    def test_default_resolves_service_store(self, monkeypatch):
+        """By default without env vars, get_credential_store() returns ServiceCredentialStore."""
+        set_credential_store(None)
+        monkeypatch.delenv("SLMS_DEV_MODE", raising=False)
+        monkeypatch.delenv("SLMS_USE_KEYRING", raising=False)
+        monkeypatch.delenv("SLMS_SERVICE_MODE", raising=False)
+
+        store = get_credential_store()
+        from core.credentials import ServiceCredentialStore
+        assert isinstance(store, ServiceCredentialStore)
+
+    def test_dev_mode_does_not_select_keyring(self, monkeypatch):
+        """SLMS_DEV_MODE=1 strictly controls logging and MUST NOT select KeyringCredentialStore."""
+        set_credential_store(None)
+        monkeypatch.setenv("SLMS_DEV_MODE", "1")
+        monkeypatch.delenv("SLMS_USE_KEYRING", raising=False)
+        monkeypatch.delenv("SLMS_SERVICE_MODE", raising=False)
+
+        store = get_credential_store()
+        from core.credentials import ServiceCredentialStore
+        assert isinstance(store, ServiceCredentialStore)
+
+    def test_use_keyring_selects_keyring(self, monkeypatch):
+        """SLMS_USE_KEYRING=1 selects KeyringCredentialStore for interactive development."""
+        set_credential_store(None)
+        monkeypatch.setenv("SLMS_USE_KEYRING", "1")
+        monkeypatch.delenv("SLMS_SERVICE_MODE", raising=False)
+
+        store = get_credential_store()
+        from core.credentials import KeyringCredentialStore
+        assert isinstance(store, KeyringCredentialStore)
+
+    def test_service_mode_overrides_use_keyring(self, monkeypatch):
+        """SLMS_SERVICE_MODE=1 always forces ServiceCredentialStore even if SLMS_USE_KEYRING=1."""
+        set_credential_store(None)
+        monkeypatch.setenv("SLMS_USE_KEYRING", "1")
+        monkeypatch.setenv("SLMS_SERVICE_MODE", "1")
+
+        store = get_credential_store()
+        from core.credentials import ServiceCredentialStore
+        assert isinstance(store, ServiceCredentialStore)
