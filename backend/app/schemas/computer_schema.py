@@ -43,6 +43,9 @@ class ComputerCreate(ComputerBase):
 
 class ComputerResponse(ComputerBase):
     id: int
+    status: str = "offline"
+    last_seen: datetime | None = None
+    registered_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select, or_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.computer import Computer
 from app.models.agent_credential import AgentCredential
@@ -19,14 +19,14 @@ def get_all_computers(
     db: Session,
     status: str | None = None,
 ) -> list[Computer]:
-    query = select(Computer)
+    query = select(Computer).options(joinedload(Computer.status_info))
 
     if status is not None:
         query = query.join(Computer.status_info).where(
             ClientStatus.status == status
         )
 
-    return list(db.scalars(query).all())
+    return list(db.scalars(query).unique().all())
 
 
 def get_computer_by_id(
@@ -34,9 +34,9 @@ def get_computer_by_id(
     computer_id: int,
 ) -> Computer | None:
     return db.scalar(
-        select(Computer).where(
-            Computer.id == computer_id
-        )
+        select(Computer)
+        .options(joinedload(Computer.status_info))
+        .where(Computer.id == computer_id)
     )
 
 

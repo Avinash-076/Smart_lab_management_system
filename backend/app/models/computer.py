@@ -63,3 +63,16 @@ class Computer(Base):
         uselist=False
     )
 
+    @property
+    def status(self) -> str:
+        if self.status_info is not None and self.status_info.status:
+            return self.status_info.status
+        return "offline"
+
+    @property
+    def last_seen(self) -> datetime | None:
+        if self.status_info is not None:
+            return self.status_info.last_seen
+        return None
+
+

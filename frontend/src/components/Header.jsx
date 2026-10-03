@@ -13,6 +13,7 @@ function Header({
   setProfileOpen,
   setFilterOpen,
   navigate,
+  logout,
 }) {
   return (
     <header className="header">
@@ -198,7 +199,10 @@ function Header({
               <button
                 className="dropdown-action logout-action"
                 onClick={() => {
-                  navigate("logout");
+                  setProfileOpen(false);
+                  if (logout) {
+                    logout();
+                  }
                 }}
               >
                 <span className="dropdown-action-icon">

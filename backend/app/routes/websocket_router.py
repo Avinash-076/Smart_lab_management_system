@@ -216,37 +216,100 @@ async def client_websocket(
 )
 async def dashboard_websocket(
     websocket: WebSocket,
-    token: str = Query(...),
+    token: str | None = Query(default=None),
 ):
+    db = SessionLocal()
     try:
-        payload = decode_token(token)
+        auth_header = websocket.headers.get("authorization")
+        raw_token = None
+        if auth_header and auth_header.lower().startswith("bearer "):
+            raw_token = auth_header[7:].strip()
+        elif token:
+            raw_token = token.strip()
 
-        if payload.get("type") != "access":
+        if not raw_token:
             await websocket.close(
-                code=4001
+                code=4001,
+                reason="Missing token",
             )
             return
 
-    except Exception:
-        await websocket.close(
-            code=4001
+        try:
+            payload = decode_token(raw_token)
+        except Exception:
+            await websocket.close(
+                code=4001,
+                reason="Invalid token",
+            )
+            return
+
+        if payload.get("type") != "access":
+            await websocket.close(
+                code=4001,
+                reason="Invalid token type",
+            )
+            return
+
+        user_id = payload.get("sub")
+        if not user_id:
+            await websocket.close(
+                code=4001,
+                reason="Invalid token payload",
+            )
+            return
+
+        try:
+            user_id_int = int(user_id)
+        except (TypeError, ValueError):
+            await websocket.close(
+                code=4001,
+                reason="Invalid user identifier",
+            )
+            return
+
+        from app.models.user import User
+        from app.models.role_permission import RolePermission
+
+        user = db.get(User, user_id_int)
+        if not user:
+            await websocket.close(
+                code=4001,
+                reason="User not found",
+            )
+            return
+
+        permission = db.scalar(
+            select(RolePermission).where(
+                RolePermission.role_id == user.role_id,
+                RolePermission.action_code == "VIEW_COMPUTERS",
+                RolePermission.allowed.is_(True),
+            )
         )
-        return
 
-    await manager.connect_dashboard(
-        websocket
-    )
+        if not permission:
+            await websocket.close(
+                code=4003,
+                reason="Forbidden: Missing VIEW_COMPUTERS permission",
+            )
+            return
 
-    try:
-        while True:
-            await websocket.receive_text()
-
-    except WebSocketDisconnect:
-        manager.disconnect_dashboard(
+        await manager.connect_dashboard(
             websocket
         )
 
-    except Exception:
-        manager.disconnect_dashboard(
-            websocket
-        )
+        try:
+            while True:
+                await websocket.receive_text()
+
+        except WebSocketDisconnect:
+            manager.disconnect_dashboard(
+                websocket
+            )
+
+        except Exception:
+            manager.disconnect_dashboard(
+                websocket
+            )
+
+    finally:
+        db.close()
