@@ -15,9 +15,8 @@ from app.schemas.computer_schema import (
     ComputerUpdate,
     ComputerPatch,
 )
-from app.services import audit_service
-
-from app.services import computer_service
+from app.schemas.software_schema import SoftwareResponse
+from app.services import audit_service, computer_service, software_service
 from app.auth import get_current_user, require_permission,get_current_agent
 from app.models.audit_log import AuditResult
 
@@ -60,6 +59,29 @@ def get_computer(
         )
 
     return computer
+
+
+@router.get(
+    "/{computer_id}/software",
+    response_model=list[SoftwareResponse],
+)
+def get_computer_software(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return software_service.get_software_for_computer(
+        db=db,
+        computer_id=computer_id,
+    )
 
 
 @router.put(

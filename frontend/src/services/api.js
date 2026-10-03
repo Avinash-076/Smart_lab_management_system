@@ -180,7 +180,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
       headers,
     });
   } catch (netErr) {
-    throw new Error(`Network error: ${netErr.message}`);
+    throw new Error(`Network error: ${netErr.message}`, { cause: netErr });
   }
 
   // Handle 401 Unauthorized with single retry after refreshing token
@@ -251,4 +251,9 @@ export async function getComputerMetrics(id, options = {}) {
   }
   return fetchWithAuth(`/metrics/${id}${query}`);
 }
+
+export async function getComputerSoftware(id) {
+  return fetchWithAuth(`/clients/${id}/software`);
+}
+
 

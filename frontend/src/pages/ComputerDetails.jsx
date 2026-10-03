@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { getComputer, getComputerMetrics } from "../services/api";
+import { getComputer, getComputerMetrics, getComputerSoftware } from "../services/api";
 import StatCard from "../components/StatCard";
 import Icon from "../components/Icon";
 import MetricChart from "../components/MetricChart";
@@ -32,6 +32,12 @@ function ComputerDetails({ computer, onBack }) {
   const [historicalMetrics, setHistoricalMetrics] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+
+  // Software inventory state (V3.1)
+  const [softwareList, setSoftwareList] = useState([]);
+  const [softwareLoading, setSoftwareLoading] = useState(false);
+  const [softwareError, setSoftwareError] = useState("");
+  const [softwareSearch, setSoftwareSearch] = useState("");
 
   const loadHistoricalMetrics = useCallback(
     async (range = timeRange) => {
@@ -70,6 +76,26 @@ function ComputerDetails({ computer, onBack }) {
     [computerId, timeRange]
   );
 
+  const loadSoftware = useCallback(async () => {
+    if (!computerId) return;
+    try {
+      setSoftwareLoading(true);
+      setSoftwareError("");
+      const data = await getComputerSoftware(computerId);
+      if (Array.isArray(data)) {
+        setSoftwareList(data);
+      } else {
+        setSoftwareList([]);
+      }
+    } catch (err) {
+      console.warn("Could not fetch software inventory:", err);
+      setSoftwareError(err.message || "Failed to load software inventory.");
+      setSoftwareList([]);
+    } finally {
+      setSoftwareLoading(false);
+    }
+  }, [computerId]);
+
   const loadDetails = useCallback(async () => {
     if (!computerId) return;
 
@@ -93,6 +119,7 @@ function ComputerDetails({ computer, onBack }) {
       }
 
       await loadHistoricalMetrics(timeRange);
+      await loadSoftware();
     } catch (err) {
       console.error("Failed to load computer details:", err);
       setError(err.message || "Failed to load computer details.");
@@ -101,7 +128,7 @@ function ComputerDetails({ computer, onBack }) {
     } finally {
       setLoading(false);
     }
-  }, [computerId, timeRange, loadHistoricalMetrics]);
+  }, [computerId, timeRange, loadHistoricalMetrics, loadSoftware]);
 
   useEffect(() => {
     if (!computerId) {
@@ -129,6 +156,18 @@ function ComputerDetails({ computer, onBack }) {
 
         if (!ignore) {
           await loadHistoricalMetrics(timeRange);
+        }
+
+        try {
+          const sw = await getComputerSoftware(computerId);
+          if (!ignore) {
+            setSoftwareList(Array.isArray(sw) ? sw : []);
+          }
+        } catch (swErr) {
+          if (!ignore) {
+            setSoftwareError(swErr.message || "Failed to load software inventory.");
+            setSoftwareList([]);
+          }
         }
       } catch (err) {
         if (!ignore) {
@@ -346,6 +385,16 @@ function ComputerDetails({ computer, onBack }) {
     latestMetric && typeof latestMetric.network_received === "number"
       ? `${latestMetric.network_received.toFixed(1)} KB/s`
       : "Unavailable";
+
+  const filteredSoftware = softwareList.filter((item) => {
+    if (!softwareSearch.trim()) return true;
+    const q = softwareSearch.toLowerCase();
+    return (
+      (item.name && item.name.toLowerCase().includes(q)) ||
+      (item.publisher && item.publisher.toLowerCase().includes(q)) ||
+      (item.version && item.version.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="content">
@@ -659,6 +708,178 @@ function ComputerDetails({ computer, onBack }) {
         onTimeRangeChange={handleTimeRangeChange}
         onRefresh={() => loadHistoricalMetrics(timeRange)}
       />
+
+      {/* =================================================
+          SOFTWARE INVENTORY (V3.1)
+      ================================================= */}
+      <div className="table-card" style={{ marginTop: "24px" }}>
+        <div
+          className="page-section-header"
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "18px 22px",
+            borderBottom: "1px solid #edf0f4",
+            flexWrap: "wrap",
+            gap: "12px",
+          }}
+        >
+          <div>
+            <h3 style={{ margin: 0, fontSize: "16px", color: "#07144a" }}>
+              Installed Software Inventory
+            </h3>
+            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#68748b" }}>
+              System applications discovered on this computer.
+            </p>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              className="table-search"
+              style={{ width: "240px", height: "36px" }}
+            >
+              <input
+                value={softwareSearch}
+                onChange={(e) => setSoftwareSearch(e.target.value)}
+                placeholder="Search software, publisher..."
+                style={{ fontSize: "12px" }}
+              />
+              <Icon type="search" size={16} />
+            </div>
+
+            <button
+              className="export"
+              onClick={loadSoftware}
+              disabled={softwareLoading}
+              title="Refresh software list from server"
+              style={{ width: "auto", height: "36px", padding: "0 14px" }}
+            >
+              <Icon type="refresh" size={14} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {softwareLoading && softwareList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <Icon type="refresh" size={32} />
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>Loading software inventory...</h4>
+            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>Fetching installed application registry from server.</p>
+          </div>
+        ) : softwareError && softwareList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#dc2626" }}>Failed to load software inventory</h4>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>{softwareError}</p>
+            <button
+              className="refresh"
+              onClick={loadSoftware}
+              style={{ display: "inline-flex" }}
+            >
+              Try Again
+            </button>
+          </div>
+        ) : softwareList.length === 0 ? (
+          <div className="empty-state" style={{ padding: "40px 20px" }}>
+            <Icon type="software" size={36} />
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No software inventory recorded</h4>
+            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>The client agent has not reported installed applications for this computer yet.</p>
+          </div>
+        ) : filteredSoftware.length === 0 ? (
+          <div className="empty-state" style={{ padding: "30px 20px" }}>
+            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No matching software found</h4>
+            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>No applications match &quot;{softwareSearch}&quot;.</p>
+            <button
+              className="export"
+              onClick={() => setSoftwareSearch("")}
+              style={{ display: "inline-flex" }}
+            >
+              Clear Search
+            </button>
+          </div>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{ width: "35%" }}>Software Name</th>
+                  <th style={{ width: "20%" }}>Version</th>
+                  <th style={{ width: "25%" }}>Publisher / Vendor</th>
+                  <th style={{ width: "20%" }}>Install Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredSoftware.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "32px",
+                            height: "32px",
+                            borderRadius: "6px",
+                            background: "#eff6ff",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#2563eb",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Icon type="software" size={16} />
+                        </div>
+                        <strong style={{ color: "#1e293b", fontSize: "12px" }}>
+                          {item.name}
+                        </strong>
+                      </div>
+                    </td>
+                    <td>
+                      <code
+                        style={{
+                          fontSize: "12px",
+                          color: "#475569",
+                          background: "#f1f5f9",
+                          padding: "2px 6px",
+                          borderRadius: "4px",
+                        }}
+                      >
+                        {item.version || "—"}
+                      </code>
+                    </td>
+                    <td style={{ color: "#475569", fontSize: "12px" }}>
+                      {item.publisher || "—"}
+                    </td>
+                    <td style={{ color: "#64748b", fontSize: "12px" }}>
+                      {item.install_date || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {softwareList.length > 0 && (
+          <div
+            style={{
+              padding: "12px 20px",
+              fontSize: "12px",
+              color: "#64748b",
+              borderTop: "1px solid #edf0f4",
+              background: "#f8fafc",
+            }}
+          >
+            Showing <strong>{filteredSoftware.length}</strong> of{" "}
+            <strong>{softwareList.length}</strong> installed applications
+          </div>
+        )}
+      </div>
     </div>
   );
 }
