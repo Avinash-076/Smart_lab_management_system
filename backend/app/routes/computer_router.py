@@ -17,7 +17,8 @@ from app.schemas.computer_schema import (
 )
 from app.schemas.software_schema import SoftwareResponse
 from app.schemas.process_schema import ProcessResponse
-from app.services import audit_service, computer_service, software_service, process_service
+from app.schemas.usage_schema import UsageSessionResponse
+from app.services import audit_service, computer_service, software_service, process_service, usage_service
 from app.auth import get_current_user, require_permission,get_current_agent
 from app.models.audit_log import AuditResult
 
@@ -105,6 +106,55 @@ def get_computer_processes(
     return process_service.get_processes_for_computer(
         db=db,
         computer_id=computer_id,
+    )
+
+
+def parse_query_datetime(val: str | None) -> datetime | None:
+    if not val:
+        return None
+    cleaned = val.strip().replace(" ", "+")
+    if cleaned.endswith("Z") or cleaned.endswith("z"):
+        cleaned = cleaned[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(cleaned)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid datetime format: {val}. Expected ISO-8601 string.",
+        )
+
+
+@router.get(
+    "/{computer_id}/usage",
+    response_model=list[UsageSessionResponse],
+)
+def get_computer_usage(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    limit: int = 100,
+    offset: int = 0,
+    start_time: str | None = None,
+    end_time: str | None = None,
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    parsed_start = parse_query_datetime(start_time)
+    parsed_end = parse_query_datetime(end_time)
+
+    return usage_service.get_usage_for_computer(
+        db=db,
+        computer_id=computer_id,
+        limit=limit,
+        offset=offset,
+        start_time=parsed_start,
+        end_time=parsed_end,
     )
 
 
