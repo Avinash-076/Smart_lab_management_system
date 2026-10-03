@@ -182,6 +182,11 @@ def submit_result(
 ) -> CommandResult:
 
     if command.result is not None:
+        if (
+            command.result.success == result_data.success
+            and command.result.message == result_data.message
+        ):
+            return command.result
         raise ValueError(
             "Command result already submitted"
         )
@@ -219,6 +224,17 @@ def submit_result(
 
     except IntegrityError:
         db.rollback()
+        # Concurrency race: another request just committed the result for this command
+        db.refresh(command)
+        if command.result is not None:
+            if (
+                command.result.success == result_data.success
+                and command.result.message == result_data.message
+            ):
+                return command.result
+            raise ValueError(
+                "Command result already submitted"
+            )
         raise
 
     except SQLAlchemyError:

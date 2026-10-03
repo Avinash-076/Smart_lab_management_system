@@ -70,7 +70,7 @@ class Process(Base):
     )
 
     start_time: Mapped[str | None] = mapped_column(
-        String(30),
+        String(64),
         nullable=True,
     )
 

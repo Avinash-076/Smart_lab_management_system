@@ -1,4 +1,5 @@
 from typing import Annotated
+from datetime import datetime
 
 from fastapi import (
     APIRouter,
@@ -95,6 +96,21 @@ def upload_usage(
         )
 
 
+def parse_query_datetime(val: str | None) -> datetime | None:
+    if not val:
+        return None
+    cleaned = val.strip().replace(" ", "+")
+    if cleaned.endswith("Z") or cleaned.endswith("z"):
+        cleaned = cleaned[:-1] + "+00:00"
+    try:
+        return datetime.fromisoformat(cleaned)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid datetime format: {val}. Expected ISO-8601 string.",
+        )
+
+
 @router.get(
     "/{computer_id}",
     response_model=list[UsageSessionResponse],
@@ -114,6 +130,8 @@ def get_usage(
         default=0,
         ge=0,
     ),
+    start_time: str | None = Query(default=None),
+    end_time: str | None = Query(default=None),
 ):
     computer = computer_service.get_computer_by_id(
         db,
@@ -126,11 +144,16 @@ def get_usage(
             detail="Computer not found",
         )
 
+    parsed_start = parse_query_datetime(start_time)
+    parsed_end = parse_query_datetime(end_time)
+
     return usage_service.get_usage_for_computer(
         db=db,
         computer_id=computer_id,
         limit=limit,
         offset=offset,
+        start_time=parsed_start,
+        end_time=parsed_end,
     )
 
 

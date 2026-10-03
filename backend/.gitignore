@@ -1,12 +1,23 @@
 # Python-generated files
 __pycache__/
 *.py[oc]
+.pytest_cache/
+.ruff_cache/
 build/
 dist/
 wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
+venv/
 
 .env
+slms.db
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+logs/
+*.log
+*.tmp

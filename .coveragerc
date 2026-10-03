@@ -1,0 +1,23 @@
+[run]
+branch = True
+source =
+    client_agent
+    backend/app
+omit =
+    */tests/*
+    */alembic/*
+    */testing_scripts/*
+    */.venv/*
+    client_agent/gui/*
+    client_agent/main.py
+    client_agent/startup.py
+    client_agent/service/__main__.py
+
+[report]
+show_missing = True
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if __name__ == .__main__.:
+    raise NotImplementedError
+    if TYPE_CHECKING:

@@ -1,47 +1,384 @@
+"""
+SLMS Client Agent Network Module.
+
+Provides canonical network identity resolution and network traffic monitoring.
+
+Design principles (Phase 4):
+- D-03 / D-04 / D-05: Single canonical implementation for machine network identity.
+  Consolidates IP and MAC address resolution from the same active adapter.
+  Never pairs an IP from adapter A with a MAC from adapter B.
+  Never fabricates 127.0.0.1 or 00:00:00:00:00:00.
+- D-06: Network byte counters (bytes_sent, bytes_received) are CUMULATIVE counters
+  from psutil.net_io_counters() since system boot/counter reset.
+  They must retain cumulative semantics and must NOT be converted to rates.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import re
 import socket
-import uuid
+from typing import Any
+
 import psutil
 
+# Regex for validating and extracting standard 6-byte MAC addresses
+_MAC_PATTERN = re.compile(r"^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$")
 
-def get_network_info():
+# Keywords indicating virtual, container, or tunnel adapters
+_VIRTUAL_ADAPTER_KEYWORDS = (
+    "vethernet",
+    "hyper-v",
+    "virtual",
+    "vmware",
+    "vmnet",
+    "vbox",
+    "virtualbox",
+    "docker",
+    "wsl",
+    "tailscale",
+    "tap",
+    "tun",
+    "wireguard",
+    "vpn",
+    "pseudo",
+    "teredo",
+    "isatap",
+    "hotspot",
+    "hosted",
+    "wifi direct",
+    "wi-fi direct",
+    "p2p",
+    "bluetooth",
+    "ndis",
+    "direct",
+    "ics",
+    "npcap",
+)
+
+# Keywords indicating preferred physical LAN adapters
+_PHYSICAL_LAN_KEYWORDS = (
+    "ethernet",
+    "local area connection",
+    "eth",
+    "lan",
+)
+
+_PHYSICAL_WIFI_KEYWORDS = (
+    "wi-fi",
+    "wifi",
+    "wireless",
+    "wlan",
+    "802.11",
+)
+
+
+def normalize_mac_address(raw_mac: str | None) -> str | None:
+    """
+    Normalize a MAC address string to standard uppercase colon-separated format
+    (e.g., 'CE:30:A6:2B:D9:DB').
+
+    Returns None if the MAC is invalid, all-zeros, all-ones, or malformed.
+    """
+    if not raw_mac or not isinstance(raw_mac, str):
+        return None
+
+    cleaned = raw_mac.strip().replace("-", ":").upper()
+    if not _MAC_PATTERN.match(cleaned):
+        return None
+
+    # Reject null MACs (all 00s) and broadcast MACs (all FFs)
+    parts = cleaned.split(":")
+    if all(p == "00" for p in parts) or all(p == "FF" for p in parts):
+        return None
+
+    return cleaned
+
+
+def is_link_local_ipv4(ip_str: str | None) -> bool:
+    """Check if an IPv4 address belongs to the 169.254.0.0/16 link-local (APIPA) range."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        return ipaddress.IPv4Address(ip_str.strip()).is_link_local
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
+def is_ics_or_hotspot_ipv4(ip_str: str | None) -> bool:
+    """Check if an IPv4 address belongs to the default Windows ICS / Mobile Hotspot subnet (192.168.137.0/24)."""
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+    try:
+        return ipaddress.IPv4Address(ip_str.strip()) in ipaddress.IPv4Network("192.168.137.0/24")
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
+def is_valid_ipv4(ip_str: str | None, allow_link_local: bool = True) -> bool:
+    """
+    Check whether an IP string is a valid non-loopback, non-unspecified, non-reserved IPv4.
+    If allow_link_local is False, link-local (169.254.0.0/16) addresses are rejected.
+    """
+    if not ip_str or not isinstance(ip_str, str):
+        return False
+
+    try:
+        ip_obj = ipaddress.IPv4Address(ip_str.strip())
+        if ip_obj.is_loopback:  # 127.0.0.0/8
+            return False
+        if ip_obj.is_unspecified:  # 0.0.0.0
+            return False
+        if ip_obj.is_reserved or ip_obj.is_multicast:
+            return False
+        if not allow_link_local and ip_obj.is_link_local:  # 169.254.0.0/16 APIPA
+            return False
+        return True
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
+def is_valid_routable_ipv4(ip_str: str | None, allow_link_local: bool = False) -> bool:
+    """
+    Check whether an IP string is a valid non-loopback, non-link-local, non-unspecified IPv4.
+    Preserved for backward compatibility.
+    """
+    return is_valid_ipv4(ip_str, allow_link_local=allow_link_local)
+
+
+def is_virtual_or_hotspot_interface(iface_name: str) -> bool:
+    """
+    Identify virtual, tunnel, container, or Windows Wi-Fi Direct / Mobile Hotspot interfaces.
+
+    Windows assigns names with '*' for virtual Wi-Fi Direct and Hosted Network miniport adapters
+    (e.g., 'Local Area Connection* 2', 'Wi-Fi* 1').
+    """
+    if not iface_name:
+        return False
+    if "*" in iface_name:
+        return True
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _VIRTUAL_ADAPTER_KEYWORDS)
+
+
+def is_physical_ethernet(iface_name: str) -> bool:
+    """Check if interface is a physical Ethernet / LAN adapter."""
+    if is_virtual_or_hotspot_interface(iface_name):
+        return False
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _PHYSICAL_LAN_KEYWORDS)
+
+
+def is_physical_wifi(iface_name: str) -> bool:
+    """Check if interface is a physical Wi-Fi / WLAN adapter."""
+    if is_virtual_or_hotspot_interface(iface_name):
+        return False
+    name_lower = iface_name.casefold()
+    return any(kw in name_lower for kw in _PHYSICAL_WIFI_KEYWORDS)
+
+
+def evaluate_interface(
+    iface_name: str,
+    addresses: list[Any],
+    stat: Any | None,
+) -> tuple[int, str | None, str | None]:
+    """
+    Evaluate a network interface for suitability as the primary LAN identity.
+
+    Returns:
+        (score, valid_ipv4, normalized_mac)
+        score <= 0 indicates unsuitable interface.
+    """
+    name_lower = iface_name.casefold()
+
+    # Exclude loopback interfaces
+    if "loopback" in name_lower or "pseudo" in name_lower:
+        return 0, None, None
+
+    # Check operational status (UP)
+    if stat is not None and not getattr(stat, "isup", True):
+        # Interface is down
+        return 0, None, None
+
+    # Extract IPv4 addresses and MAC address from this interface
+    found_ipv4: str | None = None
+    found_mac: str | None = None
+    is_link_local: bool = False
+    is_ics: bool = False
+
+    for addr in addresses:
+        try:
+            family = getattr(addr, "family", None)
+            address_str = getattr(addr, "address", None)
+            if not address_str:
+                continue
+
+            # Check for IPv4
+            if family == socket.AF_INET:
+                if is_valid_ipv4(address_str, allow_link_local=True):
+                    candidate_ll = is_link_local_ipv4(address_str)
+                    candidate_ics = is_ics_or_hotspot_ipv4(address_str)
+
+                    if found_ipv4 is None:
+                        found_ipv4 = address_str.strip()
+                        is_link_local = candidate_ll
+                        is_ics = candidate_ics
+                    elif is_link_local and not candidate_ll:
+                        # Prefer non-link-local if multiple IPs on same adapter
+                        found_ipv4 = address_str.strip()
+                        is_link_local = False
+                        is_ics = candidate_ics
+
+            # Check for MAC address (AF_LINK on Windows is -1, AF_PACKET on Linux is 17)
+            # Or any non-IP address matching standard MAC format
+            is_mac_family = family in (getattr(psutil, "AF_LINK", -1), getattr(socket, "AF_PACKET", 17))
+            if is_mac_family or family not in (socket.AF_INET, socket.AF_INET6):
+                normalized = normalize_mac_address(address_str)
+                if normalized and found_mac is None:
+                    found_mac = normalized
+        except Exception:
+            continue
+
+    # Interface without a valid IPv4 cannot be the primary LAN identity
+    if not found_ipv4:
+        return 0, None, None
+
+    # Scoring criteria:
+    score = 100
+
+    # 1. Operational speed bonus
+    if stat is not None:
+        speed = getattr(stat, "speed", 0) or 0
+        if speed > 0:
+            score += min(20, speed // 100)
+
+    # 2. Interface type classification
+    is_virtual = is_virtual_or_hotspot_interface(iface_name)
+    if is_virtual:
+        score -= 80
+    elif is_physical_ethernet(iface_name):
+        score += 60
+    elif is_physical_wifi(iface_name):
+        score += 40
+    else:
+        score += 20
+
+    # 3. IP address suitability
+    if is_link_local:
+        if not is_virtual:
+            # Valid link-local on physical Ethernet/LAN (e.g. lab peer-to-peer 169.254.60.157)
+            score += 10
+        else:
+            score -= 30
+    elif is_ics:
+        # Penalize Windows ICS / Mobile Hotspot subnet
+        score -= 40
+    else:
+        # Standard routable LAN/WAN IPv4
+        score += 30
+
+    # 4. Has corresponding valid hardware MAC address
+    if found_mac:
+        score += 30
+
+    return max(0, score), found_ipv4, found_mac
+
+
+
+def get_canonical_network_identity(
+    addrs: dict[str, list[Any]] | None = None,
+    stats: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Determine the canonical network identity for this computer.
+
+    Selects the best active network adapter based on operational status,
+    routable LAN IPv4, and physical vs. virtual priority.
+    The returned IP address and MAC address are GUARANTEED to come from the
+    exact same selected interface.
+
+    Returns:
+        dict with keys:
+            status: 'success' | 'failed'
+            interface: str | None
+            ip_address: str | None
+            mac_address: str | None
+            error: str | None
+    """
+    try:
+        if addrs is None:
+            addrs = psutil.net_if_addrs()
+        if stats is None:
+            stats = psutil.net_if_stats()
+    except Exception as e:
+        return {
+            "status": "failed",
+            "interface": None,
+            "ip_address": None,
+            "mac_address": None,
+            "error": f"Failed to query network interfaces: {e}",
+        }
+
+    best_score = 0
+    best_interface: str | None = None
+    best_ip: str | None = None
+    best_mac: str | None = None
+
+    for iface_name, iface_addrs in addrs.items():
+        iface_stat = stats.get(iface_name) if stats else None
+        score, ip, mac = evaluate_interface(iface_name, iface_addrs, iface_stat)
+
+        if score > best_score:
+            best_score = score
+            best_interface = iface_name
+            best_ip = ip
+            best_mac = mac
+
+    if best_interface is not None and best_ip is not None:
+        return {
+            "status": "success",
+            "interface": best_interface,
+            "ip_address": best_ip,
+            "mac_address": best_mac,
+            "error": None,
+        }
+
+    return {
+        "status": "failed",
+        "interface": None,
+        "ip_address": None,
+        "mac_address": None,
+        "error": "No suitable active non-loopback network interface identified",
+    }
+
+
+def get_network_info() -> dict[str, Any]:
+    """
+    Collect network information including canonical identity and cumulative byte counters.
+
+    Cumulative Counters Contract (D-06):
+    'bytes_sent' and 'bytes_received' are cumulative byte counters from
+    psutil.net_io_counters() since system/network interface counter reset.
+    They must retain cumulative semantics and are NOT rate/per-second values.
+    """
+    identity = get_canonical_network_identity()
+
     hostname = socket.gethostname()
 
-    # Get the real LAN IP
-    ip_address = "Unknown"
-
-    # try:
-    #     for interface, addresses in psutil.net_if_addrs().items():
-    #         for addr in addresses:
-    #             if addr.family == socket.AF_INET:
-    #                 if not addr.address.startswith("127."):
-    #                     ip_address = addr.address
-    #                     break
-    # except Exception:
-    #     pass
-
-    found = False
-    for interface, addresses in psutil.net_if_addrs().items():
-        for addr in addresses:
-            if addr.family == socket.AF_INET:
-                if not addr.address.startswith("127."):
-                    ip_address = addr.address
-                    found = True
-                    break
-        if found:
-            break
-
-
-    mac = ":".join(
-        f"{(uuid.getnode() >> ele) & 0xff:02x}"
-        for ele in range(40, -8, -8)
-    )
-
-    stats = psutil.net_io_counters()
+    try:
+        io_stats = psutil.net_io_counters()
+        bytes_sent = io_stats.bytes_sent
+        bytes_received = io_stats.bytes_recv
+    except Exception:
+        bytes_sent = None
+        bytes_received = None
 
     return {
         "hostname": hostname,
-        "ip_address": ip_address,
-        "mac_address": mac,
-        "bytes_sent": stats.bytes_sent,
-        "bytes_received": stats.bytes_recv
+        "interface": identity.get("interface"),
+        "ip_address": identity.get("ip_address"),
+        "mac_address": identity.get("mac_address"),
+        "network_status": identity.get("status"),
+        "bytes_sent": bytes_sent,
+        "bytes_received": bytes_received,
     }

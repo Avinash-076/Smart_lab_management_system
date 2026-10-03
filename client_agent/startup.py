@@ -1,3 +1,12 @@
+"""
+DEPRECATED MODULE - DO NOT USE IN PRODUCTION.
+This module copied the agent executable into the per-user Windows Startup folder.
+In Phase 2, this mechanism is superseded by the Windows Service architecture
+(`service/service.py`) which runs automatically on system boot in Session 0
+without requiring user login.
+Retained temporarily for backward compatibility with legacy scripts.
+"""
+
 import os
 import shutil
 from pathlib import Path
@@ -5,8 +14,8 @@ from pathlib import Path
 
 def add_to_startup(exe_path=None):
     """
-    Copies the executable to the user's Startup folder.
-    Returns True if successful, otherwise False.
+    DEPRECATED: Copies the executable to the user's Startup folder.
+    Use Windows Service (`python -m service install`) for production deployments.
     """
 
     try:

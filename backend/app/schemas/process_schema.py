@@ -35,7 +35,7 @@ class ProcessItem(BaseModel):
 
     start_time: str | None = Field(
         default=None,
-        max_length=30,
+        max_length=64,
     )
 
 

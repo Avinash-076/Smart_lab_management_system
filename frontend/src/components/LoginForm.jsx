@@ -18,15 +18,14 @@ function LoginForm({ onLogin }) {
 
   const [password, setPassword] = useState("");
 
-  const [role, setRole] = useState("");
-
   const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState("");
 
+  const [loading, setLoading] = useState(false);
 
   
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
 
     event.preventDefault();
 
@@ -45,10 +44,17 @@ function LoginForm({ onLogin }) {
     }
 
 
-    onLogin({
-      username: username.trim(),
-      password
-    });
+    try {
+      setLoading(true);
+      await onLogin({
+        username: username.trim(),
+        password
+      });
+    } catch (err) {
+      setError(err.message || "Invalid username or password.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -99,6 +105,7 @@ function LoginForm({ onLogin }) {
               type="text"
               placeholder="Enter username"
               value={username}
+              disabled={loading}
               onChange={(event) =>
                 setUsername(event.target.value)
               }
@@ -126,6 +133,7 @@ function LoginForm({ onLogin }) {
               type={showPassword ? "text" : "password"}
               placeholder="Enter password"
               value={password}
+              disabled={loading}
               onChange={(event) =>
                 setPassword(event.target.value)
               }
@@ -167,12 +175,13 @@ function LoginForm({ onLogin }) {
         <button
           type="submit"
           className="login-button"
+          disabled={loading}
         >
 
           <LoginIcon size={23} />
 
           <span>
-            Login
+            {loading ? "Signing in..." : "Login"}
           </span>
 
         </button>

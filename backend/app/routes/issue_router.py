@@ -195,6 +195,7 @@ def create_agent_issue(
         description=issue_data.description,
         severity=issue_data.severity,
         source=IssueSource.agent,
+        idempotency_key=issue_data.idempotency_key,
     )
 
     try:

@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -50,6 +51,15 @@ def create_usage_session(
 
     except IntegrityError:
         db.rollback()
+        existing = db.scalars(
+            select(UsageSession).where(
+                UsageSession.computer_id == computer_id,
+                UsageSession.application_name == session_data.application_name.strip(),
+                UsageSession.started_at == session_data.started_at,
+            )
+        ).first()
+        if existing:
+            return existing
         raise
 
     except SQLAlchemyError:
@@ -64,6 +74,7 @@ def create_usage_sessions(
 ) -> list[UsageSession]:
 
     records: list[UsageSession] = []
+    seen_in_batch: dict[tuple[str, datetime], UsageSession] = {}
 
     try:
         for item in usage_data.sessions[:MAX_USAGE_SESSIONS]:
@@ -91,6 +102,33 @@ def create_usage_sessions(
                     int(calculated),
                 )
 
+            batch_key = (
+                application_name.casefold(),
+                item.started_at,
+            )
+
+            if batch_key in seen_in_batch:
+                rec = seen_in_batch[batch_key]
+                rec.ended_at = item.ended_at
+                rec.duration_seconds = duration
+                continue
+
+            # Deduplicate if session already exists in database
+            existing = db.scalars(
+                select(UsageSession).where(
+                    UsageSession.computer_id == computer_id,
+                    UsageSession.application_name == application_name,
+                    UsageSession.started_at == item.started_at,
+                )
+            ).first()
+
+            if existing:
+                existing.ended_at = item.ended_at
+                existing.duration_seconds = duration
+                seen_in_batch[batch_key] = existing
+                records.append(existing)
+                continue
+
             record = UsageSession(
                 computer_id=computer_id,
                 application_name=application_name,
@@ -100,6 +138,7 @@ def create_usage_sessions(
             )
 
             db.add(record)
+            seen_in_batch[batch_key] = record
             records.append(record)
 
         db.commit()
@@ -111,6 +150,23 @@ def create_usage_sessions(
 
     except IntegrityError:
         db.rollback()
+        # Concurrency race: another request committed the same sessions simultaneously
+        resolved_records: list[UsageSession] = []
+        for item in usage_data.sessions[:MAX_USAGE_SESSIONS]:
+            app_name = item.application_name.strip()
+            if not app_name:
+                continue
+            rec = db.scalars(
+                select(UsageSession).where(
+                    UsageSession.computer_id == computer_id,
+                    UsageSession.application_name == app_name,
+                    UsageSession.started_at == item.started_at,
+                )
+            ).first()
+            if rec and rec not in resolved_records:
+                resolved_records.append(rec)
+        if resolved_records:
+            return resolved_records
         raise
 
     except SQLAlchemyError:
@@ -123,6 +179,8 @@ def get_usage_for_computer(
     computer_id: int,
     limit: int = 100,
     offset: int = 0,
+    start_time: datetime | None = None,
+    end_time: datetime | None = None,
 ) -> list[UsageSession]:
 
     limit = min(
@@ -130,20 +188,26 @@ def get_usage_for_computer(
         500,
     )
 
-    return list(
-        db.scalars(
-            select(UsageSession)
-            .where(
-                UsageSession.computer_id
-                == computer_id
-            )
-            .order_by(
-                UsageSession.started_at.desc()
-            )
-            .limit(limit)
-            .offset(offset)
-        ).all()
+    query = select(UsageSession).where(
+        UsageSession.computer_id == computer_id
     )
+
+    if start_time is not None:
+        query = query.where(
+            UsageSession.started_at >= start_time
+        )
+
+    if end_time is not None:
+        query = query.where(
+            UsageSession.started_at <= end_time
+        )
+
+    query = query.order_by(
+        UsageSession.started_at.desc(),
+        UsageSession.id.desc(),
+    ).limit(limit).offset(offset)
+
+    return list(db.scalars(query).all())
 
 
 def delete_usage_for_computer(

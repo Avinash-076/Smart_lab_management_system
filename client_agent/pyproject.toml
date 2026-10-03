@@ -10,4 +10,19 @@ dependencies = [
     "psutil>=7.2.2",
     "requests>=2.34.2",
     "websocket-client>=1.8.0",
+    "pywin32>=310",
 ]
+
+[dependency-groups]
+dev = [
+    "coverage>=7.16.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.9",
+]
+build = [
+    "pyinstaller>=6.11.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

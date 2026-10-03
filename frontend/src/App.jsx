@@ -1,6 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
-import { login } from "./services/api";
+import {
+  login,
+  logout,
+  isAuthenticated,
+  subscribeAuthChange,
+  refreshToken,
+  getAccessToken,
+  getRefreshToken,
+  isTokenExpired,
+} from "./services/api";
 import LoginPage from "./pages/LoginPage";
 
 import Sidebar from "./components/Sidebar";
@@ -29,7 +38,7 @@ const navItems = [
 ];
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(() => isAuthenticated());
 
   // Current active page
   const [active, setActive] = useState("dashboard");
@@ -49,33 +58,54 @@ function App() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   /* =====================================================
+     AUTH LIFECYCLE & SESSION PRESERVATION
+  ===================================================== */
+
+  useEffect(() => {
+    // If access token is expired on mount but refresh token exists, refresh eagerly
+    const aToken = getAccessToken();
+    const rToken = getRefreshToken();
+    if (aToken && isTokenExpired(aToken) && rToken && !isTokenExpired(rToken)) {
+      refreshToken().catch(() => {
+        setIsLoggedIn(false);
+      });
+    }
+
+    // Subscribe to auth state changes (e.g. 401 token invalidation)
+    const unsubscribe = subscribeAuthChange((authenticated) => {
+      setIsLoggedIn(authenticated);
+      if (!authenticated) {
+        setSelectedComputer(null);
+      }
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  /* =====================================================
      LOGIN
   ===================================================== */
 
   const handleLogin = async (userData) => {
-    try {
-      const data = await login(userData.username, userData.password);
-
-      localStorage.setItem("access_token", data.access_token);
-      localStorage.setItem("refresh_token", data.refresh_token);
-
-      console.log("Login successful");
-
-      setIsLoggedIn(true);
-    } catch (error) {
-      console.error("Login failed:", error);
-      alert(error.message);
-    }
+    const data = await login(userData.username, userData.password);
+    setIsLoggedIn(true);
+    return data;
   };
+
   /* =====================================================
      LOGOUT
   ===================================================== */
 
   const handleLogout = () => {
+    logout();
     setIsLoggedIn(false);
-
-    // Clear selected computer when logging out
     setSelectedComputer(null);
+    setProfileOpen(false);
+    setBellOpen(false);
+    setFilterOpen(false);
+    setActive("dashboard");
   };
 
   /* =====================================================
@@ -196,6 +226,7 @@ function App() {
           setProfileOpen={setProfileOpen}
           setFilterOpen={setFilterOpen}
           navigate={navigate}
+          logout={handleLogout}
         />
 
         {renderPage()}

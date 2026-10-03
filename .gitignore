@@ -6,8 +6,11 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
+.pytest_cache/
+.ruff_cache/
 
 # Virtual environment directories
+.venv/
 venv/
 .env
 
@@ -20,18 +23,45 @@ Thumbs.db
 
 # SQLite database files
 *.sqlite3
+*.db
+*.db-wal
+*.db-shm
 slms.db
+/outbox/
+!client_agent/core/outbox/
 
 # Log files
 *.log
+*.log.*
+logs/
+client_agent/logs/
 
-# Build directories
+# Generated runtime data and state files (Phase 9 I-07)
+output/
+client_agent/output/
+client_agent/cache/
+client_agent/data/*
+client_agent/config/*
+software_state.json
+usage_state.json
+issue_state.json
+client_data.json
+server_config.json
+service_credentials.enc
+service_credentials.enc.tmp
+agent_credential.json
+*.tmp
+
+# Build and packaging directories
 build/
 dist/
+wheels/
+*.egg-info
 
 # Coverage reports
 htmlcov/
 .coverage
+.coverage.*
 
 # npm debug logs
 npm-debug.log

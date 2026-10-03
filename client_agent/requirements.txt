@@ -1,4 +1,0 @@
-requests
-psutil
-keyring
-websocket-client
