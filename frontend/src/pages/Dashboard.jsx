@@ -1,30 +1,78 @@
-
-import { useState, useEffect } from "react";
-import { getComputers } from "../services/api";
+import { useState, useEffect, useCallback } from "react";
+import { getComputers, getNotifications } from "../services/api";
 import StatCard from "../components/StatCard";
 import Icon from "../components/Icon";
 
+function formatRelativeTime(dateStr) {
+  if (!dateStr) return "Just now";
+  try {
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffSec = Math.floor((now - date) / 1000);
+    if (diffSec < 60) return "Just now";
+    const diffMin = Math.floor(diffSec / 60);
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch {
+    return dateStr;
+  }
+}
+
 function Dashboard() {
   const [computers, setComputers] = useState([]);
+  const [recentNotifications, setRecentNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       setError("");
-      const data = await getComputers();
-      setComputers(Array.isArray(data) ? data : []);
+      const [compData, notifData] = await Promise.all([
+        getComputers(),
+        getNotifications({ limit: 6 }).catch(() => []),
+      ]);
+      setComputers(Array.isArray(compData) ? compData : []);
+      setRecentNotifications(Array.isArray(notifData) ? notifData : []);
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
       setError(err.message || "Failed to load dashboard statistics.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    loadDashboardData();
+    let ignore = false;
+    async function init() {
+      try {
+        setLoading(true);
+        setError("");
+        const [compData, notifData] = await Promise.all([
+          getComputers(),
+          getNotifications({ limit: 6 }).catch(() => []),
+        ]);
+        if (ignore) return;
+        setComputers(Array.isArray(compData) ? compData : []);
+        setRecentNotifications(Array.isArray(notifData) ? notifData : []);
+      } catch (err) {
+        if (!ignore) {
+          console.error("Failed to load dashboard data:", err);
+          setError(err.message || "Failed to load dashboard statistics.");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+    init();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const totalComputers = computers.length;
@@ -45,7 +93,7 @@ function Dashboard() {
         <div>
           <h2>Dashboard</h2>
           <p>
-            Monitor and manage all laboratory computers.
+            Monitor and manage all laboratory computers and active alerts.
           </p>
         </div>
 
@@ -183,24 +231,96 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* RECENT ACTIVITY */}
+          {/* RECENT ACTIVITY & SYSTEM ALERTS */}
           <div className="table-card">
             <div className="page-section-header">
               <div>
-                <h3>Recent Activity</h3>
+                <h3>Recent Activity & Alerts</h3>
                 <p>
-                  Latest events from laboratory computers.
+                  Latest real-time events and system alerts from laboratory computers.
                 </p>
               </div>
             </div>
 
-            <div className="empty-state">
-              <Icon type="details" size={32} />
-              <h3>No recent activity</h3>
-              <p>
-                Recent computer activity will appear here.
-              </p>
-            </div>
+            {recentNotifications.length > 0 ? (
+              <div style={{ padding: "0 20px 20px" }}>
+                {recentNotifications.map((notif) => {
+                  const compName = notif.computer_hostname || `PC-${notif.computer_id}`;
+                  const isCritical = notif.severity === "critical";
+                  const isWarning = notif.severity === "warning";
+                  const dotColor = isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "#3b82f6";
+                  const badgeBg = isCritical
+                    ? "rgba(239, 68, 68, 0.12)"
+                    : isWarning
+                    ? "rgba(245, 158, 11, 0.12)"
+                    : "rgba(59, 130, 246, 0.12)";
+                  const badgeColor = isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "#3b82f6";
+
+                  return (
+                    <div
+                      key={notif.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "12px 14px",
+                        marginBottom: "8px",
+                        borderRadius: "8px",
+                        background: notif.is_read ? "rgba(255, 255, 255, 0.02)" : "rgba(59, 130, 246, 0.04)",
+                        border: "1px solid rgba(255, 255, 255, 0.06)",
+                        gap: "12px",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+                        <span
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            background: dotColor,
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div>
+                          <strong style={{ fontSize: "13px", color: "#f0f6fc", marginRight: "8px" }}>
+                            {compName}
+                          </strong>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "2px 6px",
+                              borderRadius: "10px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              background: badgeBg,
+                              color: badgeColor,
+                              marginRight: "8px",
+                            }}
+                          >
+                            {notif.category?.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: "13px", color: "#8b949e" }}>
+                            {notif.message}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: "12px", color: "#718096", whiteSpace: "nowrap" }}>
+                        {formatRelativeTime(notif.created_at)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="empty-state">
+                <Icon type="details" size={32} />
+                <h3>No recent activity</h3>
+                <p>
+                  Recent computer activity and system alerts will appear here.
+                </p>
+              </div>
+            )}
           </div>
         </>
       )}

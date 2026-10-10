@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 class NotificationSeverity(str, enum.Enum):
+    info = "info"
     warning = "warning"
     critical = "critical"
 
@@ -64,3 +65,7 @@ class Notification(Base):
     )
 
     computer: Mapped["Computer"] = relationship()
+
+    @property
+    def computer_hostname(self) -> str | None:
+        return self.computer.hostname if self.computer else None

@@ -20,18 +20,21 @@ from app.schemas.process_schema import ProcessResponse
 from app.schemas.usage_schema import UsageSessionResponse
 from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
+from app.schemas.notification_schema import NotificationResponse
 from app.models.issue import IssueStatus, IssueSeverity
 from app.models.maintenance import MaintenanceStatus, MaintenanceType
+from app.models.notification import NotificationSeverity
 from app.services import (
     audit_service,
     computer_service,
     issue_service,
     maintenance_service,
+    notification_service,
     process_service,
     software_service,
     usage_service,
 )
-from app.auth import get_current_user, require_permission,get_current_agent
+from app.auth import get_current_user, require_permission, get_current_agent
 from app.models.audit_log import AuditResult
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -245,7 +248,44 @@ def get_computer_maintenance(
     )
 
 
+@router.get(
+    "/{computer_id}/notifications",
+    response_model=list[NotificationResponse],
+)
+def get_computer_notifications(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    category: str | None = None,
+    severity: NotificationSeverity | None = None,
+    unread_only: bool = Query(default=False),
+    is_read: bool | None = Query(default=None),
+    search: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
 
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    filter_is_read = is_read
+    if unread_only:
+        filter_is_read = False
+
+    return notification_service.get_notifications(
+        db=db,
+        computer_id=computer_id,
+        category=category,
+        severity=severity,
+        is_read=filter_is_read,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.put(
