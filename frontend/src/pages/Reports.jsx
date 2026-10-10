@@ -1,883 +1,783 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import StatCard from "../components/StatCard";
 import Icon from "../components/Icon";
-
-/* =====================================================
-   DEMO REPORT DATA
-===================================================== */
-
-const computerData = [
-  {
-    id: "PC-01",
-    name: "PC-01",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-02",
-    name: "PC-02",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-03",
-    name: "PC-03",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-04",
-    name: "PC-04",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-05",
-    name: "PC-05",
-    os: "Windows 11",
-    status: "Offline",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-06",
-    name: "PC-06",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-07",
-    name: "PC-07",
-    os: "Windows 7 Ultimate",
-    status: "Offline",
-    lab: "Lab 1",
-  },
-  {
-    id: "PC-08",
-    name: "PC-08",
-    os: "Windows 11",
-    status: "Online",
-    lab: "Lab 1",
-  },
-];
-
-const softwareData = [
-  {
-    name: "Google Chrome",
-    version: "136.0.7103.114",
-    category: "Browser",
-    computer: "PC-01",
-    status: "Up to Date",
-  },
-  {
-    name: "Visual Studio Code",
-    version: "1.100.2",
-    category: "Development",
-    computer: "PC-04",
-    status: "Up to Date",
-  },
-  {
-    name: "Node.js",
-    version: "20.15.1",
-    category: "Development",
-    computer: "PC-06",
-    status: "Outdated",
-  },
-  {
-    name: "Adobe Acrobat Reader",
-    version: "24.005.20320",
-    category: "Office",
-    computer: "PC-08",
-    status: "Outdated",
-  },
-];
-
-const issueData = [
-  {
-    computer: "PC-05",
-    issue: "High CPU Usage",
-    priority: "High",
-    status: "Open",
-  },
-  {
-    computer: "PC-07",
-    issue: "Computer Offline",
-    priority: "Critical",
-    status: "Open",
-  },
-  {
-    computer: "PC-12",
-    issue: "Low Disk Space",
-    priority: "High",
-    status: "In Progress",
-  },
-  {
-    computer: "PC-20",
-    issue: "High Memory Usage",
-    priority: "Medium",
-    status: "In Progress",
-  },
-];
-
-const maintenanceData = [
-  {
-    computer: "PC-05",
-    issue: "High CPU Usage",
-    technician: "Lab Technician",
-    status: "Pending",
-  },
-  {
-    computer: "PC-07",
-    issue: "Computer Offline",
-    technician: "Lab Technician",
-    status: "In Progress",
-  },
-  {
-    computer: "PC-20",
-    issue: "High Memory Usage",
-    technician: "Lab Technician",
-    status: "Completed",
-  },
-  {
-    computer: "PC-24",
-    issue: "Outdated Software",
-    technician: "System Administrator",
-    status: "Completed",
-  },
-];
-
-/* =====================================================
-   COMPONENT
-===================================================== */
+import {
+  downloadReportCSV,
+  getAuditReport,
+  getCommandReport,
+  getIssueReport,
+  getMaintenanceReport,
+  getReportOverview,
+  getSoftwareReport,
+  getUtilizationReport,
+} from "../services/api";
 
 function Reports() {
-  const [reportType, setReportType] =
-    useState("Computer Report");
+  const [reportType, setReportType] = useState("utilization");
+  const [period, setPeriod] = useState("24h");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
-  const [dateFrom, setDateFrom] =
-    useState("");
+  // Data states
+  const [overview, setOverview] = useState(null);
+  const [reportData, setReportData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
-  const [dateTo, setDateTo] =
-    useState("");
-
-  const [message, setMessage] =
-    useState("");
-
-  /* =====================================================
-     REPORT COUNTS
-  ===================================================== */
-
-  const totalComputers = 24;
-
-  const onlineComputers = 18;
-
-  const offlineComputers =
-    totalComputers -
-    onlineComputers;
-
-  const totalSoftware = 24;
-
-  const totalIssues = 8;
-
-  const totalMaintenance = 8;
-
-  /* =====================================================
-     REPORT INFORMATION
-  ===================================================== */
-
-  const reportInfo = useMemo(() => {
-    if (
-      reportType ===
-      "Computer Report"
-    ) {
-      return {
-        title: "Computer Report",
-        description:
-          "Detailed information about registered laboratory computers.",
-        count: totalComputers,
-        label: "Computers",
-      };
-    }
-
-    if (
-      reportType ===
-      "Software Report"
-    ) {
-      return {
-        title: "Software Report",
-        description:
-          "Installed software reported by client computers.",
-        count: totalSoftware,
-        label: "Software Records",
-      };
-    }
-
-    if (
-      reportType ===
-      "Issue Report"
-    ) {
-      return {
-        title: "Issue Report",
-        description:
-          "Issues reported by laboratory computers.",
-        count: totalIssues,
-        label: "Issues",
-      };
-    }
-
-    return {
-      title: "Maintenance Report",
-      description:
-        "Maintenance and service records for laboratory computers.",
-      count: totalMaintenance,
-      label: "Maintenance Records",
-    };
-  }, [reportType]);
-
-  /* =====================================================
-     CSV HELPER
-  ===================================================== */
-
-  const downloadCSV = (
-    filename,
-    headers,
-    rows
-  ) => {
-    const csvRows = [
-      headers.join(","),
-      ...rows.map((row) =>
-        row
-          .map((value) =>
-            `"${String(value).replace(
-              /"/g,
-              '""'
-            )}"`
-          )
-          .join(",")
-      ),
-    ];
-
-    const csvContent =
-      csvRows.join("\n");
-
-    const blob = new Blob(
-      [csvContent],
-      {
-        type: "text/csv;charset=utf-8;",
+  useEffect(() => {
+    let active = true;
+    async function fetchOverview() {
+      try {
+        const data = await getReportOverview();
+        if (active) setOverview(data);
+      } catch {
+        // Fallback silently if unprivileged
       }
-    );
+    }
+    fetchOverview();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-    const url =
-      URL.createObjectURL(blob);
-
-    const link =
-      document.createElement("a");
-
-    link.href = url;
-
-    link.download = filename;
-
-    document.body.appendChild(link);
-
-    link.click();
-
-    document.body.removeChild(link);
-
-    URL.revokeObjectURL(url);
-  };
-
-  /* =====================================================
-     EXPORT REPORT
-  ===================================================== */
-
-  const exportReport = () => {
+  const loadReportData = useCallback(async () => {
+    setLoading(true);
+    setError("");
     setMessage("");
+    try {
+      let data = null;
+      const options = {
+        period,
+        from_date: period === "custom" && dateFrom ? dateFrom : undefined,
+        to_date: period === "custom" && dateTo ? dateTo : undefined,
+        search: search || undefined,
+        page,
+        limit: 25,
+      };
 
-    if (
-      reportType ===
-      "Computer Report"
-    ) {
-      downloadCSV(
-        "SLMS-Computer-Report.csv",
-        [
-          "Computer ID",
-          "Computer Name",
-          "Operating System",
-          "Status",
-          "Lab",
-        ],
-        computerData.map(
-          (computer) => [
-            computer.id,
-            computer.name,
-            computer.os,
-            computer.status,
-            computer.lab,
-          ]
-        )
-      );
+      if (reportType === "utilization") {
+        data = await getUtilizationReport(options);
+      } else if (reportType === "software") {
+        data = await getSoftwareReport(options);
+      } else if (reportType === "issues") {
+        data = await getIssueReport(options);
+      } else if (reportType === "maintenance") {
+        data = await getMaintenanceReport(options);
+      } else if (reportType === "commands") {
+        data = await getCommandReport(options);
+      } else if (reportType === "audit") {
+        data = await getAuditReport(options);
+      }
+
+      setReportData(data);
+    } catch (err) {
+      setError(err.message || "Failed to load report data");
+    } finally {
+      setLoading(false);
+    }
+  }, [reportType, period, dateFrom, dateTo, search, page]);
+
+  useEffect(() => {
+    let active = true;
+    async function fetchReportData() {
+      try {
+        let data = null;
+        const options = {
+          period,
+          from_date: period === "custom" && dateFrom ? dateFrom : undefined,
+          to_date: period === "custom" && dateTo ? dateTo : undefined,
+          search: search || undefined,
+          page,
+          limit: 25,
+        };
+
+        if (reportType === "utilization") {
+          data = await getUtilizationReport(options);
+        } else if (reportType === "software") {
+          data = await getSoftwareReport(options);
+        } else if (reportType === "issues") {
+          data = await getIssueReport(options);
+        } else if (reportType === "maintenance") {
+          data = await getMaintenanceReport(options);
+        } else if (reportType === "commands") {
+          data = await getCommandReport(options);
+        } else if (reportType === "audit") {
+          data = await getAuditReport(options);
+        }
+
+        if (active) {
+          setReportData(data);
+          setError("");
+          setLoading(false);
+        }
+      } catch (err) {
+        if (active) {
+          setError(err.message || "Failed to load report data");
+          setLoading(false);
+        }
+      }
     }
 
-    if (
-      reportType ===
-      "Software Report"
-    ) {
-      downloadCSV(
-        "SLMS-Software-Report.csv",
-        [
-          "Software Name",
-          "Version",
-          "Category",
-          "Computer",
-          "Status",
-        ],
-        softwareData.map(
-          (software) => [
-            software.name,
-            software.version,
-            software.category,
-            software.computer,
-            software.status,
-          ]
-        )
-      );
-    }
+    fetchReportData();
+    return () => {
+      active = false;
+    };
+  }, [reportType, period, dateFrom, dateTo, search, page]);
 
-    if (
-      reportType ===
-      "Issue Report"
-    ) {
-      downloadCSV(
-        "SLMS-Issue-Report.csv",
-        [
-          "Computer",
-          "Issue",
-          "Priority",
-          "Status",
-        ],
-        issueData.map(
-          (issue) => [
-            issue.computer,
-            issue.issue,
-            issue.priority,
-            issue.status,
-          ]
-        )
-      );
+  // Handle CSV Export
+  const handleExport = async () => {
+    setExporting(true);
+    setError("");
+    setMessage("");
+    try {
+      const options = {
+        period,
+        from_date: period === "custom" && dateFrom ? dateFrom : undefined,
+        to_date: period === "custom" && dateTo ? dateTo : undefined,
+        search: search || undefined,
+      };
+      const filename = await downloadReportCSV(reportType, options);
+      setMessage(`Report exported successfully as ${filename}`);
+    } catch (err) {
+      setError(err.message || "Failed to export CSV report");
+    } finally {
+      setExporting(false);
     }
-
-    if (
-      reportType ===
-      "Maintenance Report"
-    ) {
-      downloadCSV(
-        "SLMS-Maintenance-Report.csv",
-        [
-          "Computer",
-          "Issue",
-          "Technician",
-          "Status",
-        ],
-        maintenanceData.map(
-          (record) => [
-            record.computer,
-            record.issue,
-            record.technician,
-            record.status,
-          ]
-        )
-      );
-    }
-
-    setMessage(
-      `${reportType} exported successfully.`
-    );
   };
-
-  /* =====================================================
-     RETURN
-  ===================================================== */
 
   return (
     <div className="content">
-
-      {/* =================================================
-          PAGE HEADER
-      ================================================= */}
-
+      {/* PAGE HEADER */}
       <div className="page-top">
-
         <div>
-          <h2>
-            Reports
-          </h2>
-
+          <h2>Reports & Analytics</h2>
           <p>
-            Generate and export reports
-            about the laboratory system.
+            Generate, inspect, and export system metrics, telemetry, and administrative logs.
           </p>
         </div>
-
       </div>
 
-      {/* =================================================
-          STAT CARDS
-      ================================================= */}
-
+      {/* OVERVIEW STAT CARDS */}
       <div className="cards">
-
         <StatCard
           icon="computer"
-          title="Computer Report"
-          number={totalComputers}
-          footer="Registered computers"
+          title="Computers & Metrics"
+          number={overview ? `${overview.online_computers}/${overview.total_computers}` : "—"}
+          footer="Online / Registered"
           type="blue"
         />
-
         <StatCard
           icon="software"
-          title="Software Report"
-          number={totalSoftware}
-          footer="Software records"
+          title="Software Inventory"
+          number={overview ? overview.unique_software_count : "—"}
+          footer={`${overview ? overview.total_software_records : 0} total installations`}
           type="green"
         />
-
         <StatCard
           icon="issue"
-          title="Issue Report"
-          number={totalIssues}
-          footer="Reported issues"
+          title="Issues Tracking"
+          number={overview ? overview.open_issues : "—"}
+          footer={`${overview ? overview.critical_issues : 0} critical open`}
           type="orange"
         />
-
         <StatCard
           icon="maintenance"
           title="Maintenance"
-          number={totalMaintenance}
-          footer="Maintenance records"
+          number={overview ? overview.pending_maintenance : "—"}
+          footer={`${overview ? overview.overdue_maintenance : 0} overdue tasks`}
           type="purple"
         />
-
       </div>
 
-      {/* =================================================
-          REPORT GENERATOR
-      ================================================= */}
-
-      <div className="report-generator">
-
+      {/* REPORT CONTROLS CARD */}
+      <div className="report-generator" style={{ marginBottom: "24px" }}>
         <div className="page-section-header">
-
           <div>
-            <h3>
-              Generate Report
-            </h3>
-
-            <p>
-              Select a report type and
-              export the available data.
-            </p>
+            <h3>Report Configuration</h3>
+            <p>Select report domain, time window, filters, and export format.</p>
           </div>
-
         </div>
 
-        <div className="report-controls">
-
+        <div className="report-controls" style={{ flexWrap: "wrap", gap: "16px" }}>
           {/* REPORT TYPE */}
-
           <div className="report-field">
-
-            <label>
-              Report Type
-            </label>
-
+            <label>Report Domain</label>
             <select
               value={reportType}
-              onChange={(event) =>
-                setReportType(
-                  event.target.value
-                )
-              }
+              onChange={(e) => {
+                setReportType(e.target.value);
+                setPage(1);
+              }}
             >
-
-              <option>
-                Computer Report
-              </option>
-
-              <option>
-                Software Report
-              </option>
-
-              <option>
-                Issue Report
-              </option>
-
-              <option>
-                Maintenance Report
-              </option>
-
+              <option value="utilization">Computer & Utilization</option>
+              <option value="software">Software Inventory</option>
+              <option value="issues">Issue Tracking</option>
+              <option value="maintenance">Maintenance Operations</option>
+              <option value="commands">Remote Commands</option>
+              <option value="audit">Security Audit Logs</option>
             </select>
-
           </div>
 
-          {/* FROM DATE */}
+          {/* TIME PERIOD */}
+          {reportType !== "software" && (
+            <div className="report-field">
+              <label>Time Window</label>
+              <select
+                value={period}
+                onChange={(e) => {
+                  setPeriod(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="24h">Last 24 Hours</option>
+                <option value="7d">Last 7 Days</option>
+                <option value="30d">Last 30 Days</option>
+                <option value="custom">Custom Date Range</option>
+              </select>
+            </div>
+          )}
 
-          <div className="report-field">
+          {/* CUSTOM DATES */}
+          {period === "custom" && reportType !== "software" && (
+            <>
+              <div className="report-field">
+                <label>From Date</label>
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+              <div className="report-field">
+                <label>To Date</label>
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </div>
+            </>
+          )}
 
-            <label>
-              From Date
-            </label>
+          {/* SEARCH (for software / audit) */}
+          {(reportType === "software" || reportType === "audit") && (
+            <div className="report-field" style={{ flexGrow: 1, minWidth: "180px" }}>
+              <label>Search Keyword</label>
+              <input
+                type="text"
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          )}
 
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) =>
-                setDateFrom(
-                  event.target.value
-                )
-              }
-            />
-
+          {/* ACTIONS */}
+          <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+            <button
+              className="btn btn-secondary"
+              onClick={loadReportData}
+              disabled={loading}
+              style={{ height: "42px", padding: "0 16px" }}
+            >
+              <Icon type="refresh" size={16} /> Refresh
+            </button>
+            <button
+              className="report-export-button"
+              onClick={handleExport}
+              disabled={exporting || loading}
+              style={{ height: "42px", padding: "0 18px", whiteSpace: "nowrap" }}
+            >
+              <Icon type="download" size={16} />
+              {exporting ? "Exporting..." : "Export CSV"}
+            </button>
           </div>
-
-          {/* TO DATE */}
-
-          <div className="report-field">
-
-            <label>
-              To Date
-            </label>
-
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) =>
-                setDateTo(
-                  event.target.value
-                )
-              }
-            />
-
-          </div>
-
-          {/* EXPORT */}
-
-          <button
-            className="report-export-button"
-            onClick={exportReport}
-          >
-
-            <Icon
-              type="download"
-              size={18}
-            />
-
-            Export Report
-
-          </button>
-
         </div>
 
-        {/* SUCCESS MESSAGE */}
-
+        {/* MESSAGES / TOASTS */}
         {message && (
-          <div className="report-message">
-            <Icon
-              type="check"
-              size={16}
-            />
-
-            {message}
+          <div className="report-message" style={{ marginTop: "14px" }}>
+            <Icon type="check" size={16} /> {message}
           </div>
         )}
-
+        {error && (
+          <div
+            style={{
+              marginTop: "14px",
+              padding: "10px 14px",
+              background: "#fee2e2",
+              color: "#991b1b",
+              borderRadius: "8px",
+              fontSize: "14px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <Icon type="alert" size={16} /> {error}
+          </div>
+        )}
       </div>
 
-      {/* =================================================
-          SELECTED REPORT
-      ================================================= */}
-
+      {/* REPORT PREVIEW AND METRICS */}
       <div className="report-preview">
-
-        <div className="report-preview-header">
-
-          <div>
-
-            <h3>
-              {reportInfo.title}
-            </h3>
-
-            <p>
-              {reportInfo.description}
-            </p>
-
+        {loading ? (
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+            Loading report data...
           </div>
-
-          <div className="report-count">
-
-            <strong>
-              {reportInfo.count}
-            </strong>
-
-            <span>
-              {reportInfo.label}
-            </span>
-
+        ) : !reportData ? (
+          <div style={{ padding: "40px", textAlign: "center", color: "#64748b" }}>
+            No report data available.
           </div>
+        ) : (
+          <>
+            {/* DOMAIN 1: UTILIZATION */}
+            {reportType === "utilization" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Nodes</span>
+                    <strong>{reportData.total_computers}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Online / Offline</span>
+                    <strong>
+                      {reportData.online_computers} / {reportData.offline_computers}
+                    </strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Avg CPU / Max CPU</span>
+                    <strong>
+                      {reportData.metrics_summary.avg_cpu_percent}% /{" "}
+                      {reportData.metrics_summary.max_cpu_percent}%
+                    </strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Avg RAM / Avg Disk</span>
+                    <strong>
+                      {reportData.metrics_summary.avg_ram_percent}% /{" "}
+                      {reportData.metrics_summary.avg_disk_percent}%
+                    </strong>
+                  </div>
+                </div>
 
-        </div>
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>
+                    Per-Computer Telemetry Breakdown
+                  </h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Hostname</th>
+                          <th style={{ padding: "10px 14px" }}>Status</th>
+                          <th style={{ padding: "10px 14px" }}>IP Address</th>
+                          <th style={{ padding: "10px 14px" }}>Avg CPU</th>
+                          <th style={{ padding: "10px 14px" }}>Avg RAM</th>
+                          <th style={{ padding: "10px 14px" }}>Avg Disk</th>
+                          <th style={{ padding: "10px 14px" }}>Samples</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.computers.map((c) => (
+                          <tr key={c.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{c.hostname}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background: c.status === "online" ? "#dcfce7" : "#f1f5f9",
+                                  color: c.status === "online" ? "#15803d" : "#64748b",
+                                }}
+                              >
+                                {c.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>{c.ip_address}</td>
+                            <td style={{ padding: "12px 14px" }}>{c.avg_cpu}%</td>
+                            <td style={{ padding: "12px 14px" }}>{c.avg_ram}%</td>
+                            <td style={{ padding: "12px 14px" }}>{c.avg_disk}%</td>
+                            <td style={{ padding: "12px 14px" }}>{c.sample_count}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
-        {/* =================================================
-            COMPUTER REPORT PREVIEW
-        ================================================= */}
+            {/* DOMAIN 2: SOFTWARE INVENTORY */}
+            {reportType === "software" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Installations</span>
+                    <strong>{reportData.total_records}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Unique Software</span>
+                    <strong>{reportData.unique_software_count}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Top Application</span>
+                    <strong>{reportData.top_installed[0]?.name || "N/A"}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Page</span>
+                    <strong>
+                      {reportData.page} of {reportData.total_pages}
+                    </strong>
+                  </div>
+                </div>
 
-        {reportType ===
-          "Computer Report" && (
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>Installed Software Records</h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Application Name</th>
+                          <th style={{ padding: "10px 14px" }}>Version</th>
+                          <th style={{ padding: "10px 14px" }}>Publisher</th>
+                          <th style={{ padding: "10px 14px" }}>Host Computer</th>
+                          <th style={{ padding: "10px 14px" }}>Install Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.items.map((s) => (
+                          <tr key={s.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{s.name}</td>
+                            <td style={{ padding: "12px 14px" }}>{s.version || "—"}</td>
+                            <td style={{ padding: "12px 14px" }}>{s.publisher || "Unknown"}</td>
+                            <td style={{ padding: "12px 14px" }}>{s.computer_hostname || `ID #${s.computer_id}`}</td>
+                            <td style={{ padding: "12px 14px" }}>{s.install_date || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          <div className="report-summary-grid">
+            {/* DOMAIN 3: ISSUES */}
+            {reportType === "issues" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Issues</span>
+                    <strong>{reportData.total_issues}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Open / In Progress</span>
+                    <strong>
+                      {reportData.by_status.open || 0} / {reportData.by_status.in_progress || 0}
+                    </strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Resolved</span>
+                    <strong>{reportData.by_status.resolved || 0}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Critical / High</span>
+                    <strong>
+                      {reportData.by_severity.critical || 0} / {reportData.by_severity.high || 0}
+                    </strong>
+                  </div>
+                </div>
 
-            <div className="report-summary-item">
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>Issue Records</h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Issue Title</th>
+                          <th style={{ padding: "10px 14px" }}>Computer</th>
+                          <th style={{ padding: "10px 14px" }}>Severity</th>
+                          <th style={{ padding: "10px 14px" }}>Status</th>
+                          <th style={{ padding: "10px 14px" }}>Reported At</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.items.map((iss) => (
+                          <tr key={iss.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{iss.title}</td>
+                            <td style={{ padding: "12px 14px" }}>{iss.computer_hostname || `ID #${iss.computer_id}`}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background:
+                                    iss.severity === "critical"
+                                      ? "#fee2e2"
+                                      : iss.severity === "high"
+                                      ? "#ffedd5"
+                                      : "#f1f5f9",
+                                  color:
+                                    iss.severity === "critical"
+                                      ? "#991b1b"
+                                      : iss.severity === "high"
+                                      ? "#c2410c"
+                                      : "#475569",
+                                }}
+                              >
+                                {iss.severity}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background: iss.status === "resolved" ? "#dcfce7" : "#e0e7ff",
+                                  color: iss.status === "resolved" ? "#15803d" : "#3730a3",
+                                }}
+                              >
+                                {iss.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>
+                              {new Date(iss.created_at).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              <span>
-                Total Computers
-              </span>
+            {/* DOMAIN 4: MAINTENANCE */}
+            {reportType === "maintenance" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Tasks</span>
+                    <strong>{reportData.total_records}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Scheduled / In Progress</span>
+                    <strong>
+                      {reportData.by_status.scheduled || 0} / {reportData.by_status.in_progress || 0}
+                    </strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Completed</span>
+                    <strong>{reportData.by_status.completed || 0}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Upcoming / Overdue</span>
+                    <strong>
+                      {reportData.upcoming_count} / {reportData.overdue_count}
+                    </strong>
+                  </div>
+                </div>
 
-              <strong>
-                24
-              </strong>
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>Maintenance Records</h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Task Title</th>
+                          <th style={{ padding: "10px 14px" }}>Type</th>
+                          <th style={{ padding: "10px 14px" }}>Computer</th>
+                          <th style={{ padding: "10px 14px" }}>Technician</th>
+                          <th style={{ padding: "10px 14px" }}>Status</th>
+                          <th style={{ padding: "10px 14px" }}>Scheduled Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.items.map((m) => (
+                          <tr key={m.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{m.title}</td>
+                            <td style={{ padding: "12px 14px" }}>{m.maintenance_type}</td>
+                            <td style={{ padding: "12px 14px" }}>{m.computer_hostname || `ID #${m.computer_id}`}</td>
+                            <td style={{ padding: "12px 14px" }}>{m.technician_name || "Unassigned"}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background: m.status === "completed" ? "#dcfce7" : "#e0e7ff",
+                                  color: m.status === "completed" ? "#15803d" : "#3730a3",
+                                }}
+                              >
+                                {m.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>
+                              {m.scheduled_at ? new Date(m.scheduled_at).toLocaleDateString() : "—"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
-            </div>
+            {/* DOMAIN 5: REMOTE COMMANDS */}
+            {reportType === "commands" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Commands</span>
+                    <strong>{reportData.total_commands}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Success Rate</span>
+                    <strong>{reportData.success_rate}%</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Executed</span>
+                    <strong>{reportData.by_status.executed || 0}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Failed / Pending</span>
+                    <strong>
+                      {reportData.by_status.failed || 0} / {reportData.by_status.pending || 0}
+                    </strong>
+                  </div>
+                </div>
 
-            <div className="report-summary-item">
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>Command Execution History</h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Command Type</th>
+                          <th style={{ padding: "10px 14px" }}>Target Computer</th>
+                          <th style={{ padding: "10px 14px" }}>Status</th>
+                          <th style={{ padding: "10px 14px" }}>Issued By</th>
+                          <th style={{ padding: "10px 14px" }}>Result</th>
+                          <th style={{ padding: "10px 14px" }}>Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.items.map((cmd) => (
+                          <tr key={cmd.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{cmd.command_type}</td>
+                            <td style={{ padding: "12px 14px" }}>{cmd.computer_hostname || `ID #${cmd.computer_id}`}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background: cmd.status === "executed" ? "#dcfce7" : "#fee2e2",
+                                  color: cmd.status === "executed" ? "#15803d" : "#991b1b",
+                                }}
+                              >
+                                {cmd.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>{cmd.issued_by_username || `User #${cmd.issued_by}`}</td>
+                            <td style={{ padding: "12px 14px" }}>{cmd.result_message || "—"}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              {new Date(cmd.created_at).toLocaleString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              <span>
-                Online
-              </span>
+            {/* DOMAIN 6: SECURITY AUDIT */}
+            {reportType === "audit" && (
+              <div>
+                <div className="report-summary-grid">
+                  <div className="report-summary-item">
+                    <span>Total Audit Events</span>
+                    <strong>{reportData.total_events}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Successful Operations</span>
+                    <strong>{reportData.by_result.success || 0}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Failed / Unauthorized</span>
+                    <strong>{reportData.by_result.failure || 0}</strong>
+                  </div>
+                  <div className="report-summary-item">
+                    <span>Top Action</span>
+                    <strong>{Object.keys(reportData.by_action)[0] || "N/A"}</strong>
+                  </div>
+                </div>
 
-              <strong>
-                {onlineComputers}
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Offline
-              </span>
-
-              <strong>
-                {offlineComputers}
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Labs
-              </span>
-
-              <strong>
-                2
-              </strong>
-
-            </div>
-
-          </div>
-
+                <div style={{ marginTop: "24px" }}>
+                  <h4 style={{ marginBottom: "12px", color: "#1e293b" }}>Security Audit Trail</h4>
+                  <div className="table-wrapper" style={{ overflowX: "auto" }}>
+                    <table className="table" style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc", textAlign: "left" }}>
+                          <th style={{ padding: "10px 14px" }}>Timestamp</th>
+                          <th style={{ padding: "10px 14px" }}>Action Code</th>
+                          <th style={{ padding: "10px 14px" }}>Actor</th>
+                          <th style={{ padding: "10px 14px" }}>Target</th>
+                          <th style={{ padding: "10px 14px" }}>Result</th>
+                          <th style={{ padding: "10px 14px" }}>IP Address</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportData.items.map((a) => (
+                          <tr key={a.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
+                            <td style={{ padding: "12px 14px" }}>{new Date(a.created_at).toLocaleString()}</td>
+                            <td style={{ padding: "12px 14px", fontWeight: "600" }}>{a.action}</td>
+                            <td style={{ padding: "12px 14px" }}>{a.username || "System"}</td>
+                            <td style={{ padding: "12px 14px" }}>
+                              {a.target_type ? `${a.target_type} #${a.target_id || ""}` : "—"}
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "12px",
+                                  fontSize: "12px",
+                                  fontWeight: "600",
+                                  background: a.result === "success" ? "#dcfce7" : "#fee2e2",
+                                  color: a.result === "success" ? "#15803d" : "#991b1b",
+                                }}
+                              >
+                                {a.result}
+                              </span>
+                            </td>
+                            <td style={{ padding: "12px 14px" }}>{a.ip_address || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
-
-        {/* =================================================
-            SOFTWARE REPORT PREVIEW
-        ================================================= */}
-
-        {reportType ===
-          "Software Report" && (
-
-          <div className="report-summary-grid">
-
-            <div className="report-summary-item">
-
-              <span>
-                Software Records
-              </span>
-
-              <strong>
-                24
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Computers Scanned
-              </span>
-
-              <strong>
-                24
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Outdated
-              </span>
-
-              <strong>
-                4
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Categories
-              </span>
-
-              <strong>
-                8
-              </strong>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* =================================================
-            ISSUE REPORT PREVIEW
-        ================================================= */}
-
-        {reportType ===
-          "Issue Report" && (
-
-          <div className="report-summary-grid">
-
-            <div className="report-summary-item">
-
-              <span>
-                Total Issues
-              </span>
-
-              <strong>
-                8
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Open
-              </span>
-
-              <strong>
-                4
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                In Progress
-              </span>
-
-              <strong>
-                2
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Resolved
-              </span>
-
-              <strong>
-                2
-              </strong>
-
-            </div>
-
-          </div>
-
-        )}
-
-        {/* =================================================
-            MAINTENANCE REPORT PREVIEW
-        ================================================= */}
-
-        {reportType ===
-          "Maintenance Report" && (
-
-          <div className="report-summary-grid">
-
-            <div className="report-summary-item">
-
-              <span>
-                Total Records
-              </span>
-
-              <strong>
-                8
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Pending
-              </span>
-
-              <strong>
-                3
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                In Progress
-              </span>
-
-              <strong>
-                2
-              </strong>
-
-            </div>
-
-            <div className="report-summary-item">
-
-              <span>
-                Completed
-              </span>
-
-              <strong>
-                3
-              </strong>
-
-            </div>
-
-          </div>
-
-        )}
-
       </div>
-
     </div>
   );
 }

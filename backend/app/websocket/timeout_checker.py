@@ -6,10 +6,9 @@ from app.services import computer_service
 from app.websocket.connection_manager import manager
 
 
-# The client sends a heartbeat every 20 seconds.
-# We allow more than three missed heartbeats before
-# considering the client offline.
-OFFLINE_TIMEOUT_SECONDS = 75
+# The client sends periodic heartbeats.
+# We allow 2.5 missed heartbeats before considering the client offline.
+DEFAULT_OFFLINE_TIMEOUT_SECONDS = 75
 
 # Check for stale connections every 20 seconds.
 CHECK_INTERVAL_SECONDS = 20
@@ -23,6 +22,15 @@ async def run_offline_timeout_checker():
 
         now = datetime.now(timezone.utc)
 
+        # Dynamic offline timeout calculation from persistent settings
+        from app.services.setting_service import get_setting_value
+        try:
+            with SessionLocal() as db_check:
+                heartbeat_sec = get_setting_value(db_check, "heartbeat_interval", 30)
+                offline_timeout = max(15, int(heartbeat_sec * 2.5))
+        except Exception:
+            offline_timeout = DEFAULT_OFFLINE_TIMEOUT_SECONDS
+
         stale_computers = [
             (
                 computer_id,
@@ -35,7 +43,7 @@ async def run_offline_timeout_checker():
             if (
                 now - last_seen
             ).total_seconds()
-            > OFFLINE_TIMEOUT_SECONDS
+            > offline_timeout
         ]
 
         for computer_id, last_seen in stale_computers:

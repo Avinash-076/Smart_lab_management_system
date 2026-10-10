@@ -7,23 +7,27 @@ from fastapi import (
     Request,
     status,
 )
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    get_current_user,
     verify_password,
 )
 from app.database import get_db
 from app.models.audit_log import AuditResult
+from app.models.role_permission import RolePermission
+from app.models.user import User
 from app.schemas.auth_schema import (
     AccessTokenResponse,
     LoginRequest,
     RefreshRequest,
     TokenResponse,
 )
+from app.schemas.role_schema import CurrentUserProfileResponse
 from app.services import (
     audit_service,
     auth_service,
@@ -51,7 +55,6 @@ def login(
     db: DbSession,
     request: Request,
 ):
-
     username = credentials.username.strip()
 
     user = auth_service.get_user_by_username(
@@ -66,7 +69,6 @@ def login(
             user.password_hash,
         )
     ):
-
         audit_service.log_action(
             db=db,
             action="LOGIN",
@@ -81,6 +83,27 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    if not user.is_active:
+        audit_service.log_action(
+            db=db,
+            action="LOGIN",
+            result=AuditResult.failure,
+            user_id=user.id,
+            ip_address=(
+                request.client.host
+                if request.client
+                else None
+            ),
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is deactivated",
             headers={
                 "WWW-Authenticate": "Bearer"
             },
@@ -124,13 +147,11 @@ def refresh_access_token(
     payload: RefreshRequest,
     db: DbSession,
 ):
-
     decoded = decode_token(
         payload.refresh_token
     )
 
     if decoded.get("type") != "refresh":
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type",
@@ -142,7 +163,6 @@ def refresh_access_token(
     user_id = decoded.get("sub")
 
     if user_id is None:
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
@@ -153,9 +173,7 @@ def refresh_access_token(
 
     try:
         user_id = int(user_id)
-
     except (TypeError, ValueError):
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid user identifier",
@@ -164,17 +182,25 @@ def refresh_access_token(
             },
         )
 
-    # Verify that the user still exists.
+    # Verify that the user still exists and is active
     user = auth_service.get_user_by_id(
         db,
         user_id,
     )
 
     if user is None:
-
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User no longer exists",
+            headers={
+                "WWW-Authenticate": "Bearer"
+            },
+        )
+
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is deactivated",
             headers={
                 "WWW-Authenticate": "Bearer"
             },
@@ -188,4 +214,36 @@ def refresh_access_token(
 
     return AccessTokenResponse(
         access_token=new_access_token
+    )
+
+
+@router.get(
+    "/me",
+    response_model=CurrentUserProfileResponse,
+)
+def get_current_user_profile(
+    current_user: Annotated[
+        User,
+        Depends(get_current_user),
+    ],
+    db: DbSession,
+):
+    """Retrieve profile and permitted action codes for the currently authenticated user."""
+    # Query permissions granted to this user's role
+    allowed_perms = db.scalars(
+        select(RolePermission.action_code).where(
+            RolePermission.role_id == current_user.role_id,
+            RolePermission.allowed.is_(True),
+        )
+    ).all()
+
+    return CurrentUserProfileResponse(
+        id=current_user.id,
+        username=current_user.username,
+        full_name=current_user.full_name,
+        email=current_user.email,
+        role_id=current_user.role_id,
+        role_name=current_user.role_name,
+        is_active=current_user.is_active,
+        permissions=list(allowed_perms),
     )

@@ -8,6 +8,9 @@ from contextlib import asynccontextmanager
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 import app.models
+from app.database import SessionLocal
+from app.services.role_service import seed_default_roles_and_permissions
+from app.services.setting_service import seed_default_settings
 from app.websocket.timeout_checker import run_offline_timeout_checker
 
 from app.routes.auth_router import router as auth_router
@@ -23,13 +26,23 @@ from app.routes.usage_router import router as usage_router
 from app.routes.issue_router import router as issue_router
 from app.routes.maintenance_router import router as maintenance_router
 from app.routes.user_router import router as user_router
+from app.routes.role_router import router as role_router
 from app.routes.process_router import router as process_router
 from app.routes.audit_router import router as audit_router
+from app.routes.report_router import router as report_router
+from app.routes.setting_router import router as setting_router
 
 logger = logging.getLogger("slms")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        with SessionLocal() as db:
+            seed_default_roles_and_permissions(db)
+            seed_default_settings(db)
+    except Exception as exc:
+        logger.warning(f"Could not seed roles/permissions/settings on startup: {exc}")
+
     task = asyncio.create_task(run_offline_timeout_checker())
 
     try:
@@ -73,12 +86,16 @@ app.include_router(websocket_router)
 app.include_router(notification_router, prefix=API_PREFIX)
 app.include_router(command_router, prefix=API_PREFIX)
 app.include_router(software_router, prefix=API_PREFIX)
-app.include_router(usage_router,prefix=API_PREFIX)
+app.include_router(usage_router, prefix=API_PREFIX)
 app.include_router(issue_router, prefix=API_PREFIX)
 app.include_router(maintenance_router, prefix=API_PREFIX)
 app.include_router(user_router, prefix=API_PREFIX)
+app.include_router(role_router, prefix=API_PREFIX)
 app.include_router(process_router, prefix=API_PREFIX)
 app.include_router(audit_router, prefix=API_PREFIX)
+app.include_router(report_router, prefix=API_PREFIX)
+app.include_router(setting_router, prefix=API_PREFIX)
+
 # ---- Global exception handlers ----
 
 @app.exception_handler(IntegrityError)

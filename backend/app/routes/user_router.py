@@ -13,14 +13,17 @@ from sqlalchemy.exc import (
 )
 from sqlalchemy.orm import Session
 
-from app.auth import require_permission
+from app.auth import get_current_user, require_permission
 from app.database import get_db
+from app.models.audit_log import AuditResult
+from app.models.user import User
 from app.schemas.user_schema import (
     UserCreate,
+    UserListResponse,
     UserResponse,
     UserUpdate,
 )
-from app.services import user_service
+from app.services import audit_service, user_service
 
 
 DbSession = Annotated[
@@ -37,28 +40,40 @@ router = APIRouter(
 
 @router.get(
     "",
-    response_model=list[UserResponse],
+    response_model=UserListResponse,
 )
 def get_users(
     db: DbSession,
-    _user=Depends(
-        require_permission("MANAGE_USERS")
-    ),
-    limit: int = Query(
-        default=100,
-        ge=1,
-        le=500,
-    ),
-    offset: int = Query(
-        default=0,
-        ge=0,
-    ),
+    _user: Annotated[User, Depends(require_permission("MANAGE_USERS"))],
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=500),
+    search: str | None = Query(default=None),
+    role_id: int | None = Query(default=None, gt=0),
+    role: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    offset: int | None = Query(default=None, ge=0),
 ):
+    """List users with multi-parameter filtering, search, and pagination."""
+    if offset is not None and offset > 0 and page == 1:
+        # Backward compatibility for offset-based queries
+        page = (offset // limit) + 1
 
-    return user_service.get_users(
+    result = user_service.get_users_paginated(
         db=db,
+        page=page,
         limit=limit,
-        offset=offset,
+        search=search,
+        role_id=role_id,
+        role=role,
+        status=status,
+    )
+
+    return UserListResponse(
+        items=[UserResponse.model_validate(u) for u in result["items"]],
+        total=result["total"],
+        page=result["page"],
+        limit=result["limit"],
+        total_pages=result["total_pages"],
     )
 
 
@@ -69,11 +84,9 @@ def get_users(
 def get_user(
     user_id: int,
     db: DbSession,
-    _user=Depends(
-        require_permission("MANAGE_USERS")
-    ),
+    _user: Annotated[User, Depends(require_permission("MANAGE_USERS"))],
 ):
-
+    """Retrieve an individual user's details."""
     user = user_service.get_user_by_id(
         db,
         user_id,
@@ -85,7 +98,7 @@ def get_user(
             detail="User not found",
         )
 
-    return user
+    return UserResponse.model_validate(user)
 
 
 @router.post(
@@ -96,16 +109,25 @@ def get_user(
 def create_user(
     user_data: UserCreate,
     db: DbSession,
-    _user=Depends(
-        require_permission("MANAGE_USERS")
-    ),
+    current_user: Annotated[User, Depends(require_permission("MANAGE_USERS"))],
 ):
-
+    """Create a new user account with validated fields and authorized role assignment."""
     try:
-        return user_service.create_user(
+        user = user_service.create_user(
             db=db,
             user_data=user_data,
         )
+
+        audit_service.log_action(
+            db=db,
+            action="CREATE_USER",
+            target_type="user",
+            target_id=user.id,
+            result=AuditResult.success,
+            user_id=current_user.id,
+        )
+
+        return UserResponse.model_validate(user)
 
     except ValueError as exc:
         raise HTTPException(
@@ -140,11 +162,9 @@ def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: DbSession,
-    _user=Depends(
-        require_permission("MANAGE_USERS")
-    ),
+    current_user: Annotated[User, Depends(require_permission("MANAGE_USERS"))],
 ):
-
+    """Update user details, role assignment, or active status."""
     user = user_service.get_user_by_id(
         db,
         user_id,
@@ -157,15 +177,27 @@ def update_user(
         )
 
     try:
-        return user_service.update_user(
+        updated_user = user_service.update_user(
             db=db,
             user=user,
             user_data=user_data,
+            current_user=current_user,
         )
+
+        audit_service.log_action(
+            db=db,
+            action="UPDATE_USER",
+            target_type="user",
+            target_id=user.id,
+            result=AuditResult.success,
+            user_id=current_user.id,
+        )
+
+        return UserResponse.model_validate(updated_user)
 
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
 
@@ -195,11 +227,9 @@ def update_user(
 def delete_user(
     user_id: int,
     db: DbSession,
-    current_user=Depends(
-        require_permission("MANAGE_USERS")
-    ),
+    current_user: Annotated[User, Depends(require_permission("MANAGE_USERS"))],
 ):
-
+    """Delete a user account."""
     user = user_service.get_user_by_id(
         db,
         user_id,
@@ -211,8 +241,7 @@ def delete_user(
             detail="User not found",
         )
 
-    # Prevent an administrator from deleting
-    # their own currently authenticated account.
+    # Prevent an administrator from deleting their own currently authenticated account
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -223,6 +252,15 @@ def delete_user(
         user_service.delete_user(
             db,
             user,
+        )
+
+        audit_service.log_action(
+            db=db,
+            action="DELETE_USER",
+            target_type="user",
+            target_id=user_id,
+            result=AuditResult.success,
+            user_id=current_user.id,
         )
 
     except ValueError as exc:

@@ -64,10 +64,23 @@ async def _check_threshold(
 
 
 async def evaluate_metric(db: Session, computer_id: int, metric: SystemMetric) -> None:
-    await _check_threshold(db, computer_id, "cpu", metric.cpu_usage, CPU_WARNING, CPU_CRITICAL)
-    await _check_threshold(db, computer_id, "ram", metric.ram_usage, RAM_WARNING, RAM_CRITICAL)
-    await _check_threshold(db, computer_id, "disk", metric.disk_usage, DISK_WARNING, DISK_CRITICAL)
+    from app.services.setting_service import get_setting_value
+
+    cpu_thresh = float(get_setting_value(db, "cpu_threshold", CPU_CRITICAL))
+    ram_thresh = float(get_setting_value(db, "ram_threshold", RAM_CRITICAL))
+    disk_thresh = float(get_setting_value(db, "disk_threshold", DISK_CRITICAL))
+    disk_alerts_enabled = bool(get_setting_value(db, "disk_alerts", True))
+
+    await _check_threshold(db, computer_id, "cpu", metric.cpu_usage, max(10.0, cpu_thresh - 10.0), cpu_thresh)
+    await _check_threshold(db, computer_id, "ram", metric.ram_usage, max(10.0, ram_thresh - 10.0), ram_thresh)
+    if disk_alerts_enabled:
+        await _check_threshold(db, computer_id, "disk", metric.disk_usage, max(10.0, disk_thresh - 10.0), disk_thresh)
 
 
 async def notify_offline(db: Session, computer_id: int) -> None:
+    from app.services.setting_service import get_setting_value
+
+    offline_alerts_enabled = bool(get_setting_value(db, "offline_alerts", True))
+    if not offline_alerts_enabled:
+        return
     await _create_notification(db, computer_id, "offline", NotificationSeverity.warning, "Computer went offline")

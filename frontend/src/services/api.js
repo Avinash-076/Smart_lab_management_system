@@ -611,3 +611,276 @@ export async function getAuditLogDetails(logId) {
   return fetchWithAuth(`/audit-logs/${logId}`);
 }
 
+/* =====================================================
+   USER & ROLE MANAGEMENT (V6.1)
+===================================================== */
+
+export async function getCurrentUserProfile() {
+  return fetchWithAuth("/auth/me");
+}
+
+export async function getUsers(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    if (options.search) params.set("search", options.search);
+    if (options.role_id) params.set("role_id", options.role_id);
+    if (options.role) params.set("role", options.role);
+    if (options.status) params.set("status", options.status);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/users${query}`);
+}
+
+export async function getUserDetails(userId) {
+  return fetchWithAuth(`/users/${userId}`);
+}
+
+export async function createUser(userData) {
+  return fetchWithAuth("/users", {
+    method: "POST",
+    body: JSON.stringify(userData),
+  });
+}
+
+export async function updateUser(userId, userData) {
+  return fetchWithAuth(`/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(userData),
+  });
+}
+
+export async function deleteUser(userId) {
+  return fetchWithAuth(`/users/${userId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getRoles() {
+  return fetchWithAuth("/roles");
+}
+
+export async function getRoleDetails(roleId) {
+  return fetchWithAuth(`/roles/${roleId}`);
+}
+
+export async function createRole(roleData) {
+  return fetchWithAuth("/roles", {
+    method: "POST",
+    body: JSON.stringify(roleData),
+  });
+}
+
+export async function updateRole(roleId, roleData) {
+  return fetchWithAuth(`/roles/${roleId}`, {
+    method: "PATCH",
+    body: JSON.stringify(roleData),
+  });
+}
+
+export async function deleteRole(roleId) {
+  return fetchWithAuth(`/roles/${roleId}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getPermissions() {
+  return fetchWithAuth("/permissions");
+}
+
+export async function updateRolePermissions(roleId, permissions) {
+  return fetchWithAuth(`/roles/${roleId}/permissions`, {
+    method: "PUT",
+    body: JSON.stringify({ permissions }),
+  });
+}
+
+/* =====================================================
+   REPORTS & ANALYTICS (V6.2)
+===================================================== */
+
+export async function getReportOverview() {
+  return fetchWithAuth("/reports/overview");
+}
+
+export async function getUtilizationReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.period) params.set("period", options.period);
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/utilization${query}`);
+}
+
+export async function getSoftwareReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.search) params.set("search", options.search.trim());
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/software${query}`);
+}
+
+export async function getIssueReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.severity) params.set("severity", options.severity);
+    if (options.status) params.set("status", options.status);
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/issues${query}`);
+}
+
+export async function getMaintenanceReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.status) params.set("status", options.status);
+    if (options.maintenance_type) params.set("maintenance_type", options.maintenance_type);
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/maintenance${query}`);
+}
+
+export async function getCommandReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.command_type) params.set("command_type", options.command_type);
+    if (options.status) params.set("status", options.status);
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/commands${query}`);
+}
+
+export async function getAuditReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.action) params.set("action", options.action);
+    if (options.user_id) params.set("user_id", options.user_id);
+    if (options.result) params.set("result", options.result);
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/audit${query}`);
+}
+
+export async function downloadReportCSV(reportType, options = {}) {
+  const token = localStorage.getItem("token");
+  const params = new URLSearchParams();
+  params.set("report_type", reportType);
+  if (options.period) params.set("period", options.period);
+  if (options.from_date) params.set("from_date", options.from_date);
+  if (options.to_date) params.set("to_date", options.to_date);
+  if (options.computer_id) params.set("computer_id", options.computer_id);
+  if (options.search) params.set("search", options.search.trim());
+  if (options.status) params.set("status", options.status);
+  if (options.severity) params.set("severity", options.severity);
+  if (options.maintenance_type) params.set("maintenance_type", options.maintenance_type);
+  if (options.command_type) params.set("command_type", options.command_type);
+  if (options.action) params.set("action", options.action);
+  if (options.result) params.set("result", options.result);
+
+  const response = await fetch(`/api/reports/export?${params.toString()}`, {
+    method: "GET",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+  });
+
+  if (!response.ok) {
+    let errorDetail = "Failed to export report CSV";
+    try {
+      const err = await response.json();
+      errorDetail = err.detail || errorDetail;
+    } catch {
+      // ignore
+    }
+    throw new Error(errorDetail);
+  }
+
+  const blob = await response.blob();
+  let filename = `SLMS-${reportType}-Report.csv`;
+  const disposition = response.headers.get("Content-Disposition");
+  if (disposition && disposition.includes("filename=")) {
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    if (match && match[1]) filename = match[1];
+  }
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  return filename;
+}
+
+/* =====================================================
+   SETTINGS & CONFIGURATION MANAGEMENT
+===================================================== */
+
+export async function getSettings(category) {
+  const path = category ? `/settings/${category}` : "/settings";
+  return fetchWithAuth(path);
+}
+
+export async function updateSettings(settingsMap) {
+  return fetchWithAuth("/settings", {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(settingsMap),
+  });
+}
+
+export async function resetSettings(keys) {
+  return fetchWithAuth("/settings/reset", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(keys ? { keys } : {}),
+  });
+}
+
