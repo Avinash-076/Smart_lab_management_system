@@ -12,6 +12,7 @@ Every shutdown/restart/LockWorkStation OS call MUST be mocked so that
 running this test suite never locks, reboots, or halts the machine.
 """
 
+import ctypes
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -27,7 +28,9 @@ from server.command_handler import (
 def test_handle_lock_success():
     """Verify handle_lock invokes LockWorkStation and returns success."""
     mock_lock = MagicMock(return_value=1)
-    with patch("ctypes.windll.user32.LockWorkStation", mock_lock, create=True):
+    mock_user32 = MagicMock(LockWorkStation=mock_lock)
+    mock_windll = MagicMock(user32=mock_user32)
+    with patch.object(ctypes, "windll", mock_windll, create=True):
         success, message = handle_lock(None)
         assert success is True
         assert message == "Workstation locked"
@@ -37,7 +40,9 @@ def test_handle_lock_success():
 def test_handle_lock_os_failure():
     """Verify handle_lock handles OS failure gracefully without crashing."""
     mock_lock = MagicMock(side_effect=OSError("LockWorkStation failed with error 5"))
-    with patch("ctypes.windll.user32.LockWorkStation", mock_lock, create=True):
+    mock_user32 = MagicMock(LockWorkStation=mock_lock)
+    mock_windll = MagicMock(user32=mock_user32)
+    with patch.object(ctypes, "windll", mock_windll, create=True):
         success, message = handle_lock(None)
         assert success is False
         assert "LockWorkStation failed" in message

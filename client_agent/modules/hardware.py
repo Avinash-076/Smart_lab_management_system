@@ -58,9 +58,12 @@ def get_hardware_info() -> dict[str, Any]:
 
     memory = psutil.virtual_memory()
 
-    system_drive = os.environ.get("SystemDrive", "C:")
-    # Ensure trailing slash for Windows drive root
-    drive_path = system_drive.rstrip("\\") + "\\"
+    if os.name == "nt":
+        system_drive = os.environ.get("SystemDrive", "C:")
+        # Ensure trailing slash for Windows drive root
+        drive_path = system_drive.rstrip("\\") + "\\"
+    else:
+        drive_path = "/"
     disk = psutil.disk_usage(drive_path)
 
     boot_time = datetime.fromtimestamp(psutil.boot_time())

@@ -501,6 +501,7 @@ class TestVirtualServiceAccountPrivileges:
         procs = list(psutil.process_iter(["pid", "name"]))
         assert len(procs) > 0
 
+    @pytest.mark.windows_only
     def test_software_inventory_hklm_read_permissions(self):
         """Caller check: Verify read access to HKLM uninstall registry key in current environment."""
         import winreg
@@ -597,13 +598,13 @@ class TestPhaseFServiceDeploymentLifecycle:
         monkeypatch.setenv("ProgramData", r"C:\ProgramData")
 
         data_dir = paths.get_data_dir()
-        assert data_dir == r"C:\ProgramData\SLMS"
+        assert data_dir.replace("/", "\\") == r"C:\ProgramData\SLMS"
 
         layout = paths.get_path_layout()
-        assert layout["logs"] == r"C:\ProgramData\SLMS\logs"
-        assert layout["data"] == r"C:\ProgramData\SLMS\data"
-        assert layout["outbox"] == r"C:\ProgramData\SLMS\data\outbox"
-        assert layout["config"] == r"C:\ProgramData\SLMS\config"
+        assert layout["logs"].replace("/", "\\") == r"C:\ProgramData\SLMS\logs"
+        assert layout["data"].replace("/", "\\") == r"C:\ProgramData\SLMS\data"
+        assert layout["outbox"].replace("/", "\\") == r"C:\ProgramData\SLMS\data\outbox"
+        assert layout["config"].replace("/", "\\") == r"C:\ProgramData\SLMS\config"
 
     def test_session_0_no_gui_enrollment_dialog(self):
         """
@@ -651,6 +652,7 @@ class TestPhaseFServiceDeploymentLifecycle:
         assert stop_event.is_set()
         mock_mutex.release.assert_called_once()
 
+    @pytest.mark.windows_only
     def test_service_and_interactive_single_instance_coordination(self):
         """
         Verify that when a service instance is active, interactive launch is rejected,
@@ -680,6 +682,7 @@ class TestPhaseFServiceDeploymentLifecycle:
         cli_mutex.release()
 
 
+@pytest.mark.windows_only
 class TestServiceSCMDispatcher:
     """Tests verifying deterministic Windows SCM service invocation and CLI dispatch."""
 

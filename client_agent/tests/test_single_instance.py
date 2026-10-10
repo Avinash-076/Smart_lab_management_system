@@ -26,6 +26,7 @@ from core.single_instance import SingleInstanceMutex, MUTEX_NAME
 
 class TestSingleInstanceMutex:
 
+    @pytest.mark.windows_only
     def test_single_instance_acquisition_and_release(self):
         """Verify initial acquisition succeeds and explicit release frees the mutex."""
         test_mutex_name = f"Local\\SLMS_Test_Mutex_{os.getpid()}_1"
@@ -53,6 +54,7 @@ class TestSingleInstanceMutex:
         mutex2.release()
         assert mutex2.is_acquired is False
 
+    @pytest.mark.windows_only
     def test_single_instance_context_manager(self):
         """Verify context manager acquires on enter and releases on exit."""
         test_mutex_name = f"Local\\SLMS_Test_Mutex_{os.getpid()}_2"
