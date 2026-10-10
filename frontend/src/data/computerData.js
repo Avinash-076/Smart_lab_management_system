@@ -32,3 +32,5 @@ const base = Array.from({ length: 24 }, (_, i) => {
     lab: n <= 12 ? "Lab 1" : "Lab 2",
   };
 });
+
+export default base;
