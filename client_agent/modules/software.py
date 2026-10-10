@@ -30,7 +30,13 @@ import json
 import os
 import tempfile
 import time
-import winreg
+
+try:
+    import winreg
+    HAVE_WINREG = True
+except ImportError:
+    winreg = None  # type: ignore
+    HAVE_WINREG = False
 
 from core.logger import logger
 from paths import SOFTWARE_STATE_FILE
@@ -60,6 +66,9 @@ def _read_value(
     """
     Safely read one Windows registry value.
     """
+    if not HAVE_WINREG or winreg is None:
+        return default
+
     try:
         value, _ = winreg.QueryValueEx(
             registry_key,
@@ -82,6 +91,9 @@ def _scan_registry_path(
     """
     Scan one Windows uninstall registry path under HKEY_LOCAL_MACHINE.
     """
+    if not HAVE_WINREG or winreg is None:
+        return []
+
     software_list = []
 
     try:
@@ -141,7 +153,11 @@ def get_installed_software() -> list[dict]:
     """
     Collect installed Windows applications from HKLM 64-bit and 32-bit registry keys.
     Results are deduplicated and deterministically sorted by name.
+    On non-Windows platforms where winreg is unavailable, returns an empty list.
     """
+    if not HAVE_WINREG or winreg is None:
+        return []
+
     software_list = []
     seen: set = set()
 
