@@ -266,6 +266,7 @@ class TestServiceSecurityAndNonInteractiveConstraints:
         runtime = AgentRuntime(stop_event=stop_event, is_service=True, enable_single_instance=False)
 
         with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=42), \
              patch("core.runtime.authenticate_agent", side_effect=RuntimeError("Auth rejected 401")):
 
             with pytest.raises(RuntimeError, match="Auth rejected"):

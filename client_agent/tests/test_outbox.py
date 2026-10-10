@@ -468,8 +468,10 @@ class TestOutboxBackpressureAndLimits:
                     idempotency_key=f"conc_metric_{i}",
                 )
 
-            # Wait briefly for worker to drain
-            time.sleep(0.3)
+            # Wait for worker to drain
+            deadline = time.time() + 3.0
+            while time.time() < deadline and outbox.get_stats()["total_count"] > 0:
+                time.sleep(0.05)
             worker.stop()
 
         stats = outbox.get_stats()

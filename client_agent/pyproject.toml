@@ -10,7 +10,7 @@ dependencies = [
     "psutil>=7.2.2",
     "requests>=2.34.2",
     "websocket-client>=1.8.0",
-    "pywin32>=310",
+    "pywin32>=310; sys_platform == 'win32'",
 ]
 
 [dependency-groups]
@@ -26,3 +26,9 @@ build = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests requiring multiple components or live server",
+    "windows_only: Tests requiring Windows operating system and/or specific Windows privileges",
+    "load: Performance and concurrency load tests",
+]

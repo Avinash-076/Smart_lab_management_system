@@ -217,6 +217,7 @@ def test_upgrade_lifecycle_acl_configuration_sequence(iss_content: str):
     assert "Service credential verification failed prior to service startup during upgrade." in upgrade_content
 
 
+@pytest.mark.windows_only
 def test_compiled_installer_binary_exists():
     """Verify compiled installer artifact exists and has valid size (> 10MB)."""
     assert SETUP_EXE.is_file(), f"Compiled setup not found at {SETUP_EXE}"
@@ -224,6 +225,7 @@ def test_compiled_installer_binary_exists():
     assert size > 10 * 1024 * 1024, f"Setup EXE size suspiciously small: {size} bytes"
 
 
+@pytest.mark.windows_only
 def test_compiled_installer_artifact_freshness():
     """
     Verify compiled installer artifact is not stale.

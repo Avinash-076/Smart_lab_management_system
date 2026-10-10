@@ -110,10 +110,24 @@ jobs:
         with:
           version: "latest"
 
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup --no-progress -y
+          echo "C:\Program Files (x86)\Inno Setup 6" >> $env:GITHUB_PATH
+
       - name: Install client dependencies on Windows
         working-directory: client_agent
         run: |
-          uv sync
+          uv sync --all-groups
+
+      - name: Build PyInstaller Executable
+        working-directory: client_agent
+        run: |
+          uv run pyinstaller --clean --noconfirm SLMS_Client_Agent.spec
+
+      - name: Compile Inno Setup Installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SLMS_Client_Agent_Setup.iss
 
       - name: Run Client Tests on Windows
         working-directory: client_agent
