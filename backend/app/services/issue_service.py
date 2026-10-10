@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.models.computer import Computer
 from app.models.issue import (
     Issue,
     IssueSeverity,
@@ -32,6 +33,7 @@ def get_issues(
     computer_id: int | None = None,
     status: IssueStatus | None = None,
     severity: IssueSeverity | None = None,
+    search: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[Issue]:
@@ -63,10 +65,23 @@ def get_issues(
             Issue.severity == severity
         )
 
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        query = query.outerjoin(
+            Computer, Issue.computer_id == Computer.id
+        ).where(
+            or_(
+                Issue.title.ilike(search_pattern),
+                Issue.description.ilike(search_pattern),
+                Computer.hostname.ilike(search_pattern),
+            )
+        )
+
     query = (
         query
         .order_by(
-            Issue.created_at.desc()
+            Issue.created_at.desc(),
+            Issue.id.desc(),
         )
         .limit(limit)
         .offset(offset)
@@ -75,6 +90,40 @@ def get_issues(
     return list(
         db.scalars(query).all()
     )
+
+
+def get_issue_stats(
+    db: Session,
+    computer_id: int | None = None,
+) -> dict:
+
+    query = select(
+        func.count(Issue.id).label("total"),
+        func.count(case((Issue.status == IssueStatus.open, 1))).label("open"),
+        func.count(case((Issue.status == IssueStatus.in_progress, 1))).label("in_progress"),
+        func.count(case((Issue.status == IssueStatus.resolved, 1))).label("resolved"),
+        func.count(case((Issue.severity == IssueSeverity.critical, 1))).label("critical"),
+        func.count(case((Issue.severity == IssueSeverity.high, 1))).label("high"),
+        func.count(case((Issue.severity == IssueSeverity.medium, 1))).label("medium"),
+        func.count(case((Issue.severity == IssueSeverity.low, 1))).label("low"),
+    )
+
+    if computer_id is not None:
+        query = query.where(Issue.computer_id == computer_id)
+
+    row = db.execute(query).one()
+
+    return {
+        "total": row.total or 0,
+        "open": row.open or 0,
+        "in_progress": row.in_progress or 0,
+        "resolved": row.resolved or 0,
+        "critical": row.critical or 0,
+        "high": row.high or 0,
+        "medium": row.medium or 0,
+        "low": row.low or 0,
+    }
+
 
 
 def create_issue(

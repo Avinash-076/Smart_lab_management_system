@@ -76,6 +76,8 @@ class IssueResponse(BaseModel):
     updated_at: datetime
     resolved_at: datetime | None
 
+    computer_hostname: str | None = None
+
     model_config = ConfigDict(
         from_attributes=True,
     )
@@ -98,3 +100,21 @@ class IssueAgentCreate(BaseModel):
         default=None,
         max_length=128,
     )
+
+
+class IssueResolve(BaseModel):
+    resolution_notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
+class IssueStatsResponse(BaseModel):
+    total: int = 0
+    open: int = 0
+    in_progress: int = 0
+    resolved: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0

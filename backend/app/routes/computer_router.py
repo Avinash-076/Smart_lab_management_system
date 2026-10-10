@@ -1,7 +1,7 @@
 from typing import Annotated
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -18,7 +18,16 @@ from app.schemas.computer_schema import (
 from app.schemas.software_schema import SoftwareResponse
 from app.schemas.process_schema import ProcessResponse
 from app.schemas.usage_schema import UsageSessionResponse
-from app.services import audit_service, computer_service, software_service, process_service, usage_service
+from app.schemas.issue_schema import IssueResponse
+from app.models.issue import IssueStatus, IssueSeverity
+from app.services import (
+    audit_service,
+    computer_service,
+    issue_service,
+    process_service,
+    software_service,
+    usage_service,
+)
 from app.auth import get_current_user, require_permission,get_current_agent
 from app.models.audit_log import AuditResult
 
@@ -156,6 +165,44 @@ def get_computer_usage(
         start_time=parsed_start,
         end_time=parsed_end,
     )
+
+
+@router.get(
+    "/{computer_id}/issues",
+    response_model=list[IssueResponse],
+)
+def get_computer_issues(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    issue_status: IssueStatus | None = Query(
+        default=None,
+        alias="status",
+    ),
+    severity: IssueSeverity | None = None,
+    search: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return issue_service.get_issues(
+        db=db,
+        computer_id=computer_id,
+        status=issue_status,
+        severity=severity,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+
 
 
 @router.put(

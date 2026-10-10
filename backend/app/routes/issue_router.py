@@ -27,7 +27,9 @@ from app.models.issue import (
 from app.schemas.issue_schema import (
     IssueAgentCreate,
     IssueCreate,
+    IssueResolve,
     IssueResponse,
+    IssueStatsResponse,
     IssueUpdate,
 )
 from app.services import (
@@ -49,6 +51,34 @@ router = APIRouter(
 
 
 @router.get(
+    "/stats",
+    response_model=IssueStatsResponse,
+)
+def get_issue_stats(
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+    computer_id: int | None = Query(
+        default=None,
+        gt=0,
+    ),
+):
+    if computer_id is not None:
+        computer = computer_service.get_computer_by_id(db, computer_id)
+        if computer is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Computer not found",
+            )
+
+    return issue_service.get_issue_stats(
+        db=db,
+        computer_id=computer_id,
+    )
+
+
+@router.get(
     "",
     response_model=list[IssueResponse],
 )
@@ -66,6 +96,9 @@ def get_issues(
         alias="status",
     ),
     severity: IssueSeverity | None = None,
+    search: str | None = Query(
+        default=None,
+    ),
     limit: int = Query(
         default=100,
         ge=1,
@@ -82,6 +115,7 @@ def get_issues(
         computer_id=computer_id,
         status=issue_status,
         severity=severity,
+        search=search,
         limit=limit,
         offset=offset,
     )
@@ -111,6 +145,7 @@ def get_issue(
         )
 
     return issue
+
 
 
 @router.post(
@@ -263,6 +298,7 @@ def update_issue(
 def resolve_issue(
     issue_id: int,
     db: DbSession,
+    resolve_data: IssueResolve | None = None,
     resolution_notes: str | None = None,
     user=Depends(
         require_permission("UPDATE_COMPUTER")
@@ -280,11 +316,17 @@ def resolve_issue(
             detail="Issue not found",
         )
 
+    notes = None
+    if resolve_data and resolve_data.resolution_notes:
+        notes = resolve_data.resolution_notes
+    elif resolution_notes:
+        notes = resolution_notes
+
     try:
         return issue_service.resolve_issue(
             db=db,
             issue=issue,
-            resolution_notes=resolution_notes,
+            resolution_notes=notes,
             user_id=user.id,
         )
 
@@ -293,6 +335,7 @@ def resolve_issue(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to resolve issue",
         )
+
 
 @router.delete(
     "/{issue_id}",

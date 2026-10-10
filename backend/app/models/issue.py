@@ -145,6 +145,10 @@ class Issue(Base):
         foreign_keys=[resolved_by],
     )
 
+    @property
+    def computer_hostname(self) -> str | None:
+        return self.computer.hostname if self.computer else None
+
     __table_args__ = (
         Index(
             "ix_issues_computer_status",
