@@ -1,12 +1,14 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.models.computer import Computer
 from app.models.maintenance import (
     MaintenanceRecord,
     MaintenanceStatus,
+    MaintenanceType,
 )
 from app.schemas.maintenance_schema import (
     MaintenanceCreate,
@@ -29,6 +31,8 @@ def get_maintenance_records(
     db: Session,
     computer_id: int | None = None,
     maintenance_status: MaintenanceStatus | None = None,
+    maintenance_type: MaintenanceType | None = None,
+    search: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[MaintenanceRecord]:
@@ -55,10 +59,31 @@ def get_maintenance_records(
             MaintenanceRecord.status == maintenance_status
         )
 
+    if maintenance_type is not None:
+        query = query.where(
+            MaintenanceRecord.maintenance_type == maintenance_type
+        )
+
+    if search:
+        search_pattern = f"%{search.strip()}%"
+        query = query.outerjoin(
+            Computer, MaintenanceRecord.computer_id == Computer.id
+        ).where(
+            or_(
+                MaintenanceRecord.title.ilike(search_pattern),
+                MaintenanceRecord.description.ilike(search_pattern),
+                MaintenanceRecord.technician_name.ilike(search_pattern),
+                MaintenanceRecord.work_performed.ilike(search_pattern),
+                MaintenanceRecord.notes.ilike(search_pattern),
+                Computer.hostname.ilike(search_pattern),
+            )
+        )
+
     query = (
         query
         .order_by(
-            MaintenanceRecord.created_at.desc()
+            MaintenanceRecord.created_at.desc(),
+            MaintenanceRecord.id.desc(),
         )
         .limit(limit)
         .offset(offset)
@@ -67,6 +92,43 @@ def get_maintenance_records(
     return list(
         db.scalars(query).all()
     )
+
+
+def get_maintenance_stats(
+    db: Session,
+    computer_id: int | None = None,
+) -> dict:
+
+    query = select(
+        func.count(MaintenanceRecord.id).label("total"),
+        func.count(case((MaintenanceRecord.status == MaintenanceStatus.scheduled, 1))).label("scheduled"),
+        func.count(case((MaintenanceRecord.status == MaintenanceStatus.in_progress, 1))).label("in_progress"),
+        func.count(case((MaintenanceRecord.status == MaintenanceStatus.completed, 1))).label("completed"),
+        func.count(case((MaintenanceRecord.status == MaintenanceStatus.cancelled, 1))).label("cancelled"),
+        func.count(case((MaintenanceRecord.maintenance_type == MaintenanceType.preventive, 1))).label("preventive"),
+        func.count(case((MaintenanceRecord.maintenance_type == MaintenanceType.corrective, 1))).label("corrective"),
+        func.count(case((MaintenanceRecord.maintenance_type == MaintenanceType.emergency, 1))).label("emergency"),
+        func.count(case((MaintenanceRecord.maintenance_type == MaintenanceType.software, 1))).label("software"),
+        func.count(case((MaintenanceRecord.maintenance_type == MaintenanceType.hardware, 1))).label("hardware"),
+    )
+
+    if computer_id is not None:
+        query = query.where(MaintenanceRecord.computer_id == computer_id)
+
+    row = db.execute(query).one()
+
+    return {
+        "total": row.total or 0,
+        "scheduled": row.scheduled or 0,
+        "in_progress": row.in_progress or 0,
+        "completed": row.completed or 0,
+        "cancelled": row.cancelled or 0,
+        "preventive": row.preventive or 0,
+        "corrective": row.corrective or 0,
+        "emergency": row.emergency or 0,
+        "software": row.software or 0,
+        "hardware": row.hardware or 0,
+    }
 
 
 def create_maintenance(
@@ -173,6 +235,40 @@ def update_maintenance(
     except IntegrityError:
         db.rollback()
         raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+
+def complete_maintenance(
+    db: Session,
+    record: MaintenanceRecord,
+    work_performed: str | None = None,
+    notes: str | None = None,
+) -> MaintenanceRecord:
+
+    now = datetime.now(timezone.utc)
+
+    record.status = MaintenanceStatus.completed
+
+    if work_performed:
+        record.work_performed = work_performed.strip()
+
+    if notes:
+        record.notes = notes.strip()
+
+    if record.started_at is None:
+        record.started_at = now
+
+    record.completed_at = now
+    record.updated_at = now
+
+    try:
+        db.commit()
+        db.refresh(record)
+
+        return record
 
     except SQLAlchemyError:
         db.rollback()

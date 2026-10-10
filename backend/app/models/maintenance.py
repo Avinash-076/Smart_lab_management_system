@@ -135,6 +135,10 @@ class MaintenanceRecord(Base):
         foreign_keys=[created_by],
     )
 
+    @property
+    def computer_hostname(self) -> str | None:
+        return self.computer.hostname if self.computer else None
+
     __table_args__ = (
         Index(
             "ix_maintenance_computer_status",

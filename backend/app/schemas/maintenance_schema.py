@@ -99,6 +99,32 @@ class MaintenanceResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    computer_hostname: str | None = None
+
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class MaintenanceComplete(BaseModel):
+    work_performed: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+    notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
+class MaintenanceStatsResponse(BaseModel):
+    total: int = 0
+    scheduled: int = 0
+    in_progress: int = 0
+    completed: int = 0
+    cancelled: int = 0
+    preventive: int = 0
+    corrective: int = 0
+    emergency: int = 0
+    software: int = 0
+    hardware: int = 0

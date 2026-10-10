@@ -15,10 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_permission
 from app.database import get_db
-from app.models.maintenance import MaintenanceStatus
+from app.models.maintenance import MaintenanceStatus, MaintenanceType
 from app.schemas.maintenance_schema import (
+    MaintenanceComplete,
     MaintenanceCreate,
     MaintenanceResponse,
+    MaintenanceStatsResponse,
     MaintenanceUpdate,
 )
 from app.services import (
@@ -40,6 +42,34 @@ router = APIRouter(
 
 
 @router.get(
+    "/stats",
+    response_model=MaintenanceStatsResponse,
+)
+def get_maintenance_stats(
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+    computer_id: int | None = Query(
+        default=None,
+        gt=0,
+    ),
+):
+    if computer_id is not None:
+        computer = computer_service.get_computer_by_id(db, computer_id)
+        if computer is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Computer not found",
+            )
+
+    return maintenance_service.get_maintenance_stats(
+        db=db,
+        computer_id=computer_id,
+    )
+
+
+@router.get(
     "",
     response_model=list[MaintenanceResponse],
 )
@@ -56,6 +86,13 @@ def get_maintenance_records(
         default=None,
         alias="status",
     ),
+    maintenance_type: MaintenanceType | None = Query(
+        default=None,
+        alias="type",
+    ),
+    search: str | None = Query(
+        default=None,
+    ),
     limit: int = Query(
         default=100,
         ge=1,
@@ -71,6 +108,8 @@ def get_maintenance_records(
         db=db,
         computer_id=computer_id,
         maintenance_status=maintenance_status,
+        maintenance_type=maintenance_type,
+        search=search,
         limit=limit,
         offset=offset,
     )
@@ -100,6 +139,7 @@ def get_maintenance(
         )
 
     return record
+
 
 
 @router.post(
@@ -187,6 +227,46 @@ def update_maintenance(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update maintenance record",
+        )
+
+
+@router.post(
+    "/{maintenance_id}/complete",
+    response_model=MaintenanceResponse,
+)
+def complete_maintenance(
+    maintenance_id: int,
+    db: DbSession,
+    complete_data: MaintenanceComplete | None = None,
+    _user=Depends(
+        require_permission("UPDATE_COMPUTER")
+    ),
+):
+    record = maintenance_service.get_maintenance_by_id(
+        db,
+        maintenance_id,
+    )
+
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Maintenance record not found",
+        )
+
+    try:
+        work = complete_data.work_performed if complete_data else None
+        notes = complete_data.notes if complete_data else None
+        return maintenance_service.complete_maintenance(
+            db=db,
+            record=record,
+            work_performed=work,
+            notes=notes,
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to complete maintenance record",
         )
 
 

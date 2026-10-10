@@ -19,11 +19,14 @@ from app.schemas.software_schema import SoftwareResponse
 from app.schemas.process_schema import ProcessResponse
 from app.schemas.usage_schema import UsageSessionResponse
 from app.schemas.issue_schema import IssueResponse
+from app.schemas.maintenance_schema import MaintenanceResponse
 from app.models.issue import IssueStatus, IssueSeverity
+from app.models.maintenance import MaintenanceStatus, MaintenanceType
 from app.services import (
     audit_service,
     computer_service,
     issue_service,
+    maintenance_service,
     process_service,
     software_service,
     usage_service,
@@ -203,6 +206,46 @@ def get_computer_issues(
     )
 
 
+@router.get(
+    "/{computer_id}/maintenance",
+    response_model=list[MaintenanceResponse],
+)
+def get_computer_maintenance(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    maintenance_status: MaintenanceStatus | None = Query(
+        default=None,
+        alias="status",
+    ),
+    maintenance_type: MaintenanceType | None = Query(
+        default=None,
+        alias="type",
+    ),
+    search: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return maintenance_service.get_maintenance_records(
+        db=db,
+        computer_id=computer_id,
+        maintenance_status=maintenance_status,
+        maintenance_type=maintenance_type,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+
+
 
 
 @router.put(
@@ -237,13 +280,13 @@ def update_computer(
         )
 
     try:
-        
+
         computer =  computer_service.update_computer(
             db,
             existing_computer,
             computer,
         )
-    
+
         audit_service.log_action(
             db=db,
             action="UPDATE_COMPUTER",
@@ -254,7 +297,7 @@ def update_computer(
         )
 
         return computer
-    
+
 
     except IntegrityError:
         raise HTTPException(
@@ -319,7 +362,7 @@ def patch_computer(
 
         return computer
 
-        
+
 
     except IntegrityError:
         raise HTTPException(
@@ -332,7 +375,7 @@ def patch_computer(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update computer.",
         )
-    
+
 
 
 @router.delete(
@@ -390,7 +433,7 @@ def delete_computer(
 #     #         status_code=status.HTTP_400_BAD_REQUEST,
 #     #         detail="The credential has not completed registration yet."
 #     #     )
-    
+
 #     # computer = computer_service.get_computer_by_id(db, agent_credential.computer_id)
 
 #     # if computer is None:
@@ -403,7 +446,7 @@ def delete_computer(
 #     #     return computer_service.record_heartbeat(db, computer)
 #     # except:
 #     #     raise HTTPException(
-#     #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+#     #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
 #     #         detail="Failed to record heartbeat",
 #     #     )
 
