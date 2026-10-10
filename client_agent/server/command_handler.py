@@ -131,4 +131,15 @@ def execute_command(
         f"Executing command: {command_type}"
     )
 
-    return handler(payload)
+    try:
+        success, message = handler(payload)
+    except Exception as exc:
+        logger.exception(
+            f"Unhandled exception in command handler for '{command_type}': {exc}"
+        )
+        success, message = False, f"Execution exception: {exc}"
+
+    if message and len(message) > 255:
+        message = message[:252] + "..."
+
+    return success, message

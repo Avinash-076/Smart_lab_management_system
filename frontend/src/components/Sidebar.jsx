@@ -9,6 +9,7 @@ function Sidebar({ active, navigate, logout}) {
     ["issue", "Issue Management", "issues"],
     ["maintenance", "Maintenance Records", "maintenance"],
     ["reports", "Reports", "reports"],
+    ["audit", "Audit Logs", "audit"],
     ["settings", "Settings", "settings"],
     ["users", "User & Role Management", "users"],
   ];

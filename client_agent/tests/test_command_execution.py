@@ -112,3 +112,31 @@ def test_execute_command_rejects_unknown_command():
         success, message = execute_command(unknown)
         assert success is False
         assert "Unknown or disallowed command" in message
+
+
+def test_execute_command_catches_unhandled_exception():
+    """Verify execute_command catches unexpected exceptions in handler without crashing."""
+    with patch.dict(COMMAND_WHITELIST, {"message": MagicMock(side_effect=RuntimeError("Unexpected crash"))}):
+        success, message = execute_command("message", "test")
+        assert success is False
+        assert "Execution exception: Unexpected crash" in message
+
+
+def test_execute_command_bounds_long_message():
+    """Verify execute_command truncates result message to at most 255 characters."""
+    very_long_msg = "X" * 500
+    with patch.dict(COMMAND_WHITELIST, {"message": MagicMock(return_value=(True, very_long_msg))}):
+        success, message = execute_command("message", "test")
+        assert success is True
+        assert len(message) <= 255
+        assert message.endswith("...")
+
+
+def test_handle_message_safe_execution():
+    """Verify handle_message safely broadcasts or falls back to log recording."""
+    from server.command_handler import handle_message
+    with patch("subprocess.run") as mock_run:
+        mock_run.return_value = MagicMock(returncode=0)
+        success, message = handle_message("Lab closing notice")
+        assert success is True
+        assert "Notice broadcast" in message

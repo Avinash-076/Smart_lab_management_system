@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models.remote_command import RemoteCommand, CommandStatus
@@ -127,6 +127,7 @@ def get_commands_for_computer(
     return list(
         db.scalars(
             select(RemoteCommand)
+            .options(joinedload(RemoteCommand.result))
             .where(
                 RemoteCommand.computer_id == computer_id
             )
@@ -145,7 +146,9 @@ def get_command_by_id(
 ) -> RemoteCommand | None:
 
     return db.scalar(
-        select(RemoteCommand).where(
+        select(RemoteCommand)
+        .options(joinedload(RemoteCommand.result))
+        .where(
             RemoteCommand.id == command_id
         )
     )

@@ -10,17 +10,6 @@ class CommandCreate(BaseModel):
     payload: str | None = Field(default=None, max_length=255)
 
 
-class CommandResponse(BaseModel):
-    id: int
-    computer_id: int
-    command_type: CommandType
-    payload: str | None
-    status: CommandStatus
-    created_at: datetime
-    
-    model_config = ConfigDict(from_attributes=True)
-
-
 class CommandResultSubmit(BaseModel):
     success: bool
     message: str | None = Field(default=None, max_length=255)
@@ -32,5 +21,17 @@ class CommandResultResponse(BaseModel):
     success: bool
     message: str | None
     completed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CommandResponse(BaseModel):
+    id: int
+    computer_id: int
+    command_type: CommandType
+    payload: str | None
+    status: CommandStatus
+    created_at: datetime
+    result: CommandResultResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)

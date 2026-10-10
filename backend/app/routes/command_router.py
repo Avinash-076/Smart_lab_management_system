@@ -16,6 +16,7 @@ from app.auth import (
     get_current_agent,
 )
 from app.models.agent_credential import AgentCredential
+from app.models.audit_log import AuditResult
 from app.schemas.command_schema import (
     CommandCreate,
     CommandResponse,
@@ -23,6 +24,7 @@ from app.schemas.command_schema import (
     CommandResultResponse,
 )
 from app.services import (
+    audit_service,
     command_service,
     computer_service,
 )
@@ -81,6 +83,15 @@ async def issue_command(
             issued_by=_user.id,
         )
 
+        audit_service.log_action(
+            db=db,
+            result=AuditResult.success,
+            action=f"ISSUE_COMMAND_{command.command_type.value.upper()}",
+            user_id=_user.id,
+            target_type="COMPUTER",
+            target_id=computer_id,
+        )
+
     except IntegrityError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -91,6 +102,35 @@ async def issue_command(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to issue command",
+        )
+
+    return command
+
+
+@router.get(
+    "/detail/{command_id}",
+    response_model=CommandResponse,
+)
+def get_command_details(
+    command_id: int,
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+):
+    """
+    Get detailed status and result for a single command.
+    """
+
+    command = command_service.get_command_by_id(
+        db=db,
+        command_id=command_id,
+    )
+
+    if command is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Command not found",
         )
 
     return command
@@ -155,10 +195,21 @@ def cancel_command(
         )
 
     try:
-        return command_service.cancel_command(
+        cancelled_command = command_service.cancel_command(
             db=db,
             command=command,
         )
+
+        audit_service.log_action(
+            db=db,
+            result=AuditResult.success,
+            action="CANCEL_COMMAND",
+            user_id=_user.id,
+            target_type="COMMAND",
+            target_id=command_id,
+        )
+
+        return cancelled_command
 
     except ValueError as e:
         raise HTTPException(
@@ -206,11 +257,24 @@ def submit_command_result(
         )
 
     try:
-        return command_service.submit_result(
+        already_had_result = command.result is not None
+        result = command_service.submit_result(
             db,
             command,
             result_data,
         )
+
+        if not already_had_result:
+            audit_service.log_action(
+                db=db,
+                result=AuditResult.success if result_data.success else AuditResult.failure,
+                action=f"COMMAND_{'EXECUTED' if result_data.success else 'FAILED'}_{command.command_type.value.upper()}",
+                user_id=None,
+                target_type="COMMAND",
+                target_id=command_id,
+            )
+
+        return result
 
     except ValueError as e:
         raise HTTPException(

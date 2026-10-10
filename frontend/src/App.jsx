@@ -24,6 +24,7 @@ import MaintenanceRecords from "./pages/MaintenanceRecords";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import UserRoleManagement from "./pages/UserRoleManagement";
+import AuditLogs from "./pages/AuditLogs";
 
 const navItems = [
   ["home", "Dashboard", "dashboard"],
@@ -33,6 +34,7 @@ const navItems = [
   ["issue", "Issue Management", "issues"],
   ["maintenance", "Maintenance Records", "maintenance"],
   ["reports", "Reports", "reports"],
+  ["audit", "Audit Logs", "audit"],
   ["settings", "Settings", "settings"],
   ["users", "User & Role Management", "users"],
 ];
@@ -170,6 +172,9 @@ function App() {
       case "reports":
         return <Reports />;
 
+      case "audit":
+        return <AuditLogs />;
+
       case "settings":
         return <Settings />;
 
@@ -224,6 +229,7 @@ function App() {
           setBellOpen={setBellOpen}
           profileOpen={profileOpen}
           setProfileOpen={setProfileOpen}
+          filterOpen={filterOpen}
           setFilterOpen={setFilterOpen}
           navigate={navigate}
           logout={handleLogout}

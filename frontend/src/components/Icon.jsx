@@ -96,6 +96,13 @@ const Icon = ({ type, size = 20 }) => {
       </>
     ),
 
+    audit: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M12 7v5l3 3" />
+      </>
+    ),
+
     logout: (
       <>
         <path d="M10 5H5v14h5" />

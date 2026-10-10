@@ -21,11 +21,13 @@ from app.schemas.usage_schema import UsageSessionResponse
 from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
 from app.schemas.notification_schema import NotificationResponse
+from app.schemas.command_schema import CommandResponse
 from app.models.issue import IssueStatus, IssueSeverity
 from app.models.maintenance import MaintenanceStatus, MaintenanceType
 from app.models.notification import NotificationSeverity
 from app.services import (
     audit_service,
+    command_service,
     computer_service,
     issue_service,
     maintenance_service,
@@ -283,6 +285,33 @@ def get_computer_notifications(
         severity=severity,
         is_read=filter_is_read,
         search=search,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get(
+    "/{computer_id}/commands",
+    response_model=list[CommandResponse],
+)
+def get_computer_commands(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return command_service.get_commands_for_computer(
+        db=db,
+        computer_id=computer_id,
         limit=limit,
         offset=offset,
     )
