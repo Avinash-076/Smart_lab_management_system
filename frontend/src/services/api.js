@@ -1,7 +1,44 @@
-const API_BASE_URL = "http://127.0.0.1:8000/api";
+import { getApiBaseUrl, buildApiUrl } from "./config";
+
+/**
+ * Backward-compatible API_BASE_URL export pointing to the centralized config.
+ */
+export const API_BASE_URL = getApiBaseUrl();
+
+/**
+ * Standardized API Error class for frontend requests.
+ * Preserves standard Error interface while distinguishing auth and authorization errors.
+ */
+export class ApiError extends Error {
+  constructor(message, status = 0, detail = null, data = null) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail || message;
+    this.data = data;
+    this.isAuthError = status === 401;
+    this.isForbidden = status === 403;
+  }
+}
 
 let authStateListeners = [];
 let refreshPromise = null;
+let logoutHandlers = [];
+
+/**
+ * Registers a callback to be invoked when logout occurs (e.g. closing WebSockets).
+ *
+ * @param {Function} handler
+ * @returns {Function} Unsubscribe callback
+ */
+export function registerLogoutHandler(handler) {
+  if (typeof handler === "function") {
+    logoutHandlers.push(handler);
+  }
+  return () => {
+    logoutHandlers = logoutHandlers.filter((h) => h !== handler);
+  };
+}
 
 export function subscribeAuthChange(listener) {
   authStateListeners.push(listener);
@@ -21,25 +58,44 @@ function notifyAuthChange(isAuthenticated) {
 }
 
 export function getAccessToken() {
-  return localStorage.getItem("access_token");
+  try {
+    return localStorage.getItem("access_token");
+  } catch {
+    return null;
+  }
 }
 
 export function getRefreshToken() {
-  return localStorage.getItem("refresh_token");
+  try {
+    return localStorage.getItem("refresh_token");
+  } catch {
+    return null;
+  }
 }
 
 export function setTokens(accessToken, refreshToken) {
-  if (accessToken) {
-    localStorage.setItem("access_token", accessToken);
-  }
-  if (refreshToken) {
-    localStorage.setItem("refresh_token", refreshToken);
+  try {
+    if (accessToken) {
+      localStorage.setItem("access_token", accessToken);
+    }
+    if (refreshToken) {
+      localStorage.setItem("refresh_token", refreshToken);
+    }
+    // Clean up obsolete key if present from legacy implementations
+    localStorage.removeItem("token");
+  } catch (e) {
+    console.error("Failed to store tokens in localStorage:", e);
   }
 }
 
 export function clearTokens() {
-  localStorage.removeItem("access_token");
-  localStorage.removeItem("refresh_token");
+  try {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
+    localStorage.removeItem("token");
+  } catch (e) {
+    console.error("Failed to clear tokens from localStorage:", e);
+  }
   notifyAuthChange(false);
 }
 
@@ -62,11 +118,11 @@ export function parseJwt(token) {
   }
 }
 
-export function isTokenExpired(token) {
+export function isTokenExpired(token, bufferSeconds = 5) {
   const decoded = parseJwt(token);
   if (!decoded || !decoded.exp) return true;
-  // exp is Unix timestamp in seconds; Date.now() in ms. 5-second buffer for clock skew
-  return decoded.exp * 1000 <= Date.now() + 5000;
+  // exp is Unix timestamp in seconds; Date.now() in ms
+  return decoded.exp * 1000 <= Date.now() + bufferSeconds * 1000;
 }
 
 export function isAuthenticated() {
@@ -78,21 +134,39 @@ export function isAuthenticated() {
 }
 
 export async function login(username, password) {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      username: username.trim(),
-      password,
-    }),
-  });
+  if (!username || typeof username !== "string" || !username.trim()) {
+    throw new ApiError("Please enter your username.", 400);
+  }
+  if (!password || typeof password !== "string") {
+    throw new ApiError("Please enter your password.", 400);
+  }
 
-  const data = await response.json();
+  const url = buildApiUrl("/auth/login");
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: username.trim(),
+        password,
+      }),
+    });
+  } catch (netErr) {
+    throw new ApiError(`Network error: ${netErr.message || "Failed to reach server"}`, 0, null, netErr);
+  }
+
+  const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    throw new Error(data.detail || "Login failed");
+    const message = data?.detail || `Login failed (HTTP ${response.status})`;
+    throw new ApiError(message, response.status, data?.detail, data);
+  }
+
+  if (!data?.access_token || !data?.refresh_token) {
+    throw new ApiError("Invalid response from server: Missing tokens.", 500);
   }
 
   setTokens(data.access_token, data.refresh_token);
@@ -108,32 +182,49 @@ export async function refreshToken() {
   const currentRefreshToken = getRefreshToken();
   if (!currentRefreshToken || isTokenExpired(currentRefreshToken)) {
     clearTokens();
-    throw new Error("Session expired. Please log in again.");
+    throw new ApiError("Session expired. Please log in again.", 401);
   }
 
   refreshPromise = (async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          refresh_token: currentRefreshToken,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        clearTokens();
-        throw new Error(data.detail || "Session expired");
+      const url = buildApiUrl("/auth/refresh");
+      let response;
+      try {
+        response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            refresh_token: currentRefreshToken,
+          }),
+        });
+      } catch (netErr) {
+        throw new ApiError(`Network error during token refresh: ${netErr.message || "Failed to reach server"}`, 0, null, netErr);
       }
 
-      setTokens(data.access_token, null);
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        // Clear tokens on auth rejection (e.g. 401 Unauthorized / 400 Bad Request)
+        if (response.status === 401 || response.status === 400 || response.status === 403) {
+          clearTokens();
+        }
+        const message = data?.detail || `Session expired (HTTP ${response.status})`;
+        throw new ApiError(message, response.status, data?.detail, data);
+      }
+
+      if (!data?.access_token) {
+        clearTokens();
+        throw new ApiError("Malformed response during token refresh", 500);
+      }
+
+      setTokens(data.access_token, data.refresh_token || null);
       return data.access_token;
     } catch (error) {
-      clearTokens();
+      if (error instanceof ApiError && (error.status === 401 || error.status === 400 || error.status === 403)) {
+        clearTokens();
+      }
       throw error;
     } finally {
       refreshPromise = null;
@@ -144,13 +235,24 @@ export async function refreshToken() {
 }
 
 export function logout() {
+  refreshPromise = null;
+
+  // Run registered cleanup handlers (such as closing all active WebSockets)
+  logoutHandlers.forEach((handler) => {
+    try {
+      handler();
+    } catch (e) {
+      console.error("Logout handler error:", e);
+    }
+  });
+
   clearTokens();
 }
 
 export async function fetchWithAuth(endpoint, options = {}) {
   let token = getAccessToken();
 
-  // If access token is expired/missing, attempt refresh before making the request
+  // 1. Proactive check: if access token is expired or missing, refresh before request
   if (!token || isTokenExpired(token)) {
     const rToken = getRefreshToken();
     if (rToken && !isTokenExpired(rToken)) {
@@ -158,11 +260,11 @@ export async function fetchWithAuth(endpoint, options = {}) {
         token = await refreshToken();
       } catch {
         clearTokens();
-        throw new Error("Session expired. Please log in again.");
+        throw new ApiError("Session expired. Please log in again.", 401);
       }
     } else {
       clearTokens();
-      throw new Error("Authentication required.");
+      throw new ApiError("Authentication required.", 401);
     }
   }
 
@@ -171,7 +273,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
     Authorization: `Bearer ${token}`,
   };
 
-  const url = endpoint.startsWith("http") ? endpoint : `${API_BASE_URL}${endpoint}`;
+  const url = buildApiUrl(endpoint);
 
   let response;
   try {
@@ -180,11 +282,21 @@ export async function fetchWithAuth(endpoint, options = {}) {
       headers,
     });
   } catch (netErr) {
-    throw new Error(`Network error: ${netErr.message}`, { cause: netErr });
+    throw new ApiError(`Network error: ${netErr.message || "Failed to reach server"}`, 0, null, netErr);
   }
 
-  // Handle 401 Unauthorized with single retry after refreshing token
+  // 2. Reactive check: handle 401 Unauthorized with single retry after refreshing token
   if (response.status === 401 && !options._isRetry) {
+    const method = (options.method || "GET").toUpperCase();
+    const isIdempotent = ["GET", "HEAD", "PUT", "DELETE", "OPTIONS"].includes(method);
+
+    // Prevent automatically retrying non-idempotent mutations if risky unless marked retrySafe
+    if (!isIdempotent && !options.retrySafe) {
+      clearTokens();
+      const errData = await response.json().catch(() => null);
+      throw new ApiError(errData?.detail || "Session expired. Please log in again.", 401, errData?.detail, errData);
+    }
+
     try {
       const newToken = await refreshToken();
       const retryHeaders = {
@@ -198,7 +310,7 @@ export async function fetchWithAuth(endpoint, options = {}) {
       });
     } catch {
       clearTokens();
-      throw new Error("Session expired. Please log in again.");
+      throw new ApiError("Session expired. Please log in again.", 401);
     }
   }
 
@@ -208,7 +320,8 @@ export async function fetchWithAuth(endpoint, options = {}) {
     if (response.status === 401) {
       clearTokens();
     }
-    throw new Error(data?.detail || `Request failed with status ${response.status}`);
+    const message = data?.detail || `Request failed with status ${response.status}`;
+    throw new ApiError(message, response.status, data?.detail, data);
   }
 
   return data;
@@ -803,9 +916,26 @@ export async function getAuditReport(options = {}) {
 }
 
 export async function downloadReportCSV(reportType, options = {}) {
-  const token = localStorage.getItem("token");
+  let token = getAccessToken();
+
+  // Proactive check: refresh token if expired
+  if (!token || isTokenExpired(token)) {
+    const rToken = getRefreshToken();
+    if (rToken && !isTokenExpired(rToken)) {
+      try {
+        token = await refreshToken();
+      } catch {
+        clearTokens();
+        throw new ApiError("Session expired. Please log in again.", 401);
+      }
+    } else {
+      clearTokens();
+      throw new ApiError("Authentication required.", 401);
+    }
+  }
+
   const params = new URLSearchParams();
-  params.set("report_type", reportType);
+  params.set("report_type", reportType || "computer");
   if (options.period) params.set("period", options.period);
   if (options.from_date) params.set("from_date", options.from_date);
   if (options.to_date) params.set("to_date", options.to_date);
@@ -818,40 +948,74 @@ export async function downloadReportCSV(reportType, options = {}) {
   if (options.action) params.set("action", options.action);
   if (options.result) params.set("result", options.result);
 
-  const response = await fetch(`/api/reports/export?${params.toString()}`, {
-    method: "GET",
-    headers: {
-      Authorization: token ? `Bearer ${token}` : "",
-    },
-  });
+  const queryStr = params.toString();
+  const endpoint = `/reports/export${queryStr ? `?${queryStr}` : ""}`;
+  const url = buildApiUrl(endpoint);
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+  } catch (netErr) {
+    throw new ApiError(`Network error: ${netErr.message || "Failed to download report"}`, 0, null, netErr);
+  }
+
+  // Reactive retry on 401
+  if (response.status === 401) {
+    try {
+      const newToken = await refreshToken();
+      response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${newToken}`,
+        },
+      });
+    } catch {
+      clearTokens();
+      throw new ApiError("Session expired. Please log in again.", 401);
+    }
+  }
 
   if (!response.ok) {
-    let errorDetail = "Failed to export report CSV";
+    let errorDetail = `Failed to export report CSV (HTTP ${response.status})`;
     try {
       const err = await response.json();
       errorDetail = err.detail || errorDetail;
     } catch {
-      // ignore
+      // ignore non-json errors
     }
-    throw new Error(errorDetail);
+    if (response.status === 401) {
+      clearTokens();
+    }
+    throw new ApiError(errorDetail, response.status);
   }
 
   const blob = await response.blob();
-  let filename = `SLMS-${reportType}-Report.csv`;
+  let filename = `SLMS-${reportType || "export"}-Report.csv`;
   const disposition = response.headers.get("Content-Disposition");
   if (disposition && disposition.includes("filename=")) {
-    const match = disposition.match(/filename="?([^"]+)"?/);
-    if (match && match[1]) filename = match[1];
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) filename = match[1].trim();
   }
 
-  const url = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(url);
+  if (typeof window !== "undefined" && window.URL && window.URL.createObjectURL) {
+    const downloadUrl = window.URL.createObjectURL(blob);
+    try {
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } finally {
+      window.URL.revokeObjectURL(downloadUrl);
+    }
+  }
+
   return filename;
 }
 

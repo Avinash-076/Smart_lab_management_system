@@ -1,16 +1,45 @@
-import { getAccessToken, isTokenExpired, refreshToken, clearTokens } from "./api";
+import { getAccessToken, isTokenExpired, refreshToken, clearTokens, registerLogoutHandler } from "./api";
+import { getWsBaseUrl } from "./config";
 
-const WS_BASE_URL = "ws://127.0.0.1:8000/ws/dashboard";
+/**
+ * Registry of all active managed WebSocket instances.
+ * Enables closing all real-time connections on logout or session invalidation.
+ */
+const activeSocketClients = new Set();
+
+/**
+ * Closes all active WebSocket connections across the application.
+ * Called automatically during user logout or session cleanup.
+ */
+export function closeAllWebSockets() {
+  for (const client of Array.from(activeSocketClients)) {
+    try {
+      client.close();
+    } catch {
+      // ignore individual socket close errors
+    }
+  }
+  activeSocketClients.clear();
+}
+
+// Automatically close active sockets when logout occurs
+registerLogoutHandler(closeAllWebSockets);
 
 /**
  * Creates a managed WebSocket connection to /ws/dashboard with auto-reconnect,
  * token refresh, and lifecycle listeners.
+ *
+ * @param {Object} options
+ * @param {Function} [options.onMessage] - Callback for incoming parsed JSON messages
+ * @param {Function} [options.onStatusChange] - Callback for connection status changes
+ * @param {number} [options.maxRetries=5] - Maximum reconnection attempts
+ * @returns {{ close: Function }} Client controller
  */
 export function createDashboardWebSocket({
   onMessage,
   onStatusChange,
   maxRetries = 5,
-}) {
+} = {}) {
   let socket = null;
   let isClosedExplicitly = false;
   let retryCount = 0;
@@ -21,6 +50,28 @@ export function createDashboardWebSocket({
       onStatusChange(status); // 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
     }
   };
+
+  const clientController = {
+    close: () => {
+      isClosedExplicitly = true;
+      activeSocketClients.delete(clientController);
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      if (socket) {
+        try {
+          socket.close(1000, "Client closed");
+        } catch {
+          // ignore
+        }
+        socket = null;
+      }
+      updateStatus("disconnected");
+    },
+  };
+
+  activeSocketClients.add(clientController);
 
   const connect = async () => {
     if (isClosedExplicitly) return;
@@ -38,15 +89,22 @@ export function createDashboardWebSocket({
       }
     }
 
+    if (isClosedExplicitly) return;
+
     updateStatus(retryCount > 0 ? "reconnecting" : "connecting");
 
     try {
-      const url = `${WS_BASE_URL}?token=${encodeURIComponent(token)}`;
+      const baseUrl = getWsBaseUrl();
+      const url = `${baseUrl}?token=${encodeURIComponent(token)}`;
       socket = new WebSocket(url);
 
       socket.onopen = () => {
         if (isClosedExplicitly) {
-          socket.close();
+          try {
+            socket.close(1000, "Closed after disconnect");
+          } catch {
+            // ignore
+          }
           return;
         }
         retryCount = 0;
@@ -75,7 +133,7 @@ export function createDashboardWebSocket({
           return;
         }
 
-        // If closed due to auth rejection (4001 / 4003)
+        // If closed due to auth rejection (4001: Unauthorized / 4003: Forbidden)
         if (event.code === 4001 || event.code === 4003) {
           updateStatus("disconnected");
           return;
@@ -97,25 +155,8 @@ export function createDashboardWebSocket({
     }
   };
 
-  // Start connection
+  // Start connection asynchronously
   connect();
 
-  return {
-    close: () => {
-      isClosedExplicitly = true;
-      if (retryTimer) {
-        clearTimeout(retryTimer);
-        retryTimer = null;
-      }
-      if (socket) {
-        try {
-          socket.close();
-        } catch {
-          // ignore
-        }
-        socket = null;
-      }
-      updateStatus("disconnected");
-    },
-  };
+  return clientController;
 }

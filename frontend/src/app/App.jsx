@@ -66,7 +66,7 @@ function App() {
     // If access token is expired on mount but refresh token exists, refresh eagerly
     const aToken = getAccessToken();
     const rToken = getRefreshToken();
-    if (aToken && isTokenExpired(aToken) && rToken && !isTokenExpired(rToken)) {
+    if ((!aToken || isTokenExpired(aToken)) && rToken && !isTokenExpired(rToken)) {
       refreshToken().catch(() => {
         setIsLoggedIn(false);
       });
