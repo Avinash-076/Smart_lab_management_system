@@ -183,6 +183,36 @@ const Icon = ({ type, size = 20 }) => {
         />
       </>
     ),
+
+    grid: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      </>
+    ),
+
+    dashboard: (
+      <>
+        <rect x="3" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="3" width="7" height="7" rx="1.5" />
+        <rect x="14" y="14" width="7" height="7" rx="1.5" />
+        <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      </>
+    ),
+
+    "chevron-down": (
+      <path d="m6 9 6 6 6-6" />
+    ),
+
+    "chevron-left": (
+      <path d="m15 18-6-6 6-6" />
+    ),
+
+    "chevron-right": (
+      <path d="m9 18 6-6-6-6" />
+    ),
   };
 
   return <svg {...p}>{i[type] || i.computer}</svg>;

@@ -1,0 +1,64 @@
+/* =====================================================
+   SLMS AUTHENTICATED APPLICATION SHELL LAYOUT
+===================================================== */
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  background-color: var(--color-background, #f4f7fc);
+  position: relative;
+  overflow-x: hidden;
+}
+
+.main {
+  margin-left: 260px;
+  width: calc(100% - 260px);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-background, #f4f7fc);
+  transition: margin-left 0.25s ease, width 0.25s ease;
+  box-sizing: border-box;
+}
+
+/* Collapsed Desktop Sidebar State */
+.app.sidebar-collapsed .main {
+  margin-left: 76px;
+  width: calc(100% - 76px);
+}
+
+/* Mobile Backdrop Overlay */
+.sidebar-backdrop {
+  display: none;
+}
+
+/* =====================================================
+   RESPONSIVE (TABLET & MOBILE)
+===================================================== */
+
+@media (max-width: 900px) {
+  .main {
+    margin-left: 0 !important;
+    width: 100% !important;
+  }
+
+  .sidebar {
+    transform: translateX(-100%);
+    width: 260px !important;
+    z-index: 1000 !important;
+  }
+
+  .app:not(.sidebar-collapsed) .sidebar {
+    transform: translateX(0) !important;
+    box-shadow: 6px 0 25px rgba(10, 34, 78, 0.4) !important;
+  }
+
+  .app:not(.sidebar-collapsed) .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 999;
+    backdrop-filter: blur(2px);
+  }
+}
