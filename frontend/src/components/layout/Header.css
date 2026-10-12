@@ -1,0 +1,401 @@
+/* =====================================================
+   SLMS AUTHENTICATED HEADER
+===================================================== */
+
+.header {
+  position: sticky;
+  top: 0;
+  height: 68px;
+  background-color: var(--color-surface, #ffffff);
+  border-bottom: 1px solid var(--color-border, #e2e8f0);
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 90;
+  box-sizing: border-box;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+/* =====================================================
+   LEFT: MENU & PAGE HEADING
+===================================================== */
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.header-menu-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 9px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-surface, #ffffff);
+  color: var(--color-text-primary, #172033);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.header-menu-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.header-menu-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 1px;
+}
+
+/* Page Title and Subtitle in Header */
+.header-title-block {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  text-align: left;
+}
+
+.header-page-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--color-text-primary, #172033);
+  line-height: 1.25;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-page-subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--color-text-secondary, #64748b);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* =====================================================
+   RIGHT: CONTROLS (BELL & USER)
+===================================================== */
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.header-popup-wrapper {
+  position: relative;
+}
+
+/* Notification Bell */
+.header-bell-btn {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  background-color: var(--color-surface, #ffffff);
+  color: var(--color-text-secondary, #475569);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  padding: 0;
+}
+
+.header-bell-btn:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+  color: var(--color-text-primary, #172033);
+}
+
+.header-bell-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 1px;
+}
+
+.header-bell-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background-color: var(--color-danger, #dc2626);
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  box-sizing: border-box;
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.4);
+}
+
+/* User Profile in Header */
+.header-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  font-family: inherit;
+}
+
+.header-user-btn:hover {
+  background-color: #f1f5f9;
+}
+
+.header-user-btn:focus-visible {
+  outline: 2px solid var(--color-primary, #2563eb);
+  outline-offset: 1px;
+}
+
+.header-user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1d4ed8, #0ea5e9);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+}
+
+.header-user-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  line-height: 1.25;
+}
+
+.header-user-name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-text-primary, #172033);
+}
+
+.header-user-role {
+  font-size: 11.5px;
+  color: var(--color-text-secondary, #64748b);
+}
+
+/* =====================================================
+   DROPDOWNS
+===================================================== */
+
+.header-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background-color: #ffffff;
+  border-radius: 12px;
+  border: 1px solid var(--color-border, #e2e8f0);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+  z-index: 1000;
+  box-sizing: border-box;
+  animation: headerDropdownFade 0.15s ease;
+}
+
+@keyframes headerDropdownFade {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Profile Dropdown Menu */
+.header-profile-menu {
+  width: 220px;
+  padding: 6px;
+}
+
+.header-profile-menu__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 4px;
+}
+
+.header-profile-menu__avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary, #2563eb);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.header-profile-menu__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary, #172033);
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color 0.15s ease;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.header-profile-menu__item:hover {
+  background-color: #f1f5f9;
+}
+
+.header-profile-menu__item.logout {
+  color: var(--color-danger, #dc2626);
+}
+
+.header-profile-menu__item.logout:hover {
+  background-color: rgba(220, 38, 38, 0.08);
+}
+
+/* Notifications Dropdown */
+.header-notifications-menu {
+  width: 380px;
+  max-width: 90vw;
+  max-height: 480px;
+  display: flex;
+  flex-direction: column;
+}
+
+.header-notifications-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-notifications-header b {
+  font-size: 14px;
+  color: var(--color-text-primary, #172033);
+}
+
+.header-notifications-header small {
+  display: block;
+  font-size: 11px;
+  color: var(--color-text-secondary, #64748b);
+  margin-top: 2px;
+}
+
+.header-notifications-tabs {
+  display: flex;
+  gap: 12px;
+  padding: 6px 16px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+}
+
+.header-notifications-tab-btn {
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.header-notifications-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 340px;
+}
+
+.header-notification-item {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f8fafc;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  transition: background-color 0.15s ease;
+}
+
+.header-notification-item:hover {
+  background-color: #f8fafc;
+}
+
+.notification-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.notification-dot.orange {
+  background-color: var(--color-warning, #d97706);
+}
+
+.notification-dot.blue {
+  background-color: var(--color-primary, #2563eb);
+}
+
+/* =====================================================
+   RESPONSIVE
+===================================================== */
+
+@media (max-width: 768px) {
+  .header {
+    padding: 0 16px;
+  }
+
+  .header-page-title {
+    font-size: 17px;
+  }
+
+  .header-page-subtitle {
+    display: none;
+  }
+
+  .header-user-text {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .header-page-title {
+    font-size: 15px;
+  }
+}
+

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "../ui/Icon";
+import { parseJwt, getAccessToken } from "../../services/authService";
 import {
   getNotifications,
   getNotificationStats,
@@ -7,6 +8,7 @@ import {
   markAllNotificationsRead,
   clearReadNotifications,
 } from "../../services/notificationService";
+import "./Header.css";
 
 function formatRelativeTime(dateStr) {
   if (!dateStr) return "Just now";
@@ -26,13 +28,81 @@ function formatRelativeTime(dateStr) {
   }
 }
 
+function getInitialUserInfo() {
+  try {
+    const token = getAccessToken();
+    if (token) {
+      const decoded = parseJwt(token);
+      if (decoded) {
+        const rawUsername =
+          decoded.username ||
+          (decoded.sub && isNaN(Number(decoded.sub)) ? decoded.sub : "Admin");
+        const rawRole = decoded.role || "Administrator";
+        return {
+          name: rawUsername.charAt(0).toUpperCase() + rawUsername.slice(1),
+          role: rawRole.charAt(0).toUpperCase() + rawRole.slice(1),
+          initial: rawUsername.charAt(0).toUpperCase(),
+        };
+      }
+    }
+  } catch {
+    // Fallback
+  }
+  return {
+    name: "Admin",
+    role: "Administrator",
+    initial: "A",
+  };
+}
+
+const PAGE_CONFIG = {
+  dashboard: {
+    title: "Dashboard",
+    subtitle: "Monitor and manage all laboratory computers and active alerts.",
+  },
+  computers: {
+    title: "Computer List",
+    subtitle: "View and manage all lab computers.",
+  },
+  details: {
+    title: "Computer Details",
+    subtitle: "Complete computer telemetry, hardware specifications, and system status.",
+  },
+  software: {
+    title: "Software Inventory",
+    subtitle: "View applications installed on laboratory computers.",
+  },
+  issues: {
+    title: "Issue Management",
+    subtitle: "Monitor and manage problems reported by laboratory computers.",
+  },
+  maintenance: {
+    title: "Maintenance Records",
+    subtitle: "Schedule, track, and manage computer maintenance and servicing activities.",
+  },
+  reports: {
+    title: "Reports & Analytics",
+    subtitle: "Generate, inspect, and export system metrics, telemetry, and administrative logs.",
+  },
+  audit: {
+    title: "Audit Logs",
+    subtitle: "Complete traceability and security audit trail for all operations across the laboratory.",
+  },
+  settings: {
+    title: "Settings",
+    subtitle: "Configure laboratory metadata, telemetry thresholds, notification alerts, and client agent parameters.",
+  },
+  users: {
+    title: "User & Role Management",
+    subtitle: "Manage SLMS user accounts, system roles, and fine-grained access control matrices.",
+  },
+};
+
 function Header({
   active,
   navItems,
   sidebarOpen,
   setSidebarOpen,
-  search,
-  setSearch,
   bellOpen,
   setBellOpen,
   profileOpen,
@@ -52,6 +122,11 @@ function Header({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [activeFilter, setActiveFilter] = useState("all"); // 'all' or 'unread'
+
+  const bellWrapperRef = useRef(null);
+  const profileWrapperRef = useRef(null);
+
+  const [userInfo] = useState(getInitialUserInfo);
 
   const fetchNotificationData = useCallback(async () => {
     try {
@@ -119,6 +194,22 @@ function Header({
     };
   }, []);
 
+  // Close dropdowns on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (bellWrapperRef.current && !bellWrapperRef.current.contains(event.target)) {
+        setBellOpen(false);
+      }
+      if (profileWrapperRef.current && !profileWrapperRef.current.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [setBellOpen, setProfileOpen]);
+
   const handleMarkRead = async (id, e) => {
     if (e) e.stopPropagation();
     try {
@@ -165,112 +256,110 @@ function Header({
 
   const getDotClass = (severity) => {
     const s = (severity || "").toLowerCase();
-    if (s === "critical") return "notification-dot orange";
-    if (s === "warning") return "notification-dot orange";
+    if (s === "critical" || s === "warning") return "notification-dot orange";
     return "notification-dot blue";
+  };
+
+  const currentPage = PAGE_CONFIG[active] || {
+    title: navItems?.find((x) => x[2] === active)?.[1] || "SLMS",
+    subtitle: "",
   };
 
   return (
     <header className="header">
-      <div className="header-title">
-        {/* MENU */}
+      {/* Left Area: Collapse Toggle & Page Heading */}
+      <div className="header-left">
         <button
-          className="menu"
+          type="button"
+          className="header-menu-btn"
           onClick={() => setSidebarOpen((prev) => !prev)}
           title={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+          aria-label={sidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
         >
-          <Icon type="menu" size={25} />
+          <Icon type="menu" size={20} />
         </button>
 
-        {/* PAGE TITLE */}
-        <h1>
-          {active === "computers"
-            ? "Computer List"
-            : navItems.find((x) => x[2] === active)?.[1] || "SLMS"}
-        </h1>
+        <div className="header-title-block">
+          <h1 className="header-page-title">{currentPage.title}</h1>
+          {currentPage.subtitle && (
+            <p className="header-page-subtitle">{currentPage.subtitle}</p>
+          )}
+        </div>
       </div>
 
+      {/* Right Area: Notification Bell & User Profile */}
       <div className="header-right">
-        {/* SEARCH */}
-        <div className="header-search">
-          <input
-            placeholder="Search computers..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <Icon type="search" size={19} />
-        </div>
-
-        {/* NOTIFICATION */}
-        <div className="header-popup-wrapper">
+        {/* Notification Bell */}
+        <div className="header-popup-wrapper" ref={bellWrapperRef}>
           <button
-            className="bell"
+            type="button"
+            className="header-bell-btn"
             onClick={() => {
               const nextState = !bellOpen;
               setBellOpen(nextState);
-              setFilterOpen(false);
+              if (setFilterOpen) setFilterOpen(false);
               setProfileOpen(false);
               if (nextState) {
                 fetchNotificationData();
               }
             }}
             title="Notifications & Alerts"
+            aria-label="Notifications & Alerts"
+            aria-expanded={bellOpen}
           >
-            <Icon type="bell" size={24} />
-            {stats.unread > 0 && <span>{stats.unread > 99 ? "99+" : stats.unread}</span>}
+            <Icon type="bell" size={20} />
+            {stats.unread > 0 && (
+              <span className="header-bell-badge">
+                {stats.unread > 99 ? "99+" : stats.unread}
+              </span>
+            )}
           </button>
 
           {bellOpen && (
-            <div
-              className="slms-dropdown notification-dropdown"
-              style={{
-                minWidth: "360px",
-                maxWidth: "420px",
-                maxHeight: "480px",
-                overflowY: "auto",
-              }}
-            >
-              {/* DROPDOWN HEADING */}
-              <div className="dropdown-heading" style={{ padding: "14px 16px" }}>
+            <div className="header-dropdown header-notifications-menu" role="dialog" aria-label="Notifications">
+              {/* Dropdown Header */}
+              <div className="header-notifications-header">
                 <div>
-                  <b>Notifications & Alerts</b>
-                  <small style={{ display: "block", color: "#8b949e", fontSize: "11px" }}>
-                    {stats.unread > 0 ? `${stats.unread} unread alert${stats.unread === 1 ? "" : "s"}` : "All alerts caught up"}
+                  <b>Notifications &amp; Alerts</b>
+                  <small>
+                    {stats.unread > 0
+                      ? `${stats.unread} unread alert${stats.unread === 1 ? "" : "s"}`
+                      : "All alerts caught up"}
                   </small>
                 </div>
 
                 <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
                   {stats.unread > 0 && (
                     <button
+                      type="button"
                       onClick={handleMarkAllRead}
                       style={{
-                        background: "rgba(59, 130, 246, 0.15)",
-                        border: "1px solid rgba(59, 130, 246, 0.3)",
-                        color: "#60a5fa",
-                        borderRadius: "4px",
-                        padding: "3px 7px",
+                        background: "rgba(37, 99, 235, 0.1)",
+                        border: "1px solid rgba(37, 99, 235, 0.25)",
+                        color: "#2563eb",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
                         fontSize: "11px",
                         fontWeight: "600",
                         cursor: "pointer",
                       }}
-                      title="Mark all as read"
                     >
                       Read All
                     </button>
                   )}
                   {notifications.some((n) => n.is_read) && (
                     <button
+                      type="button"
                       onClick={handleClearRead}
                       style={{
-                        background: "rgba(255, 255, 255, 0.05)",
-                        border: "1px solid rgba(255, 255, 255, 0.12)",
-                        color: "#8b949e",
-                        borderRadius: "4px",
-                        padding: "3px 7px",
+                        background: "#f1f5f9",
+                        border: "1px solid #e2e8f0",
+                        color: "#64748b",
+                        borderRadius: "6px",
+                        padding: "3px 8px",
                         fontSize: "11px",
                         cursor: "pointer",
                       }}
-                      title="Clear read notifications"
                     >
                       Clear
                     </button>
@@ -278,198 +367,188 @@ function Header({
                 </div>
               </div>
 
-              {/* FILTER TABS */}
-              <div
-                style={{
-                  display: "flex",
-                  borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-                  padding: "0 16px 8px",
-                  gap: "12px",
-                  fontSize: "12px",
-                }}
-              >
+              {/* Filter Tabs */}
+              <div className="header-notifications-tabs">
                 <button
+                  type="button"
+                  className="header-notifications-tab-btn"
                   onClick={() => setActiveFilter("all")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: "4px 0",
-                    color: activeFilter === "all" ? "#3b82f6" : "#8b949e",
+                    color: activeFilter === "all" ? "#2563eb" : "#64748b",
                     fontWeight: activeFilter === "all" ? "600" : "400",
-                    borderBottom: activeFilter === "all" ? "2px solid #3b82f6" : "2px solid transparent",
-                    cursor: "pointer",
+                    borderBottom: activeFilter === "all" ? "2px solid #2563eb" : "2px solid transparent",
                   }}
                 >
                   All ({notifications.length})
                 </button>
                 <button
+                  type="button"
+                  className="header-notifications-tab-btn"
                   onClick={() => setActiveFilter("unread")}
                   style={{
-                    background: "none",
-                    border: "none",
-                    padding: "4px 0",
-                    color: activeFilter === "unread" ? "#3b82f6" : "#8b949e",
+                    color: activeFilter === "unread" ? "#2563eb" : "#64748b",
                     fontWeight: activeFilter === "unread" ? "600" : "400",
-                    borderBottom: activeFilter === "unread" ? "2px solid #3b82f6" : "2px solid transparent",
-                    cursor: "pointer",
+                    borderBottom: activeFilter === "unread" ? "2px solid #2563eb" : "2px solid transparent",
                   }}
                 >
                   Unread ({stats.unread})
                 </button>
               </div>
 
-              {/* BODY LIST */}
-              {loading && notifications.length === 0 ? (
-                <div style={{ padding: "24px 16px", textAlign: "center", color: "#8b949e", fontSize: "13px" }}>
-                  Loading alerts...
-                </div>
-              ) : error && notifications.length === 0 ? (
-                <div style={{ padding: "20px 16px", textAlign: "center", color: "#ef4444", fontSize: "13px" }}>
-                  <span>⚠ {error}</span>
-                  <button
-                    onClick={fetchNotificationData}
-                    style={{
-                      display: "block",
-                      margin: "8px auto 0",
-                      background: "transparent",
-                      border: "1px solid rgba(239, 68, 68, 0.3)",
-                      color: "#ef4444",
-                      borderRadius: "4px",
-                      padding: "2px 8px",
-                      fontSize: "11px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : filteredNotifications.length > 0 ? (
-                filteredNotifications.map((notif) => {
-                  const compName = notif.computer_hostname || `PC-${notif.computer_id}`;
-                  return (
-                    <div
-                      key={notif.id}
-                      className="notification-item"
+              {/* Notification List */}
+              <div className="header-notifications-list">
+                {loading && notifications.length === 0 ? (
+                  <div style={{ padding: "24px 16px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                    Loading alerts...
+                  </div>
+                ) : error && notifications.length === 0 ? (
+                  <div style={{ padding: "20px 16px", textAlign: "center", color: "#dc2626", fontSize: "13px" }}>
+                    <span>⚠ {error}</span>
+                    <button
+                      type="button"
+                      onClick={fetchNotificationData}
                       style={{
-                        padding: "10px 16px",
-                        borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
-                        opacity: notif.is_read ? 0.75 : 1,
-                        background: notif.is_read ? "transparent" : "rgba(59, 130, 246, 0.04)",
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: "10px",
-                        cursor: "default",
+                        display: "block",
+                        margin: "8px auto 0",
+                        background: "transparent",
+                        border: "1px solid rgba(220, 38, 38, 0.3)",
+                        color: "#dc2626",
+                        borderRadius: "4px",
+                        padding: "2px 8px",
+                        fontSize: "11px",
+                        cursor: "pointer",
                       }}
                     >
-                      <span className={getDotClass(notif.severity)} style={{ marginTop: "4px" }} />
+                      Retry
+                    </button>
+                  </div>
+                ) : filteredNotifications.length > 0 ? (
+                  filteredNotifications.map((notif) => {
+                    const compName = notif.computer_hostname || `PC-${notif.computer_id}`;
+                    return (
+                      <div
+                        key={notif.id}
+                        className="header-notification-item"
+                        style={{
+                          opacity: notif.is_read ? 0.7 : 1,
+                          backgroundColor: notif.is_read ? "transparent" : "rgba(37, 99, 235, 0.03)",
+                        }}
+                      >
+                        <span className={getDotClass(notif.severity)} />
 
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <b style={{ fontSize: "13px", color: notif.is_read ? "#c9d1d9" : "#f0f6fc" }}>
-                            {compName} • {notif.category?.toUpperCase()}
-                          </b>
-                          <small style={{ color: "#718096", fontSize: "11px" }}>
-                            {formatRelativeTime(notif.created_at)}
-                          </small>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <b style={{ fontSize: "12.5px", color: notif.is_read ? "#475569" : "#172033" }}>
+                              {compName} • {notif.category?.toUpperCase()}
+                            </b>
+                            <small style={{ color: "#94a3b8", fontSize: "11px" }}>
+                              {formatRelativeTime(notif.created_at)}
+                            </small>
+                          </div>
+
+                          <p
+                            style={{
+                              margin: "3px 0 0",
+                              fontSize: "12px",
+                              color: "#64748b",
+                              lineHeight: "1.4",
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {notif.message}
+                          </p>
                         </div>
 
-                        <p
-                          style={{
-                            margin: "4px 0 0",
-                            fontSize: "12px",
-                            color: "#8b949e",
-                            lineHeight: "1.4",
-                            wordBreak: "break-word",
-                          }}
-                        >
-                          {notif.message}
-                        </p>
+                        {!notif.is_read && (
+                          <button
+                            type="button"
+                            onClick={(e) => handleMarkRead(notif.id, e)}
+                            title="Mark as read"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: "#2563eb",
+                              padding: "2px 4px",
+                              cursor: "pointer",
+                              fontSize: "13px",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            ✓
+                          </button>
+                        )}
                       </div>
-
-                      {!notif.is_read && (
-                        <button
-                          onClick={(e) => handleMarkRead(notif.id, e)}
-                          title="Mark as read"
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            color: "#3b82f6",
-                            padding: "2px 4px",
-                            cursor: "pointer",
-                            fontSize: "12px",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          ✓
-                        </button>
-                      )}
-                    </div>
-                  );
-                })
-              ) : (
-                <div style={{ padding: "30px 16px", textAlign: "center", color: "#8b949e", fontSize: "13px" }}>
-                  {activeFilter === "unread" ? "No unread notifications" : "No notifications found"}
-                </div>
-              )}
+                    );
+                  })
+                ) : (
+                  <div style={{ padding: "30px 16px", textAlign: "center", color: "#64748b", fontSize: "13px" }}>
+                    {activeFilter === "unread" ? "No unread notifications" : "No notifications found"}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* ADMIN */}
-        <div className="header-popup-wrapper">
+        {/* User Profile in Header */}
+        <div className="header-popup-wrapper" ref={profileWrapperRef}>
           <button
-            className="admin"
+            type="button"
+            className="header-user-btn"
             onClick={() => {
               setProfileOpen((p) => !p);
               setBellOpen(false);
-              setFilterOpen(false);
+              if (setFilterOpen) setFilterOpen(false);
             }}
+            aria-expanded={profileOpen}
+            aria-haspopup="true"
           >
-            <div className="avatar">
-              <Icon type="users" size={22} />
+            <div className="header-user-avatar" aria-hidden="true">
+              {userInfo.initial}
             </div>
 
-            <div>
-              <b>Admin</b>
-              <small>Administrator</small>
+            <div className="header-user-text">
+              <span className="header-user-name">{userInfo.name}</span>
+              <span className="header-user-role">{userInfo.role}</span>
             </div>
           </button>
 
           {profileOpen && (
-            <div className="slms-dropdown admin-dropdown">
-              <div className="admin-dropdown-header">
-                <div className="admin-big-avatar">
-                  <Icon type="users" size={24} />
+            <div className="header-dropdown header-profile-menu" role="menu">
+              <div className="header-profile-menu__header">
+                <div className="header-profile-menu__avatar">
+                  {userInfo.initial}
                 </div>
-
                 <div>
-                  <b>Admin</b>
-                  <small>Administrator</small>
+                  <div className="header-user-name">{userInfo.name}</div>
+                  <div className="header-user-role">{userInfo.role}</div>
                 </div>
               </div>
 
-              <div className="dropdown-divider" />
-
               <button
-                className="dropdown-action"
+                type="button"
+                className="header-profile-menu__item"
+                role="menuitem"
                 onClick={() => {
                   navigate("settings");
                   setProfileOpen(false);
                 }}
               >
-                <Icon type="settings" size={18} />
-                Settings
+                <Icon type="settings" size={16} />
+                <span>Settings</span>
               </button>
 
               <button
-                className="dropdown-action"
+                type="button"
+                className="header-profile-menu__item logout"
+                role="menuitem"
                 onClick={() => {
-                  logout();
                   setProfileOpen(false);
+                  logout();
                 }}
               >
-                <Icon type="logout" size={18} />
-                Logout
+                <Icon type="logout" size={16} />
+                <span>Logout</span>
               </button>
             </div>
           )}

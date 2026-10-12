@@ -89,15 +89,8 @@ function Dashboard() {
 
   return (
     <div className="content">
-      {/* PAGE HEADER */}
-      <div className="page-top">
-        <div>
-          <h2>Dashboard</h2>
-          <p>
-            Monitor and manage all laboratory computers and active alerts.
-          </p>
-        </div>
-
+      {/* PAGE ACTIONS */}
+      <div className="page-top" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
         <div className="top-actions">
           <button
             className="refresh"

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import "../styles/globals.css";
+import "../components/layout/AppLayout.css";
 import {
   login,
   logout,
@@ -49,8 +50,6 @@ function App() {
   const [selectedComputer, setSelectedComputer] = useState(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
-
-  const [search, setSearch] = useState("");
 
   const [bellOpen, setBellOpen] = useState(false);
 
@@ -206,10 +205,18 @@ function App() {
           : "sidebar-collapsed"
       }`}
     >
+      {/* Mobile drawer backdrop */}
+      <div
+        className="sidebar-backdrop"
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
+
       <Sidebar
         active={active}
         navigate={navigate}
         logout={handleLogout}
+        sidebarOpen={sidebarOpen}
       />
 
       <main className="main">
@@ -219,8 +226,6 @@ function App() {
           navItems={navItems}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}
-          search={search}
-          setSearch={setSearch}
           bellOpen={bellOpen}
           setBellOpen={setBellOpen}
           profileOpen={profileOpen}
