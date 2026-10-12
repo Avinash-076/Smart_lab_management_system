@@ -1,64 +1,28 @@
-import Brand from "../components/Brand";
-import FeatureCard from "../components/FeatureCard";
+import LoginBrandPanel from "../components/LoginBrandPanel";
 import LoginForm from "../components/LoginForm";
-import SystemIllustration from "../components/SystemIllustration";
 import "./Login.css";
 
 function LoginPage({ onLogin }) {
-
   return (
     <main className="login-page">
+      {/* Left Branding Panel */}
+      <LoginBrandPanel />
 
-      {/* LEFT SIDE */}
+      {/* Right Authentication Area */}
+      <section className="login-auth">
+        {/* Ambient background decoration */}
+        <div className="login-auth__bg-shape" aria-hidden="true" />
 
-      <section className="left-panel">
-
-        <Brand />
-
-
-        <div className="welcome-section">
-
-          <h2>
-            Welcome <span>Back!</span>
-          </h2>
-
-          <p>
-            Sign in to access your lab dashboard and
-            <br />
-            manage systems efficiently.
-          </p>
-
-        </div>
-
-
-        <SystemIllustration />
-
-
-        <FeatureCard />
-
-      </section>
-
-
-      {/* RIGHT SIDE */}
-
-      <section className="right-panel">
-
-        <div className="login-card">
-
+        {/* Centered Login Card Container */}
+        <div className="login-auth__center">
           <LoginForm onLogin={onLogin} />
-
         </div>
 
+        {/* Footer */}
+        <footer className="login-auth__footer">
+          &copy; 2025 SLMS - Smart Lab Management System. All rights reserved.
+        </footer>
       </section>
-
-
-      {/* FOOTER */}
-
-      <footer>
-        © 2025 SLMS - Smart Lab Management System.
-        All rights reserved.
-      </footer>
-
     </main>
   );
 }

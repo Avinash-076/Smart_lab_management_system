@@ -1,0 +1,307 @@
+/* =====================================================
+   LOGIN BRAND PANEL
+===================================================== */
+
+.login-brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 48px 52px 36px;
+  background: linear-gradient(140deg,
+      #0a224e 0%,
+      var(--color-brand, #103b82) 48%,
+      #0c2a5e 100%);
+  color: #ffffff;
+  overflow: hidden;
+  min-height: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Ambient glow accents */
+.login-brand__glow-top {
+  position: absolute;
+  top: -100px;
+  right: -60px;
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+      rgba(14, 165, 233, 0.2) 0%,
+      rgba(37, 99, 235, 0.08) 50%,
+      transparent 70%);
+  pointer-events: none;
+}
+
+.login-brand__glow-bottom {
+  position: absolute;
+  bottom: -120px;
+  left: -80px;
+  width: 440px;
+  height: 440px;
+  border-radius: 50%;
+  background: radial-gradient(circle,
+      rgba(14, 165, 233, 0.14) 0%,
+      rgba(16, 59, 130, 0.18) 50%,
+      transparent 75%);
+  pointer-events: none;
+}
+
+/* Unified Left-Aligned Container */
+.login-brand__container {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  max-width: 500px;
+  width: 100%;
+  gap: 34px;
+}
+
+/* Brand Header */
+.login-brand__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  text-align: left;
+}
+
+.login-brand__logo-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  background: linear-gradient(135deg,
+      rgba(37, 99, 235, 0.8) 0%,
+      rgba(14, 165, 233, 0.7) 100%);
+  border: 1.5px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 4px 14px rgba(10, 34, 78, 0.4);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+
+.login-brand__logo-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.login-brand__title {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  line-height: 1.1;
+  text-align: left;
+}
+
+.login-brand__subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.82);
+  margin-top: 3px;
+  letter-spacing: 0.1px;
+  text-align: left;
+}
+
+/* Hero Headline */
+.login-brand__hero {
+  margin: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.login-brand__headline {
+  margin: 0 0 16px;
+  font-size: 42px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+  color: #ffffff;
+  text-align: left;
+}
+
+.login-brand__accent {
+  color: var(--color-accent, #0ea5e9);
+  display: inline-block;
+}
+
+.login-brand__description {
+  margin: 0;
+  font-size: 16.5px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.85);
+  max-width: 460px;
+  text-align: left;
+}
+
+/* Feature List */
+.login-brand__features {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+
+.login-brand__feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  text-align: left;
+}
+
+.login-brand__feature-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--color-accent, #0ea5e9);
+  flex-shrink: 0;
+  backdrop-filter: blur(4px);
+  margin-top: 2px;
+}
+
+.login-brand__feature-content {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.login-brand__feature-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.login-brand__feature-desc {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 420px;
+  text-align: left;
+}
+
+/* Subtle Lab Monitor Decorative Graphic */
+.login-brand__graphic {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  height: 160px;
+  pointer-events: none;
+  opacity: 0.22;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.login-brand__graphic-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* =====================================================
+   RESPONSIVE (TABLET & MOBILE)
+===================================================== */
+
+@media (max-width: 1024px) {
+  .login-brand {
+    padding: 36px 34px 28px;
+  }
+
+  .login-brand__container {
+    max-width: 100%;
+    gap: 26px;
+  }
+
+  .login-brand__title {
+    font-size: 22px;
+  }
+
+  .login-brand__headline {
+    font-size: 34px;
+    margin-bottom: 12px;
+  }
+
+  .login-brand__description {
+    font-size: 15px;
+  }
+
+  .login-brand__feature-title {
+    font-size: 15.5px;
+  }
+
+  .login-brand__feature-desc {
+    font-size: 13.5px;
+  }
+
+  .login-brand__graphic {
+    width: 210px;
+    height: 120px;
+    opacity: 0.16;
+  }
+}
+
+@media (max-width: 860px) {
+  .login-brand {
+    padding: 30px 24px 24px;
+    min-height: auto;
+  }
+
+  .login-brand__container {
+    gap: 20px;
+  }
+
+  .login-brand__header {
+    margin: 0;
+  }
+
+  .login-brand__hero {
+    margin: 0;
+  }
+
+  .login-brand__headline {
+    font-size: 28px;
+    margin-bottom: 10px;
+  }
+
+  .login-brand__description {
+    font-size: 14px;
+  }
+
+  .login-brand__features {
+    gap: 16px;
+  }
+
+  .login-brand__feature-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .login-brand__feature-title {
+    font-size: 15px;
+  }
+
+  .login-brand__feature-desc {
+    font-size: 13px;
+  }
+
+  .login-brand__graphic {
+    display: none;
+  }
+}
