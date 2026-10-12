@@ -9,7 +9,7 @@ import {
   getAccessToken,
   getRefreshToken,
   isTokenExpired,
-} from "../services/api";
+} from "../services/authService";
 
 import LoginPage from "../features/auth/pages/LoginPage";
 import Sidebar from "../components/layout/Sidebar";

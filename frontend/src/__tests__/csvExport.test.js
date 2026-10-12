@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { downloadReportCSV, setTokens, clearTokens } from "../services/api";
+import { downloadReportCSV } from "../services/reportService";
+import { setTokens, clearTokens } from "../services/api";
 
 function createFakeJwt(payload) {
   const header = btoa(JSON.stringify({ alg: "HS256", typ: "JWT" }));

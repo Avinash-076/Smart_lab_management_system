@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { getComputers, getNotifications } from "../../services/api";
+import { getComputers } from "../../services/computerService";
+import { getNotifications } from "../../services/notificationService";
 import StatCard from "../../components/ui/StatCard";
 import Icon from "../../components/ui/Icon";
 

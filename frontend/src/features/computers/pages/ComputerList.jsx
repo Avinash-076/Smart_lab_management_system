@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getComputers } from "../../../services/api";
+import { getComputers } from "../../../services/computerService";
 import Icon from "../../../components/ui/Icon";
 import StatCard from "../../../components/ui/StatCard";
 import ComputerFilters from "../components/ComputerFilters";

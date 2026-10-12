@@ -9,7 +9,7 @@ import {
   getPermissions,
   updateRolePermissions,
   getCurrentUserProfile,
-} from "../../../services/api";
+} from "../../../services/userService";
 
 function UserRoleManagement() {
   // Navigation tabs

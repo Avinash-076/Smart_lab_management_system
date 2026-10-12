@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getComputer,
   getComputerMetrics,
-  getComputerSoftware,
-  getComputerProcesses,
   getComputerUsage,
+} from "../../../services/computerService";
+import { getComputerSoftware } from "../../../services/softwareService";
+import { getComputerProcesses } from "../../../services/processService";
+import {
   issueCommand,
   getComputerCommands,
   cancelCommand,
-} from "../../../services/api";
+} from "../../../services/commandService";
 import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
 import MetricChart from "../components/MetricChart";

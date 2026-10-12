@@ -6,7 +6,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
   clearReadNotifications,
-} from "../../services/api";
+} from "../../services/notificationService";
 
 function formatRelativeTime(dateStr) {
   if (!dateStr) return "Just now";

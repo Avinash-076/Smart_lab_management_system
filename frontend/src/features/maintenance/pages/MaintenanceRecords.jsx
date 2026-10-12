@@ -1,13 +1,13 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { getComputers } from "../../../services/computerService";
 import {
   getMaintenanceRecords,
   getMaintenanceStats,
-  getComputers,
   createMaintenanceRecord,
   updateMaintenanceRecord,
   completeMaintenanceRecord,
   deleteMaintenanceRecord,
-} from "../../../services/api";
+} from "../../../services/maintenanceService";
 import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
 

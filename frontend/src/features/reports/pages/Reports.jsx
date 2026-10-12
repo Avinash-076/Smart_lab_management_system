@@ -11,7 +11,7 @@ import {
   getReportOverview,
   getSoftwareReport,
   getUtilizationReport,
-} from "../../../services/api";
+} from "../../../services/reportService";
 
 function Reports() {
   const [reportType, setReportType] = useState("utilization");

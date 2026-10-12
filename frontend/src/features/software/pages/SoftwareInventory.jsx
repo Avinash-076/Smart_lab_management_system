@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { getComputers, getComputerSoftware } from "../../../services/api";
+import { getComputers } from "../../../services/computerService";
+import { getComputerSoftware } from "../../../services/softwareService";
 import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
 

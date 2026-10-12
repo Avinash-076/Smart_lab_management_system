@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
-import { getAuditLogs, getAuditLogDetails } from "../../../services/api";
+import { getAuditLogs, getAuditLogDetails } from "../../../services/auditService";
 
 function AuditLogs() {
   const [logs, setLogs] = useState([]);

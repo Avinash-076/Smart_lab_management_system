@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Icon from "../../../components/ui/Icon";
-import { getSettings, updateSettings, resetSettings } from "../../../services/api";
+import { getSettings, updateSettings, resetSettings } from "../../../services/settingService";
 
 // Reusable Toggle Component
 function Toggle({ checked, onChange, disabled }) {
