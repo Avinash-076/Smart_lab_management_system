@@ -9,6 +9,7 @@ from app.database import Base
 if TYPE_CHECKING:
     from app.models.client_status import ClientStatus
     from app.models.agent_credential import AgentCredential
+    from app.models.computer_hardware import ComputerHardware
 
 class Computer(Base):
     __tablename__ = "computers"
@@ -61,6 +62,14 @@ class Computer(Base):
         back_populates="computer",
         cascade="all, delete-orphan",
         uselist=False
+    )
+
+    hardware: Mapped["ComputerHardware | None"] = relationship(
+        "ComputerHardware",
+        back_populates="computer",
+        cascade="all, delete-orphan",
+        uselist=False,
+        lazy="selectin",
     )
 
     @property

@@ -1,0 +1,339 @@
+/* =====================================================
+   COMPUTER SUMMARY CARD COMPONENT STYLES
+   Matches the reference image visual hierarchy and layout
+===================================================== */
+
+.computer-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 24px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
+}
+
+/* =====================================================
+   LEFT SECTION: Computer Identity
+===================================================== */
+.summary-identity-section {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  min-width: 380px;
+  flex: 0 0 auto;
+}
+
+.summary-identity-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.summary-device-illu {
+  width: 130px;
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.summary-device-svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 10px rgba(15, 23, 42, 0.12));
+}
+
+.summary-status-pill-container {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.summary-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.summary-status-pill.online {
+  background-color: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.summary-status-pill.offline {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.summary-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  box-shadow: 0 0 6px currentColor;
+}
+
+/* Identity Details (Title + key-value list) */
+.summary-identity-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.summary-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.summary-computer-name {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.2;
+  font-family: var(--heading, 'Poppins', sans-serif);
+  letter-spacing: -0.02em;
+}
+
+.summary-lab-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background-color: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #dbeafe;
+}
+
+.summary-specs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.summary-spec-row {
+  display: flex;
+  align-items: center;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.summary-spec-label {
+  width: 95px;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.summary-spec-colon {
+  width: 14px;
+  color: #94a3b8;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.summary-spec-value {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.summary-spec-value.summary-mac {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+/* =====================================================
+   RIGHT SECTION: 4 Resource Metric Cards Grid
+===================================================== */
+.summary-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  flex: 1;
+}
+
+.summary-metric-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 124px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.summary-metric-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.metric-icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.metric-icon-blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.metric-icon-green {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.metric-icon-orange {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.metric-icon-purple {
+  background-color: #faf5ff;
+  color: #9333ea;
+}
+
+.metric-text-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  line-height: 1.2;
+}
+
+.metric-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+  font-family: var(--heading, 'Poppins', sans-serif);
+  margin-top: 2px;
+}
+
+.metric-value-uptime {
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Trend Sparkline & Progress Bar */
+.metric-visual {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.metric-sparkline {
+  width: 100%;
+  height: 24px;
+  overflow: visible;
+}
+
+.summary-metric-card:not(.metric-uptime) .metric-sparkline {
+  display: none;
+}
+
+.metric-uptime .metric-visual {
+  margin-top: 14px;
+}
+
+.metric-progress-track {
+  flex: 1;
+  height: 6px;
+  background-color: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.metric-progress-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.metric-bar-blue {
+  background-color: #2563eb;
+}
+
+.metric-bar-green {
+  background-color: #16a34a;
+}
+
+.metric-bar-orange {
+  background-color: #ea580c;
+}
+
+.metric-progress-number {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* =====================================================
+   RESPONSIVE BEHAVIOR
+===================================================== */
+@media (max-width: 1280px) {
+  .computer-summary-card {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 20px;
+  }
+
+  .summary-identity-section {
+    min-width: 100%;
+  }
+
+  .summary-metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .summary-identity-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .summary-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+}

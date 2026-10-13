@@ -16,6 +16,7 @@ from app.models.maintenance import MaintenanceRecord
 from app.models.software import Software
 from app.models.process import Process
 from app.models.app_setting import AppSetting
+from app.models.computer_hardware import ComputerHardware
 
 
 __all__ = [
@@ -37,4 +38,5 @@ __all__ = [
     "Software",
     "Process",
     "AppSetting",
+    "ComputerHardware",
 ]

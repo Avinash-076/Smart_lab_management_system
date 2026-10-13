@@ -1,0 +1,80 @@
+/* =====================================================
+   COMPUTER DETAILS TABS COMPONENT STYLES
+   Matches the 6 tabs design from the reference image
+===================================================== */
+
+.computer-details-tabs-bar {
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.computer-details-tabs-nav {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  min-width: max-content;
+}
+
+.details-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 6px 14px 6px;
+  background: transparent;
+  border: none;
+  font-family: var(--sans, 'Poppins', sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.15s ease;
+  white-space: nowrap;
+}
+
+.details-tab-btn:hover {
+  color: #1e293b;
+}
+
+.details-tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.details-tab-label {
+  line-height: 1;
+}
+
+.details-tab-btn.active {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.details-tab-btn.active .details-tab-icon {
+  color: #2563eb;
+}
+
+.details-tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background-color: #2563eb;
+  border-radius: 2px 2px 0 0;
+}
+
+@media (max-width: 768px) {
+  .computer-details-tabs-nav {
+    gap: 18px;
+  }
+
+  .details-tab-btn {
+    font-size: 13px;
+    padding: 10px 4px 12px 4px;
+  }
+}

@@ -1,0 +1,100 @@
+/* =====================================================
+   HARDWARE INFO CARD STYLES
+===================================================== */
+
+.hw-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hw-card:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.hw-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.hw-card-icon-box {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hw-icon-blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.hw-icon-green {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.hw-icon-orange {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.hw-icon-purple {
+  background-color: #faf5ff;
+  color: #9333ea;
+}
+
+.hw-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.hw-card-content {
+  flex: 1;
+}
+
+.hw-key-value-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hw-kv-row {
+  display: flex;
+  align-items: baseline;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.hw-kv-label {
+  width: 140px;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.hw-kv-colon {
+  width: 16px;
+  color: #94a3b8;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.hw-kv-value {
+  color: #1e293b;
+  font-weight: 600;
+  word-break: break-word;
+}

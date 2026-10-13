@@ -1,0 +1,71 @@
+/* =====================================================
+   HARDWARE INFO TAB STYLES
+   2-column responsive layout matching the reference image
+===================================================== */
+
+.hw-tab-container {
+  width: 100%;
+}
+
+.hw-columns-wrapper {
+  display: grid;
+  grid-template-columns: 58fr 42fr;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Left Column */
+.hw-col-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hw-left-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+/* Right Column */
+.hw-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.hw-right-top-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.hw-right-bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* Ensure equal height on the bottom mini cards across both columns */
+.hw-left-bottom-grid .hw-mini-card,
+.hw-right-bottom-grid .hw-mini-card {
+  height: 100%;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1380px) {
+  .hw-columns-wrapper {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 900px) {
+  .hw-left-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hw-right-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,35 @@
+/* =====================================================
+   NETWORK INFO CARD STYLES
+===================================================== */
+
+.hw-two-col-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.hw-sub-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.hw-sub-col .hw-kv-label {
+  width: 95px;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.hw-mono {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+@media (max-width: 640px) {
+  .hw-two-col-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}

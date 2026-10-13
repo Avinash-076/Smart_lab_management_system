@@ -3,6 +3,7 @@ import {
   getComputer,
   getComputerMetrics,
   getComputerUsage,
+  updateComputer,
 } from "../../../services/computerService";
 import { getComputerSoftware } from "../../../services/softwareService";
 import { getComputerProcesses } from "../../../services/processService";
@@ -11,9 +12,12 @@ import {
   getComputerCommands,
   cancelCommand,
 } from "../../../services/commandService";
-import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
 import MetricChart from "../components/MetricChart";
+import ComputerSummaryCard from "../components/ComputerSummaryCard";
+import ComputerDetailsTabs from "../components/ComputerDetailsTabs";
+import HardwareInfoTab from "../components/HardwareInfoTab";
+import EditComputerModal from "../components/EditComputerModal";
 import { useComputerWebSocket } from "../hooks/useComputerWebSocket";
 import "./ComputerDetails.css";
 
@@ -61,6 +65,8 @@ function ComputerDetails({ computer, onBack }) {
   const [latestMetric, setLatestMetric] = useState(null);
   const [loading, setLoading] = useState(Boolean(computerId));
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("hardware");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // Historical metrics state
   const [timeRange, setTimeRange] = useState("1h"); // '1h' | '6h' | '24h'
@@ -493,7 +499,7 @@ function ComputerDetails({ computer, onBack }) {
     });
   }, []);
 
-  const { wsStatus } = useComputerWebSocket(computerId, {
+  useComputerWebSocket(computerId, {
     onMetricUpdate: handleLiveMetric,
     onStatusUpdate: handleLiveStatus,
   });
@@ -640,37 +646,7 @@ function ComputerDetails({ computer, onBack }) {
   ===================================================== */
   const hostname = details.hostname || `PC-${details.id}`;
   const ip = details.ip_address || "—";
-  const mac = details.mac_address || "—";
-  const osName = details.os_name || "—";
-  const osVersion = details.os_version || "";
-  const fullOs = `${osName} ${osVersion}`.trim();
   const status = (details.status || "offline").toLowerCase();
-  const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
-  const isWindows = fullOs.toLowerCase().includes("windows");
-
-  // Current Metrics (Distinguish real 0% from null/Unavailable!)
-  const hasCpu = latestMetric && typeof latestMetric.cpu_usage === "number";
-  const hasRam = latestMetric && typeof latestMetric.ram_usage === "number";
-  const hasDisk = latestMetric && typeof latestMetric.disk_usage === "number";
-
-  const cpuText = hasCpu
-    ? `${latestMetric.cpu_usage.toFixed(1)}%`
-    : "Unavailable";
-  const ramText = hasRam
-    ? `${latestMetric.ram_usage.toFixed(1)}%`
-    : "Unavailable";
-  const diskText = hasDisk
-    ? `${latestMetric.disk_usage.toFixed(1)}%`
-    : "Unavailable";
-
-  const networkSentText =
-    latestMetric && typeof latestMetric.network_sent === "number"
-      ? `${latestMetric.network_sent.toFixed(1)} KB/s`
-      : "Unavailable";
-  const networkRecvText =
-    latestMetric && typeof latestMetric.network_received === "number"
-      ? `${latestMetric.network_received.toFixed(1)} KB/s`
-      : "Unavailable";
 
   const filteredSoftware = softwareList.filter((item) => {
     if (!softwareSearch.trim()) return true;
@@ -734,342 +710,122 @@ function ComputerDetails({ computer, onBack }) {
     .sort((a, b) => b.duration - a.duration)
     .slice(0, 5);
 
+  const hardware = details.hardware || {};
+  const uptimeText = (() => {
+    if (typeof hardware.uptime_seconds === "number" && hardware.uptime_seconds > 0) {
+      const days = Math.floor(hardware.uptime_seconds / 86400);
+      const hours = Math.floor((hardware.uptime_seconds % 86400) / 3600);
+      const mins = Math.floor((hardware.uptime_seconds % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h ${mins}m`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${mins}m`;
+    }
+    return status === "online" ? "Active" : "—";
+  })();
+
+  const handleSaveEdit = async (updatedComputer) => {
+    try {
+      await updateComputer(updatedComputer.id, {
+        hostname: updatedComputer.hostname,
+        ip_address: updatedComputer.ip_address,
+        mac_address: updatedComputer.mac_address,
+        os_name: updatedComputer.os_name,
+        os_version: updatedComputer.os_version || "1.0",
+      });
+      setDetails((prev) => ({ ...prev, ...updatedComputer }));
+      setIsEditModalOpen(false);
+    } catch (err) {
+      console.error("Failed to update computer:", err);
+      setDetails((prev) => ({ ...prev, ...updatedComputer }));
+      setIsEditModalOpen(false);
+    }
+  };
+
   return (
     <div className="content">
       {/* =================================================
-          PAGE HEADER
+          TOP ACTION BAR (Back to Computers, Refresh, Edit Details)
       ================================================= */}
-      <div className="page-top">
-        <div>
-          <div className="computer-details-breadcrumb">
-            <button
-              type="button"
-              className="computer-details-breadcrumb-link"
-              onClick={onBack}
-              title="Back to Computers"
-            >
-              Computers
-            </button>
-            <span className="computer-details-breadcrumb-sep">/</span>
-            <span className="computer-details-breadcrumb-current">{hostname}</span>
-          </div>
-          <h2>Computer Details</h2>
-          <p>System specifications and telemetry for {hostname}.</p>
-        </div>
+      <div className="details-top-actions-bar">
+        <button
+          type="button"
+          className="computer-details-back-btn"
+          onClick={onBack}
+          title="Return to Computers inventory"
+        >
+          <Icon type="arrow-left" size={16} />
+          Back to Computers
+        </button>
 
-        <div className="top-actions">
+        <div className="details-action-btns-group">
           <button
             type="button"
-            className="computer-details-back-btn"
-            onClick={onBack}
-            title="Return to Computers inventory"
-          >
-            <Icon type="arrow-left" size={16} />
-            Back to Computers
-          </button>
-
-          <button
-            type="button"
-            className="export"
+            className="details-btn-refresh"
             onClick={loadDetails}
             disabled={loading}
             title="Refresh computer information from backend"
           >
-            <Icon type="refresh" size={16} />
+            <Icon type="refresh" size={15} />
             Refresh
+          </button>
+          <button
+            type="button"
+            className="details-btn-edit"
+            onClick={() => setIsEditModalOpen(true)}
+            title="Edit computer details"
+          >
+            <Icon type="edit" size={15} />
+            Edit Details
           </button>
         </div>
       </div>
 
       {/* =================================================
-          SELECTED COMPUTER HEADER
+          COMPUTER SUMMARY CARD
       ================================================= */}
-      <div className="details-computer-header">
-        <div className="details-computer-title">
-          <div className="details-computer-icon">
-            <Icon type={isWindows ? "windows" : "computer"} size={30} />
-          </div>
-
-          <div>
-            <h2>{hostname}</h2>
-            <p>
-              ID #{details.id} • {ip} • {fullOs}
-            </p>
-          </div>
-        </div>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span className={`ws-badge ws-${wsStatus}`}>
-            <i />
-            {wsStatus === "connected" && "● Live"}
-            {wsStatus === "connecting" && "↻ Connecting"}
-            {wsStatus === "reconnecting" && "↻ Reconnecting"}
-            {wsStatus === "disconnected" && "○ Disconnected"}
-          </span>
-
-          <span className={`status ${status}`}>
-            <i />
-            {statusLabel}
-          </span>
-        </div>
-      </div>
-
-      {/* =================================================
-          CURRENT METRIC STAT CARDS
-      ================================================= */}
-      <div className="cards">
-        <StatCard
-          icon="computer"
-          title="CPU Usage"
-          number={cpuText}
-          footer={
-            hasCpu ? "Current processor usage" : "No metric data recorded"
-          }
-          type="blue"
-        />
-
-        <StatCard
-          icon="computer"
-          title="RAM Usage"
-          number={ramText}
-          footer={hasRam ? "Current memory usage" : "No metric data recorded"}
-          type="green"
-        />
-
-        <StatCard
-          icon="computer"
-          title="Disk Usage"
-          number={diskText}
-          footer={hasDisk ? "Storage utilization" : "No metric data recorded"}
-          type="orange"
-        />
-
-        <StatCard
-          icon={isWindows ? "windows" : "computer"}
-          title="Operating System"
-          number={osName}
-          footer={osVersion || "Standard"}
-          type="purple"
-        />
-      </div>
-
-      {/* =================================================
-          INFORMATION GRID
-      ================================================= */}
-      <div className="details-sections">
-        {/* SYSTEM INFORMATION */}
-        <div className="details-panel">
-          <div className="details-panel-header">
-            <h3>System Information</h3>
-          </div>
-
-          <div className="details-info-grid">
-            <div>
-              <span>Computer Name</span>
-              <strong>{hostname}</strong>
-            </div>
-
-            <div>
-              <span>Computer ID</span>
-              <strong>#{details.id}</strong>
-            </div>
-
-            <div>
-              <span>Operating System</span>
-              <strong>{fullOs || "—"}</strong>
-            </div>
-
-            <div>
-              <span>System Status</span>
-              <strong>{statusLabel}</strong>
-            </div>
-
-            <div>
-              <span>Last Seen</span>
-              <strong>{formatDateTime(details.last_seen)}</strong>
-            </div>
-
-            <div>
-              <span>Registered At</span>
-              <strong>{formatDateTime(details.registered_at)}</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* NETWORK INFORMATION */}
-        <div className="details-panel">
-          <div className="details-panel-header">
-            <h3>Network Information</h3>
-          </div>
-
-          <div className="details-info-grid">
-            <div>
-              <span>IP Address</span>
-              <strong>{ip}</strong>
-            </div>
-
-            <div>
-              <span>MAC Address</span>
-              <strong>
-                <code style={{ fontSize: "13px", color: "#1e293b" }}>{mac}</code>
-              </strong>
-            </div>
-
-            <div>
-              <span>Network Sent</span>
-              <strong>{networkSentText}</strong>
-            </div>
-
-            <div>
-              <span>Network Received</span>
-              <strong>{networkRecvText}</strong>
-            </div>
-
-            <div>
-              <span>Connection Status</span>
-              <strong>{statusLabel}</strong>
-            </div>
-
-            <div>
-              <span>Last Heartbeat</span>
-              <strong>{formatDateTime(details.last_seen)}</strong>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* =================================================
-          CURRENT HARDWARE UTILIZATION
-      ================================================= */}
-      <div className="details-panel disk-panel" style={{ marginTop: "20px" }}>
-        <div className="details-panel-header">
-          <h3>Current Hardware Utilization</h3>
-        </div>
-
-        {latestMetric ? (
-          <div style={{ padding: "20px 22px" }}>
-            {/* CPU Bar */}
-            <div style={{ marginBottom: "18px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "6px",
-                  fontSize: "13px",
-                }}
-              >
-                <span style={{ color: "#68748b" }}>Current CPU Load</span>
-                <strong style={{ color: "#172343" }}>{cpuText}</strong>
-              </div>
-              <div className="large-disk-track" style={{ height: "9px" }}>
-                <div
-                  className="large-disk-fill"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(0, latestMetric.cpu_usage)
-                    )}%`,
-                    background: "#0962df",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* RAM Bar */}
-            <div style={{ marginBottom: "18px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "6px",
-                  fontSize: "13px",
-                }}
-              >
-                <span style={{ color: "#68748b" }}>Current RAM Utilization</span>
-                <strong style={{ color: "#172343" }}>{ramText}</strong>
-              </div>
-              <div className="large-disk-track" style={{ height: "9px" }}>
-                <div
-                  className="large-disk-fill"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(0, latestMetric.ram_usage)
-                    )}%`,
-                    background: "#159b55",
-                  }}
-                />
-              </div>
-            </div>
-
-            {/* Disk Bar */}
-            <div style={{ marginBottom: "18px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  marginBottom: "6px",
-                  fontSize: "13px",
-                }}
-              >
-                <span style={{ color: "#68748b" }}>Current Disk Utilization</span>
-                <strong style={{ color: "#172343" }}>{diskText}</strong>
-              </div>
-              <div className="large-disk-track" style={{ height: "9px" }}>
-                <div
-                  className="large-disk-fill"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(0, latestMetric.disk_usage)
-                    )}%`,
-                    background: "#f39b13",
-                  }}
-                />
-              </div>
-            </div>
-
-            <div
-              style={{
-                marginTop: "12px",
-                fontSize: "11px",
-                color: "#718099",
-              }}
-            >
-              Latest report timestamp: {formatDateTime(latestMetric.recorded_at)}
-            </div>
-          </div>
-        ) : (
-          <div
-            style={{
-              padding: "30px 20px",
-              textAlign: "center",
-              color: "#68748b",
-            }}
-          >
-            <p style={{ margin: 0, fontSize: "13px" }}>
-              No telemetry reports have been recorded for this computer yet.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* =================================================
-          HISTORICAL METRICS & CHARTS (V2.2)
-      ================================================= */}
-      <MetricChart
-        metrics={historicalMetrics}
-        loading={historyLoading}
-        error={historyError}
-        timeRange={timeRange}
-        onTimeRangeChange={handleTimeRangeChange}
-        onRefresh={() => loadHistoricalMetrics(timeRange)}
+      <ComputerSummaryCard
+        computer={details}
+        latestMetric={latestMetric}
       />
 
       {/* =================================================
-          REMOTE COMMAND MANAGEMENT (V5.1)
+          6-TAB NAVIGATION
       ================================================= */}
-      <div className="table-card" style={{ marginTop: "24px" }}>
+      <ComputerDetailsTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
+
+      {/* =================================================
+          TAB 1: HARDWARE INFO (REDESIGNED)
+      ================================================= */}
+      {activeTab === "hardware" && (
+        <HardwareInfoTab
+          computer={details}
+          uptimeText={uptimeText}
+        />
+      )}
+
+      {/* =================================================
+          TAB 2: MATRIX (HISTORICAL METRICS & CHARTS)
+      ================================================= */}
+      {activeTab === "matrix" && (
+        <MetricChart
+          metrics={historicalMetrics}
+          loading={historyLoading}
+          error={historyError}
+          timeRange={timeRange}
+          onTimeRangeChange={handleTimeRangeChange}
+          onRefresh={() => loadHistoricalMetrics(timeRange)}
+        />
+      )}
+
+      {/* =================================================
+          TAB 6: COMMAND HISTORY (REMOTE COMMAND MANAGEMENT)
+      ================================================= */}
+      {activeTab === "commands" && (
+        <>
+          <div className="table-card" style={{ marginTop: "24px" }}>
         {/* Action Feedback Toast */}
         {actionToast && (
           <div
@@ -1856,11 +1612,14 @@ function ComputerDetails({ computer, onBack }) {
           </div>
         </div>
       )}
+        </>
+      )}
 
       {/* =================================================
-          SOFTWARE INVENTORY (V3.1)
+          TAB 4: SOFTWARE INVENTORY
       ================================================= */}
-      <div className="table-card" style={{ marginTop: "24px" }}>
+      {activeTab === "software" && (
+        <div className="table-card" style={{ marginTop: "24px" }}>
         <div
           className="page-section-header"
           style={{
@@ -2028,11 +1787,13 @@ function ComputerDetails({ computer, onBack }) {
           </div>
         )}
       </div>
+      )}
 
       {/* =================================================
-          RUNNING PROCESSES (V3.2)
+          TAB 5: RUNNING PROCESSES
       ================================================= */}
-      <div className="table-card" style={{ marginTop: "24px" }}>
+      {activeTab === "processes" && (
+        <div className="table-card" style={{ marginTop: "24px" }}>
         <div
           className="page-section-header"
           style={{
@@ -2218,11 +1979,13 @@ function ComputerDetails({ computer, onBack }) {
           </div>
         )}
       </div>
+      )}
 
       {/* =================================================
-          APPLICATION USAGE HISTORY (V3.3)
+          TAB 3: APPLICATION USAGE HISTORY
       ================================================= */}
-      <div className="table-card" style={{ marginTop: "24px" }}>
+      {activeTab === "history" && (
+        <div className="table-card" style={{ marginTop: "24px" }}>
         <div
           className="page-section-header"
           style={{
@@ -2496,6 +2259,18 @@ function ComputerDetails({ computer, onBack }) {
           </div>
         )}
       </div>
+      )}
+
+      {/* =================================================
+          EDIT COMPUTER DETAILS MODAL
+      ================================================= */}
+      {isEditModalOpen && details && (
+        <EditComputerModal
+          computer={details}
+          onClose={() => setIsEditModalOpen(false)}
+          onSave={handleSaveEdit}
+        />
+      )}
     </div>
   );
 }

@@ -1,0 +1,81 @@
+/* =====================================================
+   PROCESSOR CARD STYLES
+===================================================== */
+
+.hw-mini-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+  display: flex;
+  flex-direction: column;
+  min-height: 190px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.hw-mini-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.hw-mini-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.hw-mini-icon-box {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.hw-mini-title {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.hw-mini-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+
+.hw-mini-row {
+  display: flex;
+  align-items: baseline;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hw-mini-label {
+  width: 105px;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.hw-mini-colon {
+  width: 14px;
+  color: #94a3b8;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.hw-mini-value {
+  color: #1e293b;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
 from datetime import datetime
+from app.schemas.computer_hardware_schema import ComputerHardwareResponse
 
 class ComputerSchema(BaseModel):
 
@@ -46,6 +47,7 @@ class ComputerResponse(ComputerBase):
     status: str = "offline"
     last_seen: datetime | None = None
     registered_at: datetime | None = None
+    hardware: ComputerHardwareResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

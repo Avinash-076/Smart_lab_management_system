@@ -169,3 +169,61 @@ export function getPaginationItems(current, total) {
 
   return items;
 }
+
+/**
+ * Parses and formats system uptime from a boot timestamp string.
+ */
+export function parseUptimeString(bootTimeStr) {
+  if (!bootTimeStr) return null;
+  try {
+    let bootDate = null;
+    if (bootTimeStr.includes("Today,")) {
+      const timePart = bootTimeStr.replace("Today,", "").trim();
+      const parts = timePart.split(" ");
+      const [hStr, mStr] = parts[0].split(":");
+      let h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10);
+      if (parts[1] === "PM" && h < 12) h += 12;
+      if (parts[1] === "AM" && h === 12) h = 0;
+      bootDate = new Date();
+      bootDate.setHours(h, m, 0, 0);
+    } else if (bootTimeStr.includes("Yesterday,")) {
+      const timePart = bootTimeStr.replace("Yesterday,", "").trim();
+      const parts = timePart.split(" ");
+      const [hStr, mStr] = parts[0].split(":");
+      let h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10);
+      if (parts[1] === "PM" && h < 12) h += 12;
+      if (parts[1] === "AM" && h === 12) h = 0;
+      bootDate = new Date();
+      bootDate.setDate(bootDate.getDate() - 1);
+      bootDate.setHours(h, m, 0, 0);
+    } else {
+      const [datePart, timePart] = bootTimeStr.split(",");
+      if (datePart && timePart) {
+        const [d, mo, y] = datePart.trim().split("-");
+        const parts = timePart.trim().split(" ");
+        const [hStr, mStr] = parts[0].split(":");
+        let h = parseInt(hStr, 10);
+        const m = parseInt(mStr, 10);
+        if (parts[1] === "PM" && h < 12) h += 12;
+        if (parts[1] === "AM" && h === 12) h = 0;
+        bootDate = new Date(parseInt(y, 10), parseInt(mo, 10) - 1, parseInt(d, 10), h, m, 0);
+      }
+    }
+
+    if (bootDate && !isNaN(bootDate.getTime())) {
+      const now = new Date();
+      const diffSec = Math.max(0, Math.floor((now.getTime() - bootDate.getTime()) / 1000));
+      const days = Math.floor(diffSec / 86400);
+      const hours = Math.floor((diffSec % 86400) / 3600);
+      const mins = Math.floor((diffSec % 3600) / 60);
+      if (days > 0) return `${days}d ${hours}h ${mins}m`;
+      if (hours > 0) return `${hours}h ${mins}m`;
+      return `${mins}m`;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}

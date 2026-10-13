@@ -1,0 +1,10 @@
+/* =====================================================
+   MEMORY (RAM) CARD STYLES
+===================================================== */
+
+.hw-mini-card .hw-mini-label {
+  width: 105px;
+  color: #64748b;
+  font-weight: 500;
+  flex-shrink: 0;
+}

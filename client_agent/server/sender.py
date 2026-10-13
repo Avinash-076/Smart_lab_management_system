@@ -253,3 +253,24 @@ def send_command_result(command_id: int, payload: dict, access_token: str) -> di
     )
     response.raise_for_status()
     return response.json()
+
+
+# ==========================================
+# Hardware Specifications
+# ==========================================
+
+def send_hardware_specs(specs: dict, access_token: str) -> dict:
+    """
+    Send detailed hardware specifications to the backend.
+    """
+    api_url = get_api_base_url()
+    session = create_secure_session()
+
+    response = session.post(
+        f"{api_url}/api/clients/hardware",
+        json=specs,
+        headers=_build_headers(access_token),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()

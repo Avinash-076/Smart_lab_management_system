@@ -299,6 +299,99 @@ const Icon = ({ type, size = 20 }) => {
         <line x1="12" y1="3" x2="12" y2="15" />
       </>
     ),
+
+    chip: (
+      <>
+        <rect x="5" y="5" width="14" height="14" rx="2" />
+        <rect x="9" y="9" width="6" height="6" />
+        <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" />
+      </>
+    ),
+
+    cpu: (
+      <>
+        <rect x="5" y="5" width="14" height="14" rx="2" />
+        <rect x="9" y="9" width="6" height="6" />
+        <path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" />
+      </>
+    ),
+
+    ram: (
+      <>
+        <rect x="3" y="7" width="18" height="10" rx="1.5" />
+        <path d="M7 11h2v3H7zM11 11h2v3h-2zM15 11h2v3h-2z" />
+        <path d="M6 17v2M10 17v2M14 17v2M18 17v2" />
+      </>
+    ),
+
+    memory: (
+      <>
+        <rect x="3" y="7" width="18" height="10" rx="1.5" />
+        <path d="M7 11h2v3H7zM11 11h2v3h-2zM15 11h2v3h-2z" />
+        <path d="M6 17v2M10 17v2M14 17v2M18 17v2" />
+      </>
+    ),
+
+    storage: (
+      <>
+        <rect x="3" y="5" width="18" height="14" rx="2" />
+        <circle cx="7" cy="12" r="1.5" fill="currentColor" />
+        <line x1="11" y1="12" x2="17" y2="12" />
+      </>
+    ),
+
+    gpu: (
+      <>
+        <rect x="3" y="4" width="18" height="12" rx="2" />
+        <line x1="8" y1="20" x2="16" y2="20" />
+        <line x1="12" y1="16" x2="12" y2="20" />
+      </>
+    ),
+
+    network: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <path d="M3.6 9h16.8M3.6 15h16.8" />
+        <path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+      </>
+    ),
+
+    motherboard: (
+      <>
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <rect x="6" y="6" width="5" height="5" />
+        <path d="M15 6h3M15 9h3M15 12h3M6 15h3M6 18h3M13 16h5v2h-5z" />
+      </>
+    ),
+
+    clock: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15 14" />
+      </>
+    ),
+
+    uptime: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <polyline points="12 7 12 12 15 14" />
+      </>
+    ),
+
+    command: (
+      <>
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </>
+    ),
+
+    info: (
+      <>
+        <circle cx="12" cy="12" r="9" />
+        <line x1="12" y1="8" x2="12" y2="8.01" strokeWidth="2.5" />
+        <line x1="12" y1="11" x2="12" y2="16" />
+      </>
+    ),
   };
 
   return <svg {...p}>{i[type] || i.computer}</svg>;

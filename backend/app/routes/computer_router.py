@@ -22,6 +22,10 @@ from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
 from app.schemas.notification_schema import NotificationResponse
 from app.schemas.command_schema import CommandResponse
+from app.schemas.computer_hardware_schema import (
+    ComputerHardwareUpload,
+    ComputerHardwareResponse,
+)
 from app.models.issue import IssueStatus, IssueSeverity
 from app.models.maintenance import MaintenanceStatus, MaintenanceType
 from app.models.notification import NotificationSeverity
@@ -29,6 +33,7 @@ from app.services import (
     audit_service,
     command_service,
     computer_service,
+    hardware_service,
     issue_service,
     maintenance_service,
     notification_service,
@@ -541,3 +546,52 @@ def heartbeat(
     db.commit()
 
     return {"message": "Credential valid"}
+
+
+@router.post(
+    "/hardware",
+    response_model=ComputerHardwareResponse,
+    status_code=status.HTTP_200_OK,
+)
+def upload_hardware(
+    db: DbSession,
+    hardware_data: ComputerHardwareUpload,
+    agent_credential: AgentCredential = Depends(get_current_agent),
+):
+    if agent_credential.computer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This credential has not completed registration yet.",
+        )
+
+    try:
+        return hardware_service.save_or_update_hardware(
+            db,
+            agent_credential.computer_id,
+            hardware_data,
+        )
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save hardware specifications.",
+        )
+
+
+@router.get(
+    "/{computer_id}/hardware",
+    response_model=ComputerHardwareResponse | None,
+)
+def get_computer_hardware(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return hardware_service.get_hardware_by_computer_id(db, computer_id)
