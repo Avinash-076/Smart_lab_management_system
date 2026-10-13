@@ -61,7 +61,7 @@ const PAGE_CONFIG = {
     subtitle: "Monitor and manage all laboratory computers and active alerts.",
   },
   computers: {
-    title: "Computer List",
+    title: "Computers",
     subtitle: "View and manage all lab computers.",
   },
   details: {

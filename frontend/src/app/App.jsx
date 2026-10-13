@@ -29,8 +29,7 @@ import AuditLogs from "../features/audit/pages/AuditLogs";
 
 const navItems = [
   ["home", "Dashboard", "dashboard"],
-  ["computer", "Computer List", "computers"],
-  ["details", "Computer Details", "details"],
+  ["computer", "Computers", "computers"],
   ["software", "Software Inventory", "software"],
   ["issue", "Issue Management", "issues"],
   ["maintenance", "Maintenance Records", "maintenance"],
@@ -40,14 +39,78 @@ const navItems = [
   ["users", "User & Role Management", "users"],
 ];
 
+function parsePath(pathname) {
+  const clean =
+    pathname && pathname !== "/" && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname || "/";
+
+  // Match /computers/:id (e.g. /computers/1, /computers/2)
+  const matchDetails = clean.match(/^\/computers\/([^/]+)$/);
+  if (matchDetails) {
+    const rawId = matchDetails[1];
+    const compId = !isNaN(Number(rawId)) ? Number(rawId) : rawId;
+    return {
+      active: "details",
+      computer: { id: compId },
+    };
+  }
+
+  if (clean === "/computers") {
+    return { active: "computers", computer: null };
+  }
+
+  const validPages = [
+    "dashboard",
+    "software",
+    "issues",
+    "maintenance",
+    "reports",
+    "audit",
+    "settings",
+    "users",
+  ];
+
+  const section = clean.replace(/^\//, "");
+  if (validPages.includes(section)) {
+    return { active: section, computer: null };
+  }
+
+  return { active: "dashboard", computer: null };
+}
+
+function getPathFor(pageId, comp) {
+  if (pageId === "details") {
+    const cid =
+      comp?.id !== undefined
+        ? comp.id
+        : typeof comp === "number" || typeof comp === "string"
+        ? comp
+        : null;
+    return cid ? `/computers/${cid}` : "/computers";
+  }
+  if (pageId === "dashboard") {
+    return "/";
+  }
+  return `/${pageId}`;
+}
+
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(() => isAuthenticated());
 
+  // Parse initial route from URL
+  const initialRoute =
+    typeof window !== "undefined"
+      ? parsePath(window.location.pathname)
+      : { active: "dashboard", computer: null };
+
   // Current active page
-  const [active, setActive] = useState("dashboard");
+  const [active, setActive] = useState(initialRoute.active);
 
   // Selected computer for Computer Details page
-  const [selectedComputer, setSelectedComputer] = useState(null);
+  const [selectedComputer, setSelectedComputer] = useState(
+    initialRoute.computer
+  );
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
@@ -56,6 +119,23 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
+
+  /* =====================================================
+     URL SYNCHRONIZATION & BROWSER HISTORY
+  ===================================================== */
+
+  useEffect(() => {
+    function handlePopState() {
+      const route = parsePath(window.location.pathname);
+      setActive(route.active);
+      setSelectedComputer(route.computer);
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   /* =====================================================
      AUTH LIFECYCLE & SESSION PRESERVATION
@@ -106,17 +186,28 @@ function App() {
     setBellOpen(false);
     setFilterOpen(false);
     setActive("dashboard");
+    if (typeof window !== "undefined" && window.location.pathname !== "/") {
+      window.history.pushState(null, "", "/");
+    }
   };
 
   /* =====================================================
      NAVIGATION
   ===================================================== */
 
-  const navigate = (id) => {
+  const navigate = (id, comp = null) => {
     setActive(id);
+    setSelectedComputer(comp);
     setBellOpen(false);
     setProfileOpen(false);
     setFilterOpen(false);
+
+    if (typeof window !== "undefined") {
+      const newPath = getPathFor(id, comp);
+      if (window.location.pathname !== newPath) {
+        window.history.pushState(null, "", newPath);
+      }
+    }
   };
 
   /* =====================================================
@@ -124,11 +215,7 @@ function App() {
   ===================================================== */
 
   const openComputerDetails = (computer) => {
-    // Store the computer that was clicked
-    setSelectedComputer(computer);
-
-    // Navigate to Computer Details page
-    navigate("details");
+    navigate("details", computer);
   };
 
   /* =====================================================

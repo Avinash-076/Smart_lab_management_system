@@ -1,0 +1,112 @@
+/* =====================================================
+   COMPUTER SUMMARY CARDS STYLES
+===================================================== */
+
+.computer-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.summary-card {
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-card, 12px);
+  padding: 16px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.summary-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07);
+}
+
+.summary-card__icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.summary-card__icon-box--blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.summary-card__icon-box--green {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.summary-card__icon-box--red {
+  background-color: #fef2f2;
+  color: #dc2626;
+}
+
+.summary-card__icon-box--purple {
+  background-color: #faf5ff;
+  color: #9333ea;
+}
+
+.summary-card__icon-box--amber {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
+.summary-card__content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.summary-card__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-card__number {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--color-text-primary, #0f172a);
+  line-height: 1.15;
+  margin: 3px 0;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.summary-card__desc {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 1400px) {
+  .computer-summary-cards {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .computer-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .computer-summary-cards {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,68 @@
+/* =====================================================
+   COMPUTER DETAILS COMPONENT STYLES
+===================================================== */
+
+.computer-details-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.computer-details-breadcrumb-link {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-primary-600, #2563eb);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.computer-details-breadcrumb-link:hover {
+  color: var(--color-primary-700, #1d4ed8);
+  text-decoration: underline;
+}
+
+.computer-details-breadcrumb-sep {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.computer-details-breadcrumb-current {
+  color: var(--color-text-main, #1e293b);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.computer-details-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-md, 8px);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-main, #1e293b);
+  background: #ffffff;
+  border: 1px solid var(--color-border-subtle, #e2e8f0);
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
+}
+
+.computer-details-back-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: var(--color-primary-600, #2563eb);
+}
+
+.computer-details-back-btn:active {
+  background: #f1f5f9;
+}

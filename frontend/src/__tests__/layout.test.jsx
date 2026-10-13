@@ -22,8 +22,8 @@ describe("Shared Authenticated Layout Components", () => {
 
     // Navigation items
     expect(html).toContain("Dashboard");
-    expect(html).toContain("Computer List");
-    expect(html).toContain("Computer Details");
+    expect(html).toContain("Computers");
+    expect(html).not.toContain("Computer Details");
     expect(html).toContain("Software Inventory");
     expect(html).toContain("Issue Management");
     expect(html).toContain("Maintenance Records");
@@ -62,7 +62,7 @@ describe("Shared Authenticated Layout Components", () => {
   it("renders Header with menu button, dynamic title and subtitle, notification bell, and user profile (no search bar)", () => {
     const navItems = [
       ["grid", "Dashboard", "dashboard"],
-      ["computer", "Computer List", "computers"],
+      ["computer", "Computers", "computers"],
     ];
 
     const html = renderToString(
@@ -120,7 +120,7 @@ describe("Shared Authenticated Layout Components", () => {
       />
     );
 
-    expect(html).toContain("Computer List");
+    expect(html).toContain("Computers");
     expect(html).toContain("View and manage all lab computers.");
   });
 });

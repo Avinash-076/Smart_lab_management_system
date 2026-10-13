@@ -15,6 +15,7 @@ import StatCard from "../../../components/ui/StatCard";
 import Icon from "../../../components/ui/Icon";
 import MetricChart from "../components/MetricChart";
 import { useComputerWebSocket } from "../hooks/useComputerWebSocket";
+import "./ComputerDetails.css";
 
 function formatDateTime(dateStr) {
   if (!dateStr) return "Never";
@@ -45,7 +46,16 @@ function formatDuration(seconds) {
 }
 
 function ComputerDetails({ computer, onBack }) {
-  const computerId = computer?.id || (typeof computer === "number" ? computer : null);
+  const rawId =
+    computer?.id !== undefined
+      ? computer.id
+      : typeof computer === "number" || typeof computer === "string"
+      ? computer
+      : null;
+  const computerId =
+    rawId !== null && rawId !== undefined && !isNaN(Number(rawId))
+      ? Number(rawId)
+      : rawId;
 
   const [details, setDetails] = useState(null);
   const [latestMetric, setLatestMetric] = useState(null);
@@ -503,7 +513,7 @@ function ComputerDetails({ computer, onBack }) {
           <div>
             <h2>Computer Details</h2>
             <p>
-              Select a computer from the Computer List to view its complete
+              Select a computer from Computers to view its complete
               information.
             </p>
           </div>
@@ -514,15 +524,17 @@ function ComputerDetails({ computer, onBack }) {
             <Icon type="details" size={40} />
             <h3>No computer selected</h3>
             <p>
-              Open the Computer List and click the view button beside a
+              Open Computers and click the view button beside a
               computer.
             </p>
             <button
-              className="refresh"
+              type="button"
+              className="computer-details-back-btn"
               onClick={onBack}
-              style={{ marginTop: "15px", display: "inline-flex" }}
+              style={{ marginTop: "15px" }}
             >
-              ← Go to Computer List
+              <Icon type="arrow-left" size={16} />
+              Back to Computers
             </button>
           </div>
         </div>
@@ -541,9 +553,16 @@ function ComputerDetails({ computer, onBack }) {
             <h2>Computer Details</h2>
             <p>Fetching real computer information from backend...</p>
           </div>
-          <button className="refresh" onClick={onBack}>
-            ← Back to Computer List
-          </button>
+          <div className="top-actions">
+            <button
+              type="button"
+              className="computer-details-back-btn"
+              onClick={onBack}
+            >
+              <Icon type="arrow-left" size={16} />
+              Back to Computers
+            </button>
+          </div>
         </div>
 
         <div className="table-card">
@@ -568,9 +587,16 @@ function ComputerDetails({ computer, onBack }) {
             <h2>Computer Details</h2>
             <p>Error retrieving computer information.</p>
           </div>
-          <button className="refresh" onClick={onBack}>
-            ← Back to Computer List
-          </button>
+          <div className="top-actions">
+            <button
+              type="button"
+              className="computer-details-back-btn"
+              onClick={onBack}
+            >
+              <Icon type="arrow-left" size={16} />
+              Back to Computers
+            </button>
+          </div>
         </div>
 
         <div className="table-card">
@@ -586,12 +612,21 @@ function ComputerDetails({ computer, onBack }) {
                 justifyContent: "center",
               }}
             >
-              <button className="refresh" onClick={loadDetails}>
+              <button
+                type="button"
+                className="computer-details-back-btn"
+                onClick={onBack}
+              >
+                <Icon type="arrow-left" size={16} />
+                Back to Computers
+              </button>
+              <button
+                type="button"
+                className="export"
+                onClick={loadDetails}
+              >
                 <Icon type="refresh" size={16} />
                 Try Again
-              </button>
-              <button className="export" onClick={onBack}>
-                ← Back to Computer List
               </button>
             </div>
           </div>
@@ -706,12 +741,35 @@ function ComputerDetails({ computer, onBack }) {
       ================================================= */}
       <div className="page-top">
         <div>
+          <div className="computer-details-breadcrumb">
+            <button
+              type="button"
+              className="computer-details-breadcrumb-link"
+              onClick={onBack}
+              title="Back to Computers"
+            >
+              Computers
+            </button>
+            <span className="computer-details-breadcrumb-sep">/</span>
+            <span className="computer-details-breadcrumb-current">{hostname}</span>
+          </div>
           <h2>Computer Details</h2>
           <p>System specifications and telemetry for {hostname}.</p>
         </div>
 
         <div className="top-actions">
           <button
+            type="button"
+            className="computer-details-back-btn"
+            onClick={onBack}
+            title="Return to Computers inventory"
+          >
+            <Icon type="arrow-left" size={16} />
+            Back to Computers
+          </button>
+
+          <button
+            type="button"
             className="export"
             onClick={loadDetails}
             disabled={loading}
@@ -719,10 +777,6 @@ function ComputerDetails({ computer, onBack }) {
           >
             <Icon type="refresh" size={16} />
             Refresh
-          </button>
-
-          <button className="refresh" onClick={onBack}>
-            ← Back to Computer List
           </button>
         </div>
       </div>

@@ -53,8 +53,7 @@ function Sidebar({ active, navigate, logout, sidebarOpen = true }) {
 
   const navItems = [
     ["grid", "Dashboard", "dashboard"],
-    ["computer", "Computer List", "computers"],
-    ["details", "Computer Details", "details"],
+    ["computer", "Computers", "computers"],
     ["software", "Software Inventory", "software"],
     ["issue", "Issue Management", "issues"],
     ["maintenance", "Maintenance Records", "maintenance"],
@@ -81,7 +80,7 @@ function Sidebar({ active, navigate, logout, sidebarOpen = true }) {
       {/* Navigation List */}
       <nav className="sidebar-nav" aria-label="Main navigation">
         {navItems.map(([ic, label, id]) => {
-          const isActive = active === id;
+          const isActive = active === id || (id === "computers" && active === "details");
           return (
             <button
               key={id}

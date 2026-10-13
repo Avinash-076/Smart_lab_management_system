@@ -72,3 +72,22 @@ export async function getComputerUsage(id, options = {}) {
   }
   return fetchWithAuth(`/clients/${id}/usage${query}`);
 }
+
+export async function deleteComputer(id) {
+  return fetchWithAuth(`/clients/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function updateComputer(id, data) {
+  return fetchWithAuth(`/clients/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function generateEnrollmentKey() {
+  return fetchWithAuth("/enrollment-keys", {
+    method: "POST",
+  });
+}
