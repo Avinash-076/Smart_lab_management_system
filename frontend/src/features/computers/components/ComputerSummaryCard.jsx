@@ -1,5 +1,6 @@
 import Icon from "../../../components/ui/Icon";
 import { parseUptimeString } from "../utils/computerUtils";
+import SoftwareSummaryCards from "./SoftwareSummaryCards";
 import "./ComputerSummaryCard.css";
 
 function ComputerIllustration() {
@@ -75,6 +76,11 @@ function MiniSparkline({ color = "#3b82f6" }) {
 export default function ComputerSummaryCard({
   computer,
   latestMetric,
+  activeTab = "hardware",
+  softwareSummary = null,
+  softwareLoading = false,
+  onScanNow = null,
+  scanning = false,
 }) {
   if (!computer) return null;
 
@@ -168,105 +174,114 @@ export default function ComputerSummaryCard({
         </div>
       </div>
 
-      {/* RIGHT SECTION: 4 Resource Metric Cards */}
-      <div className="summary-metrics-grid">
-        {/* 1. CPU Usage */}
-        <div className="summary-metric-card metric-cpu">
-          <div className="metric-header">
-            <div className="metric-icon-box metric-icon-blue">
-              <Icon type="chip" size={20} />
+      {/* RIGHT SECTION: Metric Cards */}
+      {activeTab === "software" ? (
+        <SoftwareSummaryCards
+          summary={softwareSummary}
+          loading={softwareLoading}
+          onScanNow={onScanNow}
+          scanning={scanning}
+        />
+      ) : (
+        <div className="summary-metrics-grid">
+          {/* 1. CPU Usage */}
+          <div className="summary-metric-card metric-cpu">
+            <div className="metric-header">
+              <div className="metric-icon-box metric-icon-blue">
+                <Icon type="chip" size={20} />
+              </div>
+              <div className="metric-text-group">
+                <span className="metric-label">CPU Usage</span>
+                <span className="metric-value">
+                  {cpuPercent !== null ? `${cpuPercent}%` : "—"}
+                </span>
+              </div>
             </div>
-            <div className="metric-text-group">
-              <span className="metric-label">CPU Usage</span>
-              <span className="metric-value">
-                {cpuPercent !== null ? `${cpuPercent}%` : "—"}
-              </span>
+            <div className="metric-visual">
+              <MiniSparkline color="#2563eb" />
+              <div className="metric-progress-track">
+                <div
+                  className="metric-progress-bar metric-bar-blue"
+                  style={{ width: `${Math.min(100, Math.max(0, cpuPercent ?? 0))}%` }}
+                />
+              </div>
+              {cpuPercent !== null && (
+                <span className="metric-progress-number">{cpuPercent}%</span>
+              )}
             </div>
           </div>
-          <div className="metric-visual">
-            <MiniSparkline color="#2563eb" />
-            <div className="metric-progress-track">
-              <div
-                className="metric-progress-bar metric-bar-blue"
-                style={{ width: `${Math.min(100, Math.max(0, cpuPercent ?? 0))}%` }}
-              />
-            </div>
-            {cpuPercent !== null && (
-              <span className="metric-progress-number">{cpuPercent}%</span>
-            )}
-          </div>
-        </div>
 
-        {/* 2. RAM Usage */}
-        <div className="summary-metric-card metric-ram">
-          <div className="metric-header">
-            <div className="metric-icon-box metric-icon-green">
-              <Icon type="ram" size={20} />
+          {/* 2. RAM Usage */}
+          <div className="summary-metric-card metric-ram">
+            <div className="metric-header">
+              <div className="metric-icon-box metric-icon-green">
+                <Icon type="ram" size={20} />
+              </div>
+              <div className="metric-text-group">
+                <span className="metric-label">RAM Usage</span>
+                <span className="metric-value">
+                  {ramPercent !== null ? `${ramPercent}%` : "—"}
+                </span>
+              </div>
             </div>
-            <div className="metric-text-group">
-              <span className="metric-label">RAM Usage</span>
-              <span className="metric-value">
-                {ramPercent !== null ? `${ramPercent}%` : "—"}
-              </span>
+            <div className="metric-visual">
+              <MiniSparkline color="#10b981" />
+              <div className="metric-progress-track">
+                <div
+                  className="metric-progress-bar metric-bar-green"
+                  style={{ width: `${Math.min(100, Math.max(0, ramPercent ?? 0))}%` }}
+                />
+              </div>
+              {ramPercent !== null && (
+                <span className="metric-progress-number">{ramPercent}%</span>
+              )}
             </div>
           </div>
-          <div className="metric-visual">
-            <MiniSparkline color="#10b981" />
-            <div className="metric-progress-track">
-              <div
-                className="metric-progress-bar metric-bar-green"
-                style={{ width: `${Math.min(100, Math.max(0, ramPercent ?? 0))}%` }}
-              />
-            </div>
-            {ramPercent !== null && (
-              <span className="metric-progress-number">{ramPercent}%</span>
-            )}
-          </div>
-        </div>
 
-        {/* 3. Storage Usage */}
-        <div className="summary-metric-card metric-storage">
-          <div className="metric-header">
-            <div className="metric-icon-box metric-icon-orange">
-              <Icon type="storage" size={20} />
+          {/* 3. Storage Usage */}
+          <div className="summary-metric-card metric-storage">
+            <div className="metric-header">
+              <div className="metric-icon-box metric-icon-orange">
+                <Icon type="storage" size={20} />
+              </div>
+              <div className="metric-text-group">
+                <span className="metric-label">Storage Usage</span>
+                <span className="metric-value">
+                  {storagePercent !== null ? `${storagePercent}%` : "—"}
+                </span>
+              </div>
             </div>
-            <div className="metric-text-group">
-              <span className="metric-label">Storage Usage</span>
-              <span className="metric-value">
-                {storagePercent !== null ? `${storagePercent}%` : "—"}
-              </span>
+            <div className="metric-visual">
+              <MiniSparkline color="#f59e0b" />
+              <div className="metric-progress-track">
+                <div
+                  className="metric-progress-bar metric-bar-orange"
+                  style={{ width: `${Math.min(100, Math.max(0, storagePercent ?? 0))}%` }}
+                />
+              </div>
+              {storagePercent !== null && (
+                <span className="metric-progress-number">{storagePercent}%</span>
+              )}
             </div>
           </div>
-          <div className="metric-visual">
-            <MiniSparkline color="#f59e0b" />
-            <div className="metric-progress-track">
-              <div
-                className="metric-progress-bar metric-bar-orange"
-                style={{ width: `${Math.min(100, Math.max(0, storagePercent ?? 0))}%` }}
-              />
-            </div>
-            {storagePercent !== null && (
-              <span className="metric-progress-number">{storagePercent}%</span>
-            )}
-          </div>
-        </div>
 
-        {/* 4. System Uptime */}
-        <div className="summary-metric-card metric-uptime">
-          <div className="metric-header">
-            <div className="metric-icon-box metric-icon-purple">
-              <Icon type="clock" size={20} />
+          {/* 4. System Uptime */}
+          <div className="summary-metric-card metric-uptime">
+            <div className="metric-header">
+              <div className="metric-icon-box metric-icon-purple">
+                <Icon type="clock" size={20} />
+              </div>
+              <div className="metric-text-group">
+                <span className="metric-label">Uptime</span>
+                <span className="metric-value metric-value-uptime">{uptimeText}</span>
+              </div>
             </div>
-            <div className="metric-text-group">
-              <span className="metric-label">Uptime</span>
-              <span className="metric-value metric-value-uptime">{uptimeText}</span>
+            <div className="metric-visual">
+              <MiniSparkline color="#8b5cf6" />
             </div>
-          </div>
-          <div className="metric-visual">
-            <MiniSparkline color="#8b5cf6" />
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

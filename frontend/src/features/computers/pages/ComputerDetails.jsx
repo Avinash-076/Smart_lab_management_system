@@ -4,7 +4,10 @@ import {
   getComputerMetrics,
   updateComputer,
 } from "../../../services/computerService";
-import { getComputerSoftware } from "../../../services/softwareService";
+import {
+  getComputerSoftware,
+  getComputerSoftwareSummary,
+} from "../../../services/softwareService";
 import { getComputerProcesses } from "../../../services/processService";
 import {
   issueCommand,
@@ -17,6 +20,7 @@ import ComputerSummaryCard from "../components/ComputerSummaryCard";
 import ComputerDetailsTabs from "../components/ComputerDetailsTabs";
 import HardwareInfoTab from "../components/HardwareInfoTab";
 import HistoryTab from "../components/HistoryTab";
+import SoftwareTab from "../components/SoftwareTab";
 import EditComputerModal from "../components/EditComputerModal";
 import { useComputerWebSocket } from "../hooks/useComputerWebSocket";
 import "./ComputerDetails.css";
@@ -57,11 +61,11 @@ function ComputerDetails({ computer, onBack }) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
 
-  // Software inventory state (V3.1)
-  const [softwareList, setSoftwareList] = useState([]);
+  // Software inventory state (V3.1 & V3.2)
+  const [, setSoftwareList] = useState([]);
   const [softwareLoading, setSoftwareLoading] = useState(false);
-  const [softwareError, setSoftwareError] = useState("");
-  const [softwareSearch, setSoftwareSearch] = useState("");
+  const [softwareSummary, setSoftwareSummary] = useState(null);
+  const [isScanningSoftware, setIsScanningSoftware] = useState(false);
 
   // Running processes state (V3.2)
   const [processList, setProcessList] = useState([]);
@@ -89,21 +93,41 @@ function ComputerDetails({ computer, onBack }) {
     if (!computerId) return;
     try {
       setSoftwareLoading(true);
-      setSoftwareError("");
-      const data = await getComputerSoftware(computerId);
-      if (Array.isArray(data)) {
-        setSoftwareList(data);
+      const [dataRes, sumRes] = await Promise.allSettled([
+        getComputerSoftware(computerId),
+        getComputerSoftwareSummary(computerId),
+      ]);
+      if (dataRes.status === "fulfilled") {
+        const val = dataRes.value;
+        const list = Array.isArray(val?.data) ? val.data : (Array.isArray(val) ? val : []);
+        setSoftwareList(list);
       } else {
         setSoftwareList([]);
       }
+      if (sumRes.status === "fulfilled") {
+        setSoftwareSummary(sumRes.value);
+      }
     } catch (err) {
       console.warn("Could not fetch software inventory:", err);
-      setSoftwareError(err.message || "Failed to load software inventory.");
       setSoftwareList([]);
     } finally {
       setSoftwareLoading(false);
     }
   }, [computerId]);
+
+  const handleScanNow = useCallback(async () => {
+    if (!computerId) return;
+    try {
+      setIsScanningSoftware(true);
+      await loadSoftware();
+      const sum = await getComputerSoftwareSummary(computerId);
+      setSoftwareSummary(sum);
+    } catch (err) {
+      console.warn("Scan refresh failed:", err);
+    } finally {
+      setIsScanningSoftware(false);
+    }
+  }, [computerId, loadSoftware]);
 
   const loadProcesses = useCallback(async () => {
     if (!computerId) return;
@@ -286,11 +310,10 @@ function ComputerDetails({ computer, onBack }) {
         try {
           const sw = await getComputerSoftware(computerId);
           if (!ignore) {
-            setSoftwareList(Array.isArray(sw) ? sw : []);
+            setSoftwareList(Array.isArray(sw?.data) ? sw.data : (Array.isArray(sw) ? sw : []));
           }
-        } catch (swErr) {
+        } catch {
           if (!ignore) {
-            setSoftwareError(swErr.message || "Failed to load software inventory.");
             setSoftwareList([]);
           }
         }
@@ -507,16 +530,6 @@ function ComputerDetails({ computer, onBack }) {
   const ip = details.ip_address || "—";
   const status = (details.status || "offline").toLowerCase();
 
-  const filteredSoftware = softwareList.filter((item) => {
-    if (!softwareSearch.trim()) return true;
-    const q = softwareSearch.toLowerCase();
-    return (
-      (item.name && item.name.toLowerCase().includes(q)) ||
-      (item.publisher && item.publisher.toLowerCase().includes(q)) ||
-      (item.version && item.version.toLowerCase().includes(q))
-    );
-  });
-
   const filteredProcesses = processList.filter((item) => {
     if (!processSearch.trim()) return true;
     const q = processSearch.toLowerCase();
@@ -620,6 +633,11 @@ function ComputerDetails({ computer, onBack }) {
       <ComputerSummaryCard
         computer={details}
         latestMetric={latestMetric}
+        activeTab={activeTab}
+        softwareSummary={softwareSummary}
+        softwareLoading={softwareLoading}
+        onScanNow={handleScanNow}
+        scanning={isScanningSoftware}
       />
 
       {/* =================================================
@@ -1447,177 +1465,16 @@ function ComputerDetails({ computer, onBack }) {
       )}
 
       {/* =================================================
-          TAB 4: SOFTWARE INVENTORY
+          TAB 4: SOFTWARE INVENTORY (REDESIGNED)
       ================================================= */}
       {activeTab === "software" && (
-        <div className="table-card" style={{ marginTop: "24px" }}>
-        <div
-          className="page-section-header"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "18px 22px",
-            borderBottom: "1px solid #edf0f4",
-            flexWrap: "wrap",
-            gap: "12px",
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0, fontSize: "16px", color: "#07144a" }}>
-              Installed Software Inventory
-            </h3>
-            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#68748b" }}>
-              System applications discovered on this computer.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div
-              className="table-search"
-              style={{ width: "240px", height: "36px" }}
-            >
-              <input
-                value={softwareSearch}
-                onChange={(e) => setSoftwareSearch(e.target.value)}
-                placeholder="Search software, publisher..."
-                style={{ fontSize: "12px" }}
-              />
-              <Icon type="search" size={16} />
-            </div>
-
-            <button
-              className="export"
-              onClick={loadSoftware}
-              disabled={softwareLoading}
-              title="Refresh software list from server"
-              style={{ width: "auto", height: "36px", padding: "0 14px" }}
-            >
-              <Icon type="refresh" size={14} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {softwareLoading && softwareList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <Icon type="refresh" size={32} />
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>Loading software inventory...</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>Fetching installed application registry from server.</p>
-          </div>
-        ) : softwareError && softwareList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#dc2626" }}>Failed to load software inventory</h4>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>{softwareError}</p>
-            <button
-              className="refresh"
-              onClick={loadSoftware}
-              style={{ display: "inline-flex" }}
-            >
-              Try Again
-            </button>
-          </div>
-        ) : softwareList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <Icon type="software" size={36} />
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No software inventory recorded</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>The client agent has not reported installed applications for this computer yet.</p>
-          </div>
-        ) : filteredSoftware.length === 0 ? (
-          <div className="empty-state" style={{ padding: "30px 20px" }}>
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No matching software found</h4>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>No applications match &quot;{softwareSearch}&quot;.</p>
-            <button
-              className="export"
-              onClick={() => setSoftwareSearch("")}
-              style={{ display: "inline-flex" }}
-            >
-              Clear Search
-            </button>
-          </div>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: "35%" }}>Software Name</th>
-                  <th style={{ width: "20%" }}>Version</th>
-                  <th style={{ width: "25%" }}>Publisher / Vendor</th>
-                  <th style={{ width: "20%" }}>Install Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSoftware.map((item) => (
-                  <tr key={item.id}>
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "6px",
-                            background: "#eff6ff",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#2563eb",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <Icon type="software" size={16} />
-                        </div>
-                        <strong style={{ color: "#1e293b", fontSize: "12px" }}>
-                          {item.name}
-                        </strong>
-                      </div>
-                    </td>
-                    <td>
-                      <code
-                        style={{
-                          fontSize: "12px",
-                          color: "#475569",
-                          background: "#f1f5f9",
-                          padding: "2px 6px",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        {item.version || "—"}
-                      </code>
-                    </td>
-                    <td style={{ color: "#475569", fontSize: "12px" }}>
-                      {item.publisher || "—"}
-                    </td>
-                    <td style={{ color: "#64748b", fontSize: "12px" }}>
-                      {item.install_date || "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {softwareList.length > 0 && (
-          <div
-            style={{
-              padding: "12px 20px",
-              fontSize: "12px",
-              color: "#64748b",
-              borderTop: "1px solid #edf0f4",
-              background: "#f8fafc",
-            }}
-          >
-            Showing <strong>{filteredSoftware.length}</strong> of{" "}
-            <strong>{softwareList.length}</strong> installed applications
-          </div>
-        )}
-      </div>
+        <SoftwareTab
+          computerId={computerId}
+          computer={details}
+          onSummaryUpdate={setSoftwareSummary}
+          onScanNow={handleScanNow}
+          scanning={isScanningSoftware}
+        />
       )}
 
       {/* =================================================

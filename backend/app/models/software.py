@@ -56,6 +56,16 @@ class Software(Base):
         nullable=True,
     )
 
+    install_location: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
+    architecture: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

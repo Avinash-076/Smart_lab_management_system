@@ -117,6 +117,19 @@ def _scan_registry_path(
                         raw_install_date = _read_value(subkey, "InstallDate", None)
                         install_date = _format_install_date(raw_install_date)
 
+                        raw_install_location = _read_value(subkey, "InstallLocation", None)
+                        install_location = None
+                        if raw_install_location and isinstance(raw_install_location, str) and raw_install_location.strip():
+                            install_location = raw_install_location.strip().rstrip("\\") + "\\"
+                        else:
+                            icon = _read_value(subkey, "DisplayIcon", None)
+                            if icon and isinstance(icon, str) and ("\\" in icon):
+                                clean_icon = icon.split(",")[0].strip('"').strip()
+                                if "\\" in clean_icon:
+                                    install_location = os.path.dirname(clean_icon).rstrip("\\") + "\\"
+
+                        architecture = "32-bit" if "WOW6432Node" in registry_path else "64-bit"
+
                         identity = (
                             str(name).strip().casefold(),
                             str(version).strip().casefold(),
@@ -133,6 +146,8 @@ def _scan_registry_path(
                                 "version": str(version),
                                 "publisher": str(publisher),
                                 "install_date": install_date,
+                                "install_location": install_location,
+                                "architecture": architecture,
                             }
                         )
 
@@ -208,6 +223,8 @@ def compute_software_fingerprint(software_list: list[dict]) -> str:
                 "version": str(item.get("version") or "").strip(),
                 "publisher": str(item.get("publisher") or "").strip(),
                 "install_date": str(item.get("install_date") or "").strip(),
+                "install_location": str(item.get("install_location") or "").strip(),
+                "architecture": str(item.get("architecture") or "").strip(),
             }
         )
 
@@ -218,6 +235,8 @@ def compute_software_fingerprint(software_list: list[dict]) -> str:
             x["version"].casefold(),
             x["publisher"].casefold(),
             x["install_date"].casefold(),
+            x["install_location"].casefold(),
+            x["architecture"].casefold(),
         )
     )
 

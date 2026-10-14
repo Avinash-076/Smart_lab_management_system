@@ -341,3 +341,52 @@ def test_agent_software_upload_and_replacement(
     assert len(sw_data) == 2
     assert sw_data[0]["name"] == "Git"
     assert sw_data[1]["name"] == "Notepad++"
+
+
+def test_software_summary_and_filtering(client, db_session, test_software_user, sample_computers_with_software):
+    comp_a = sample_computers_with_software["comp_a"]
+    user_token = test_software_user["token"]
+
+    # 1. Test Summary endpoint
+    summary_res = client.get(
+        f"/api/clients/{comp_a.id}/software/summary",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+    assert summary["total_installed"] == 3
+    assert summary["potentially_outdated"] is None
+    assert isinstance(summary["categories"], list)
+    assert isinstance(summary["top_publishers"], list)
+    assert "Google LLC" in summary["available_publishers"]
+    assert "Microsoft Corporation" in summary["available_publishers"]
+
+    # 2. Test Filtering by search
+    search_res = client.get(
+        f"/api/clients/{comp_a.id}/software?search=chrome",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert search_res.status_code == 200
+    assert search_res.headers.get("x-total-count") == "1"
+    items = search_res.json()
+    assert len(items) == 1
+    assert items[0]["name"] == "Google Chrome"
+
+    # 3. Test Filtering by publisher
+    pub_res = client.get(
+        f"/api/clients/{comp_a.id}/software?publisher=Microsoft+Corporation",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert pub_res.status_code == 200
+    assert pub_res.headers.get("x-total-count") == "1"
+    assert pub_res.json()[0]["name"] == "VS Code"
+
+    # 4. Test Pagination (limit & offset)
+    page_res = client.get(
+        f"/api/clients/{comp_a.id}/software?limit=2&offset=0",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert page_res.status_code == 200
+    assert page_res.headers.get("x-total-count") == "3"
+    assert len(page_res.json()) == 2
+

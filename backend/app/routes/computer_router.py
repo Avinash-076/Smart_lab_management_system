@@ -1,7 +1,7 @@
 from typing import Annotated
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
@@ -15,7 +15,7 @@ from app.schemas.computer_schema import (
     ComputerUpdate,
     ComputerPatch,
 )
-from app.schemas.software_schema import SoftwareResponse
+from app.schemas.software_schema import SoftwareResponse, SoftwareSummaryResponse
 from app.schemas.process_schema import ProcessResponse, ProcessRankingsResponse
 from app.schemas.usage_schema import UsageSessionResponse, UsageSummaryResponse
 from app.schemas.issue_schema import IssueResponse
@@ -86,12 +86,16 @@ def get_computer(
 
 
 @router.get(
-    "/{computer_id}/software",
-    response_model=list[SoftwareResponse],
+    "/{computer_id}/software/summary",
+    response_model=SoftwareSummaryResponse,
 )
-def get_computer_software(
+def get_computer_software_summary(
     computer_id: int,
     db: DbSession,
+    search: str | None = Query(default=None),
+    publisher: str | None = Query(default=None),
+    architecture: str | None = Query(default=None),
+    date_range: str | None = Query(default=None),
     _user=Depends(require_permission("VIEW_COMPUTERS")),
 ):
     computer = computer_service.get_computer_by_id(db, computer_id)
@@ -102,9 +106,63 @@ def get_computer_software(
             detail="Computer not found",
         )
 
+    return software_service.get_software_summary_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        publisher=publisher,
+        architecture=architecture,
+        date_range=date_range,
+    )
+
+
+@router.get(
+    "/{computer_id}/software",
+    response_model=list[SoftwareResponse],
+)
+def get_computer_software(
+    computer_id: int,
+    response: Response,
+    db: DbSession,
+    search: str | None = Query(default=None),
+    publisher: str | None = Query(default=None),
+    architecture: str | None = Query(default=None),
+    date_range: str | None = Query(default=None),
+    sort_by: str = Query(default="name"),
+    sort_order: str = Query(default="asc"),
+    limit: int | None = Query(default=None, ge=1, le=2000),
+    offset: int = Query(default=0, ge=0),
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    total_count = software_service.get_software_count_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        publisher=publisher,
+        architecture=architecture,
+        date_range=date_range,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
     return software_service.get_software_for_computer(
         db=db,
         computer_id=computer_id,
+        search=search,
+        publisher=publisher,
+        architecture=architecture,
+        date_range=date_range,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
     )
 
 

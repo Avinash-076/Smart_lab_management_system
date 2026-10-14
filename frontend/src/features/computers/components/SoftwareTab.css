@@ -1,0 +1,59 @@
+/* =====================================================
+   SOFTWARE TAB CONTAINER STYLES
+   Organizes the filter toolbar, side-by-side analytics, & table
+===================================================== */
+
+.software-tab-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.software-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.software-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.software-error-banner .error-icon {
+  font-size: 16px;
+}
+
+.software-error-banner .error-text {
+  flex: 1;
+}
+
+.software-error-banner .error-retry-btn {
+  background-color: #ffffff;
+  border: 1px solid #f87171;
+  color: #b91c1c;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.software-error-banner .error-retry-btn:hover {
+  background-color: #fee2e2;
+}
+
+@media (max-width: 1024px) {
+  .software-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
