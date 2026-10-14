@@ -61,3 +61,30 @@ class ProcessResponse(BaseModel):
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class ProcessRankingItem(BaseModel):
+    rank: int
+    pid: int
+    name: str
+    user: str | None = None
+    cpu_percent: float
+    memory_percent: float
+    memory_mb: float | None = None
+    download_mb: float | None = None
+    upload_mb: float | None = None
+    total_mb: float | None = None
+
+
+class NetworkAttributionInfo(BaseModel):
+    supported: bool = False
+    status: str = "unavailable"
+    reason: str = "Platform attribution unavailable: user-space process socket I/O is not reliably attributable without kernel-mode drivers on Windows."
+    items: list[ProcessRankingItem] = Field(default_factory=list)
+
+
+class ProcessRankingsResponse(BaseModel):
+    computer_id: int
+    top_cpu: list[ProcessRankingItem]
+    top_memory: list[ProcessRankingItem]
+    network: NetworkAttributionInfo

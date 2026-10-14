@@ -9,3 +9,8 @@ import { fetchWithAuth } from "./api";
 export async function getComputerProcesses(id) {
   return fetchWithAuth(`/clients/${id}/processes`);
 }
+
+export async function getComputerProcessRankings(id, limit = 5) {
+  return fetchWithAuth(`/clients/${id}/processes/rankings?limit=${limit}`);
+}
+

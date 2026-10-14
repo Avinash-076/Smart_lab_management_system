@@ -393,3 +393,121 @@ def test_agent_usage_upload_unauthenticated(client):
         json={"sessions": []},
     )
     assert res.status_code == 401
+
+
+def test_get_usage_summary_success(client, db_session, test_usage_user):
+    """
+    GET /api/clients/{id}/usage/summary returns aggregated analytics.
+    """
+    comp = Computer(
+        hostname=f"PC-USAGE-SUMM-{int(datetime.now().timestamp() * 1000)}",
+        ip_address="192.168.1.185",
+        mac_address=f"00:11:22:33:44:{int(datetime.now().timestamp()) % 80 + 10}",
+        os_name="Windows 11",
+        os_version="22H2",
+    )
+    db_session.add(comp)
+    db_session.commit()
+    db_session.refresh(comp)
+
+    now = datetime.now(timezone.utc)
+    t1 = now - timedelta(hours=2)
+    t2 = now - timedelta(hours=1)
+
+    s1 = UsageSession(
+        computer_id=comp.id,
+        application_name="chrome.exe",
+        process_name="chrome.exe",
+        user="LabUser",
+        started_at=t1,
+        ended_at=t2,
+        duration_seconds=3600,
+    )
+    s2 = UsageSession(
+        computer_id=comp.id,
+        application_name="Code.exe",
+        process_name="Code.exe",
+        user="Student1",
+        started_at=t2,
+        ended_at=now,
+        duration_seconds=1800,
+    )
+    db_session.add_all([s1, s2])
+    db_session.commit()
+
+    token = test_usage_user["token"]
+    res = client.get(
+        f"/api/clients/{comp.id}/usage/summary?time_range=today",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["computer_id"] == comp.id
+    assert data["total_active_seconds"] == 5400
+    assert "h" in data["formatted_total_active"]
+    assert len(data["top_applications"]) >= 2
+    # Verify friendly name mapping
+    names = [a["application_name"] for a in data["top_applications"]]
+    assert "Google Chrome" in names
+    assert "Visual Studio Code" in names
+    assert "LabUser" in data["available_users"]
+    assert "Student1" in data["available_users"]
+
+
+def test_get_usage_filtering_and_header(client, db_session, test_usage_user):
+    """
+    GET /api/clients/{id}/usage supports filtering by user and application and returns X-Total-Count.
+    """
+    comp = Computer(
+        hostname=f"PC-USAGE-FILT-{int(datetime.now().timestamp() * 1000)}",
+        ip_address="192.168.1.186",
+        mac_address=f"00:11:22:33:55:{int(datetime.now().timestamp()) % 80 + 10}",
+        os_name="Windows 11",
+        os_version="22H2",
+    )
+    db_session.add(comp)
+    db_session.commit()
+    db_session.refresh(comp)
+
+    now = datetime.now(timezone.utc)
+    s1 = UsageSession(
+        computer_id=comp.id,
+        application_name="chrome.exe",
+        process_name="chrome.exe",
+        user="UserA",
+        started_at=now - timedelta(minutes=30),
+        ended_at=now,
+        duration_seconds=1800,
+    )
+    s2 = UsageSession(
+        computer_id=comp.id,
+        application_name="notepad.exe",
+        process_name="notepad.exe",
+        user="UserB",
+        started_at=now - timedelta(minutes=10),
+        ended_at=now,
+        duration_seconds=600,
+    )
+    db_session.add_all([s1, s2])
+    db_session.commit()
+
+    token = test_usage_user["token"]
+
+    # Filter by user
+    res_user = client.get(
+        f"/api/clients/{comp.id}/usage?user=UserA",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res_user.status_code == 200
+    assert len(res_user.json()) == 1
+    assert res_user.json()[0]["application_name"] == "chrome.exe"
+
+    # Filter by application
+    res_app = client.get(
+        f"/api/clients/{comp.id}/usage?application=notepad",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res_app.status_code == 200
+    assert len(res_app.json()) == 1
+    assert res_app.json()[0]["application_name"] == "notepad.exe"
+

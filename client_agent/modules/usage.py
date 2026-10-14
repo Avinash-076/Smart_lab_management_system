@@ -98,7 +98,7 @@ def _get_running_applications() -> dict[tuple[int, float], dict[str, Any]]:
     now_ts = now.timestamp()
 
     try:
-        proc_iter = psutil.process_iter(["pid", "name", "create_time"])
+        proc_iter = psutil.process_iter(["pid", "name", "create_time", "username"])
     except Exception as e:
         logger.warning(f"Failed to enumerate processes for usage tracking: {e}")
         return running
@@ -109,6 +109,7 @@ def _get_running_applications() -> dict[tuple[int, float], dict[str, Any]]:
             pid = info.get("pid")
             name = info.get("name")
             create_time = info.get("create_time")
+            raw_user = info.get("username")
 
             if pid is None:
                 continue
@@ -125,6 +126,11 @@ def _get_running_applications() -> dict[tuple[int, float], dict[str, Any]]:
             # Exclude OS kernel pseudo-processes (D-12)
             if _is_excluded_process(pid, name):
                 continue
+
+            # Clean username if available (strip domain/host prefix)
+            clean_user: str | None = None
+            if raw_user:
+                clean_user = str(raw_user).split("\\")[-1].strip() or None
 
             # Handle process creation time
             if create_time is None or create_time <= 0:
@@ -145,6 +151,8 @@ def _get_running_applications() -> dict[tuple[int, float], dict[str, Any]]:
                 "pid": pid,
                 "create_time": create_time,
                 "application_name": name,
+                "process_name": name,
+                "user": clean_user,
                 "started_at": started_at,
                 "last_seen_at": now,
             }
@@ -161,18 +169,24 @@ def _build_session(
     application_name: str,
     started_at: datetime,
     ended_at: datetime,
+    process_name: str | None = None,
+    user: str | None = None,
 ) -> dict[str, Any]:
     """
     Convert an ended process session into the backend usage-session payload format.
     """
     duration_seconds = max(0, int((ended_at - started_at).total_seconds()))
 
-    return {
+    session_payload: dict[str, Any] = {
         "application_name": application_name,
+        "process_name": process_name or application_name,
         "started_at": started_at.isoformat(),
         "ended_at": ended_at.isoformat(),
         "duration_seconds": duration_seconds,
     }
+    if user:
+        session_payload["user"] = user
+    return session_payload
 
 
 def save_usage_state(state_file: str | None = None) -> None:
@@ -202,6 +216,8 @@ def save_usage_state(state_file: str | None = None) -> None:
                 "pid": pid,
                 "create_time": ct,
                 "application_name": sess["application_name"],
+                "process_name": sess.get("process_name", sess["application_name"]),
+                "user": sess.get("user"),
                 "started_at": started_at_str,
                 "last_seen_at": last_seen_str,
                 "consecutive_misses": sess.get("consecutive_misses", 0),
@@ -275,12 +291,17 @@ def load_usage_state(state_file: str | None = None) -> list[dict[str, Any]]:
                     # Exists but cannot read create_time; conservatively consider alive
                     is_alive = True
 
+            proc_name = str(sess_data.get("process_name", app_name))
+            sess_user = sess_data.get("user")
+
             if is_alive:
                 # Process survived agent restart: resume tracking seamlessly (D-10)
                 _ACTIVE_SESSIONS[identity] = {
                     "pid": pid,
                     "create_time": create_time,
                     "application_name": app_name,
+                    "process_name": proc_name,
+                    "user": sess_user,
                     "started_at": started_at,
                     "last_seen_at": now,
                     "consecutive_misses": 0,
@@ -292,6 +313,8 @@ def load_usage_state(state_file: str | None = None) -> list[dict[str, Any]]:
                         application_name=app_name,
                         started_at=started_at,
                         ended_at=last_seen,
+                        process_name=proc_name,
+                        user=sess_user,
                     )
                 )
 
@@ -342,6 +365,8 @@ def _collect_usage_sessions_unlocked(state_file: str | None = None) -> list[dict
                 "pid": process_data["pid"],
                 "create_time": process_data["create_time"],
                 "application_name": process_data["application_name"],
+                "process_name": process_data.get("process_name", process_data["application_name"]),
+                "user": process_data.get("user"),
                 "started_at": process_data["started_at"],
                 "last_seen_at": now,
                 "consecutive_misses": 0,
@@ -390,6 +415,8 @@ def _collect_usage_sessions_unlocked(state_file: str | None = None) -> list[dict
                         application_name=closed_session["application_name"],
                         started_at=closed_session["started_at"],
                         ended_at=now,
+                        process_name=closed_session.get("process_name", closed_session["application_name"]),
+                        user=closed_session.get("user"),
                     )
                 )
         else:
@@ -404,6 +431,8 @@ def _collect_usage_sessions_unlocked(state_file: str | None = None) -> list[dict
                             application_name=closed_session["application_name"],
                             started_at=closed_session["started_at"],
                             ended_at=now,
+                            process_name=closed_session.get("process_name", closed_session["application_name"]),
+                            user=closed_session.get("user"),
                         )
                     )
 

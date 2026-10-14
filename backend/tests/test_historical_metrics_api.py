@@ -261,3 +261,187 @@ def test_get_historical_metrics_limit_and_ordering(client, auth_headers, compute
     # Newest first: 15.0 (T-30m) then 35.0 (T-2h)
     assert metrics[0]["cpu_usage"] == 15.0
     assert metrics[1]["cpu_usage"] == 35.0
+
+
+def test_get_metric_summary_with_time_series_and_stats(client, auth_headers, computer_with_time_series_metrics):
+    """Verify /api/metrics/{id}/summary returns structured window statistics, hardware capacity, and time series."""
+    c1_id = computer_with_time_series_metrics["c1_id"]
+    now = computer_with_time_series_metrics["now"]
+
+    t_6h_ago = (now - timedelta(hours=6)).isoformat()
+    response = client.get(
+        f"/api/metrics/{c1_id}/summary?start_time={t_6h_ago}&range_preset=6h",
+        headers=auth_headers,
+    )
+    assert response.status_code == 200
+    data = response.json()
+
+    assert data["computer_id"] == c1_id
+    assert data["time_range"] == "6h"
+    assert data["sample_count"] == 2  # m1 at T-30m and m2 at T-2h
+    assert data["cpu"]["current"] == 15.0
+    assert data["cpu"]["average"] == 25.0  # (35.0 + 15.0)/2
+    assert data["cpu"]["maximum"] == 35.0
+    assert data["cpu"]["minimum"] == 15.0
+    assert data["memory"]["current"] == 40.0
+    assert data["disk"]["current"] == 55.0
+    assert "memory_details" in data
+    assert "disk_partitions" in data
+    assert "network_details" in data
+    assert len(data["time_series"]) == 2
+
+
+def test_get_metric_summary_empty_state_without_fabrication(client, auth_headers, db_session):
+    """Verify empty metric history returns sample_count=0 and null stats without fabricating chart points."""
+    c = Computer(
+        hostname="V2-EMPTY-PC",
+        ip_address="192.168.70.99",
+        mac_address="00:70:00:00:00:99",
+        os_name="Windows",
+        os_version="11",
+    )
+    db_session.add(c)
+    db_session.commit()
+    db_session.refresh(c)
+
+    response = client.get(f"/api/metrics/{c.id}/summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["sample_count"] == 0
+    assert data["time_series"] == []
+    assert data["cpu"]["average"] is None
+    assert data["memory"]["average"] is None
+
+    delete_computer(db_session, c)
+
+
+def test_get_process_rankings_api(client, auth_headers, db_session):
+    """Verify /api/processes/{id}/rankings and /api/clients/{id}/processes/rankings return top CPU and RAM processes."""
+    from app.models.process import Process
+
+    c = Computer(
+        hostname="V2-PROC-PC",
+        ip_address="192.168.70.88",
+        mac_address="00:70:00:00:00:88",
+        os_name="Windows",
+        os_version="11",
+    )
+    db_session.add(c)
+    db_session.commit()
+    db_session.refresh(c)
+
+    p1 = Process(
+        computer_id=c.id,
+        pid=1001,
+        name="chrome.exe",
+        user="LabUser",
+        cpu_percent=12.5,
+        memory_percent=4.2,
+    )
+    p2 = Process(
+        computer_id=c.id,
+        pid=1002,
+        name="code.exe",
+        user="LabUser",
+        cpu_percent=6.8,
+        memory_percent=8.5,
+    )
+    p3 = Process(
+        computer_id=c.id,
+        pid=1003,
+        name="idle_worker.exe",
+        user="SYSTEM",
+        cpu_percent=0.5,
+        memory_percent=1.1,
+    )
+    db_session.add_all([p1, p2, p3])
+    db_session.commit()
+
+    # Query via process router
+    resp = client.get(f"/api/processes/{c.id}/rankings?limit=2", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["top_cpu"]) == 2
+    assert data["top_cpu"][0]["name"] == "chrome.exe"
+    assert data["top_cpu"][0]["rank"] == 1
+    assert data["top_cpu"][1]["name"] == "code.exe"
+
+    assert len(data["top_memory"]) == 2
+    assert data["top_memory"][0]["name"] == "code.exe"
+    assert data["top_memory"][0]["rank"] == 1
+    assert data["top_memory"][1]["name"] == "chrome.exe"
+
+    # Query via client router alias
+    resp_alias = client.get(f"/api/clients/{c.id}/processes/rankings?limit=2", headers=auth_headers)
+    assert resp_alias.status_code == 200
+
+    # Cleanup
+    delete_computer(db_session, c)
+
+
+def test_upload_metrics_batch(client, db_session):
+    """Verify POST /api/metrics/batch saves a list of metrics and enforces idempotency."""
+    from app.auth import create_agent_access_token
+    from app.models.agent_credential import AgentCredential
+
+    c = Computer(
+        hostname="V2-BATCH-PC",
+        ip_address="192.168.70.77",
+        mac_address="00:70:00:00:00:77",
+        os_name="Windows",
+        os_version="11",
+    )
+    db_session.add(c)
+    db_session.commit()
+    db_session.refresh(c)
+
+    agent_cred = AgentCredential(
+        agent_id="agt_batch_test_01",
+        secret_hash="fake_hash_123",
+        computer_id=c.id,
+        is_active=True,
+    )
+    db_session.add(agent_cred)
+    db_session.commit()
+    db_session.refresh(agent_cred)
+
+    token = create_agent_access_token({"sub": agent_cred.agent_id, "computer_id": c.id})
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "metrics": [
+            {
+                "cpu_usage": 20.0,
+                "ram_usage": 45.0,
+                "disk_usage": 60.0,
+                "network_sent": 1000.0,
+                "network_received": 2000.0,
+                "idempotency_key": "batch_key_01",
+            },
+            {
+                "cpu_usage": 25.0,
+                "ram_usage": 50.0,
+                "disk_usage": 60.0,
+                "network_sent": 1500.0,
+                "network_received": 3000.0,
+                "idempotency_key": "batch_key_02",
+            },
+        ]
+    }
+
+    resp = client.post("/api/metrics/batch", json=payload, headers=headers)
+    assert resp.status_code == 201
+    results = resp.json()
+    assert len(results) == 2
+    assert results[0]["cpu_usage"] == 20.0
+    assert results[1]["cpu_usage"] == 25.0
+
+    # Repeat call with duplicate idempotency keys returns existing without error
+    resp_dup = client.post("/api/metrics/batch", json=payload, headers=headers)
+    assert resp_dup.status_code == 201
+    assert len(resp_dup.json()) == 2
+
+    # Cleanup
+    delete_computer(db_session, c)
+
+

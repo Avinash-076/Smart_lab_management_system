@@ -1,0 +1,18 @@
+.history-tab-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.history-charts-row {
+  display: flex;
+  align-items: stretch;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .history-charts-row {
+    flex-direction: column;
+  }
+}

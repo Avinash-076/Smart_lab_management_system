@@ -18,6 +18,8 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
+import threading
+import time
 from typing import Any
 
 import psutil
@@ -352,14 +354,24 @@ def get_canonical_network_identity(
     }
 
 
+_net_sample_state: dict[str, Any] = {
+    "timestamp": None,
+    "bytes_sent": None,
+    "bytes_recv": None,
+}
+_net_sample_lock = threading.Lock()
+
+
 def get_network_info() -> dict[str, Any]:
     """
-    Collect network information including canonical identity and cumulative byte counters.
+    Collect network information including canonical identity, cumulative byte counters,
+    and active throughput rate (Mbps).
 
     Cumulative Counters Contract (D-06):
     'bytes_sent' and 'bytes_received' are cumulative byte counters from
     psutil.net_io_counters() since system/network interface counter reset.
     They must retain cumulative semantics and are NOT rate/per-second values.
+    'upload_mbps' and 'download_mbps' provide the instantaneous transfer rates.
     """
     identity = get_canonical_network_identity()
 
@@ -373,6 +385,30 @@ def get_network_info() -> dict[str, Any]:
         bytes_sent = None
         bytes_received = None
 
+    upload_mbps = 0.0
+    download_mbps = 0.0
+    now = time.monotonic()
+
+    with _net_sample_lock:
+        prev_t = _net_sample_state["timestamp"]
+        prev_sent = _net_sample_state["bytes_sent"]
+        prev_recv = _net_sample_state["bytes_recv"]
+        if (
+            prev_t is not None
+            and prev_sent is not None
+            and prev_recv is not None
+            and bytes_sent is not None
+            and bytes_received is not None
+        ):
+            dt = now - prev_t
+            if dt > 0.05 and bytes_sent >= prev_sent and bytes_received >= prev_recv:
+                upload_mbps = round(((bytes_sent - prev_sent) * 8.0) / (dt * 1_000_000.0), 2)
+                download_mbps = round(((bytes_received - prev_recv) * 8.0) / (dt * 1_000_000.0), 2)
+        if bytes_sent is not None and bytes_received is not None:
+            _net_sample_state["timestamp"] = now
+            _net_sample_state["bytes_sent"] = bytes_sent
+            _net_sample_state["bytes_recv"] = bytes_received
+
     return {
         "hostname": hostname,
         "interface": identity.get("interface"),
@@ -381,4 +417,6 @@ def get_network_info() -> dict[str, Any]:
         "network_status": identity.get("status"),
         "bytes_sent": bytes_sent,
         "bytes_received": bytes_received,
+        "upload_mbps": float(upload_mbps),
+        "download_mbps": float(download_mbps),
     }

@@ -114,6 +114,36 @@ def send_metrics(data: dict, access_token: str) -> dict:
     return response.json()
 
 
+def send_metrics_batch(data_batch: list[dict], access_token: str) -> list[dict]:
+    """
+    Send a batch of system metrics to the backend.
+    """
+    if not isinstance(data_batch, list):
+        raise TypeError("data_batch must be a list of metric dictionaries")
+
+    payloads = []
+    for item in data_batch:
+        try:
+            payloads.append(build_metric_payload(item))
+        except Exception:
+            continue
+
+    if not payloads:
+        return []
+
+    api_url = get_api_base_url()
+    session = create_secure_session()
+
+    response = session.post(
+        f"{api_url}/api/metrics/batch",
+        json={"metrics": payloads},
+        headers=_build_headers(access_token),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 # ==========================================
 # Software Inventory
 # ==========================================

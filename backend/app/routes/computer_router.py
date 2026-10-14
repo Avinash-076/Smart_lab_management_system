@@ -16,8 +16,8 @@ from app.schemas.computer_schema import (
     ComputerPatch,
 )
 from app.schemas.software_schema import SoftwareResponse
-from app.schemas.process_schema import ProcessResponse
-from app.schemas.usage_schema import UsageSessionResponse
+from app.schemas.process_schema import ProcessResponse, ProcessRankingsResponse
+from app.schemas.usage_schema import UsageSessionResponse, UsageSummaryResponse
 from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
 from app.schemas.notification_schema import NotificationResponse
@@ -131,6 +131,31 @@ def get_computer_processes(
     )
 
 
+@router.get(
+    "/{computer_id}/processes/rankings",
+    response_model=ProcessRankingsResponse,
+)
+def get_computer_process_rankings(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    limit: int = Query(default=5, ge=1, le=20),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return process_service.get_process_rankings(
+        db=db,
+        computer_id=computer_id,
+        limit=limit,
+    )
+
+
+
 def parse_query_datetime(val: str | None) -> datetime | None:
     if not val:
         return None
@@ -147,6 +172,41 @@ def parse_query_datetime(val: str | None) -> datetime | None:
 
 
 @router.get(
+    "/{computer_id}/usage/summary",
+    response_model=UsageSummaryResponse,
+)
+def get_computer_usage_summary(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    time_range: str = Query(default="today"),
+    start_time: str | None = None,
+    end_time: str | None = None,
+    user: str | None = None,
+    application: str | None = None,
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    parsed_start = parse_query_datetime(start_time)
+    parsed_end = parse_query_datetime(end_time)
+
+    return usage_service.get_usage_summary_for_computer(
+        db=db,
+        computer_id=computer_id,
+        time_range_preset=time_range,
+        start_time=parsed_start,
+        end_time=parsed_end,
+        user=user,
+        application=application,
+    )
+
+
+@router.get(
     "/{computer_id}/usage",
     response_model=list[UsageSessionResponse],
 )
@@ -158,6 +218,8 @@ def get_computer_usage(
     offset: int = 0,
     start_time: str | None = None,
     end_time: str | None = None,
+    user: str | None = None,
+    application: str | None = None,
 ):
     computer = computer_service.get_computer_by_id(db, computer_id)
 
@@ -177,6 +239,8 @@ def get_computer_usage(
         offset=offset,
         start_time=parsed_start,
         end_time=parsed_end,
+        user=user,
+        application=application,
     )
 
 

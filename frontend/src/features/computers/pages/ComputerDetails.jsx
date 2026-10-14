@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import {
   getComputer,
   getComputerMetrics,
-  getComputerUsage,
   updateComputer,
 } from "../../../services/computerService";
 import { getComputerSoftware } from "../../../services/softwareService";
@@ -13,10 +12,11 @@ import {
   cancelCommand,
 } from "../../../services/commandService";
 import Icon from "../../../components/ui/Icon";
-import MetricChart from "../components/MetricChart";
+import MatrixTab from "../components/MatrixTab";
 import ComputerSummaryCard from "../components/ComputerSummaryCard";
 import ComputerDetailsTabs from "../components/ComputerDetailsTabs";
 import HardwareInfoTab from "../components/HardwareInfoTab";
+import HistoryTab from "../components/HistoryTab";
 import EditComputerModal from "../components/EditComputerModal";
 import { useComputerWebSocket } from "../hooks/useComputerWebSocket";
 import "./ComputerDetails.css";
@@ -35,19 +35,7 @@ function formatDateTime(dateStr) {
   }
 }
 
-function formatDuration(seconds) {
-  if (!seconds || seconds <= 0) return "0s";
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-  if (h > 0) {
-    return `${h}h ${m > 0 ? `${m}m ` : ""}${s > 0 ? `${s}s` : ""}`.trim();
-  }
-  if (m > 0) {
-    return `${m}m ${s > 0 ? `${s}s` : ""}`.trim();
-  }
-  return `${s}s`;
-}
+
 
 function ComputerDetails({ computer, onBack }) {
   const rawId =
@@ -68,11 +56,6 @@ function ComputerDetails({ computer, onBack }) {
   const [activeTab, setActiveTab] = useState("hardware");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Historical metrics state
-  const [timeRange, setTimeRange] = useState("1h"); // '1h' | '6h' | '24h'
-  const [historicalMetrics, setHistoricalMetrics] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyError, setHistoryError] = useState("");
 
   // Software inventory state (V3.1)
   const [softwareList, setSoftwareList] = useState([]);
@@ -86,12 +69,6 @@ function ComputerDetails({ computer, onBack }) {
   const [processError, setProcessError] = useState("");
   const [processSearch, setProcessSearch] = useState("");
 
-  // Application usage history state (V3.3)
-  const [usageList, setUsageList] = useState([]);
-  const [usageLoading, setUsageLoading] = useState(false);
-  const [usageError, setUsageError] = useState("");
-  const [usageSearch, setUsageSearch] = useState("");
-  const [usageTimeRange, setUsageTimeRange] = useState("all"); // '1h' | '6h' | '24h' | 'all'
 
   // Remote command management state (V5.1)
   const [commandList, setCommandList] = useState([]);
@@ -107,42 +84,6 @@ function ComputerDetails({ computer, onBack }) {
     payload: "",
   });
 
-  const loadHistoricalMetrics = useCallback(
-    async (range = timeRange) => {
-      if (!computerId) return;
-
-      try {
-        setHistoryLoading(true);
-        setHistoryError("");
-
-        const now = Date.now();
-        let startTime = new Date(now - 60 * 60 * 1000); // default 1h
-
-        if (range === "6h") {
-          startTime = new Date(now - 6 * 60 * 60 * 1000);
-        } else if (range === "24h") {
-          startTime = new Date(now - 24 * 60 * 60 * 1000);
-        }
-
-        const metricsData = await getComputerMetrics(computerId, {
-          start_time: startTime,
-          limit: 300,
-        });
-
-        if (Array.isArray(metricsData)) {
-          setHistoricalMetrics(metricsData);
-        } else {
-          setHistoricalMetrics([]);
-        }
-      } catch (err) {
-        console.error("Failed to load historical metrics:", err);
-        setHistoryError(err.message || "Failed to load historical metrics.");
-      } finally {
-        setHistoryLoading(false);
-      }
-    },
-    [computerId, timeRange]
-  );
 
   const loadSoftware = useCallback(async () => {
     if (!computerId) return;
@@ -183,43 +124,6 @@ function ComputerDetails({ computer, onBack }) {
       setProcessLoading(false);
     }
   }, [computerId]);
-
-  const loadUsage = useCallback(
-    async (range = usageTimeRange) => {
-      if (!computerId) return;
-      try {
-        setUsageLoading(true);
-        setUsageError("");
-        let startTime = undefined;
-        const now = Date.now();
-        if (range === "1h") {
-          startTime = new Date(now - 60 * 60 * 1000);
-        } else if (range === "6h") {
-          startTime = new Date(now - 6 * 60 * 60 * 1000);
-        } else if (range === "24h") {
-          startTime = new Date(now - 24 * 60 * 60 * 1000);
-        }
-
-        const data = await getComputerUsage(computerId, {
-          start_time: startTime,
-          limit: 200,
-        });
-
-        if (Array.isArray(data)) {
-          setUsageList(data);
-        } else {
-          setUsageList([]);
-        }
-      } catch (err) {
-        console.warn("Could not fetch usage history:", err);
-        setUsageError(err.message || "Failed to load usage history.");
-        setUsageList([]);
-      } finally {
-        setUsageLoading(false);
-      }
-    },
-    [computerId, usageTimeRange]
-  );
 
   const loadCommands = useCallback(async () => {
     if (!computerId) return;
@@ -337,11 +241,9 @@ function ComputerDetails({ computer, onBack }) {
         setLatestMetric(null);
       }
 
-      await loadHistoricalMetrics(timeRange);
       await loadCommands();
       await loadSoftware();
       await loadProcesses();
-      await loadUsage(usageTimeRange);
     } catch (err) {
       console.error("Failed to load computer details:", err);
       setError(err.message || "Failed to load computer details.");
@@ -352,13 +254,9 @@ function ComputerDetails({ computer, onBack }) {
     }
   }, [
     computerId,
-    timeRange,
-    loadHistoricalMetrics,
     loadCommands,
     loadSoftware,
     loadProcesses,
-    loadUsage,
-    usageTimeRange,
   ]);
 
   useEffect(() => {
@@ -385,10 +283,6 @@ function ComputerDetails({ computer, onBack }) {
           if (!ignore) setLatestMetric(null);
         }
 
-        if (!ignore) {
-          await loadHistoricalMetrics(timeRange);
-        }
-
         try {
           const sw = await getComputerSoftware(computerId);
           if (!ignore) {
@@ -410,18 +304,6 @@ function ComputerDetails({ computer, onBack }) {
           if (!ignore) {
             setProcessError(procErr.message || "Failed to load running processes.");
             setProcessList([]);
-          }
-        }
-
-        try {
-          const usg = await getComputerUsage(computerId, { limit: 200 });
-          if (!ignore) {
-            setUsageList(Array.isArray(usg) ? usg : []);
-          }
-        } catch (usgErr) {
-          if (!ignore) {
-            setUsageError(usgErr.message || "Failed to load usage history.");
-            setUsageList([]);
           }
         }
 
@@ -454,7 +336,7 @@ function ComputerDetails({ computer, onBack }) {
     return () => {
       ignore = true;
     };
-  }, [computerId, timeRange, loadHistoricalMetrics]);
+  }, [computerId]);
 
   // WebSocket Live Updates Handler (V2.3)
   const handleLiveMetric = useCallback((metricMsg) => {
@@ -466,25 +348,6 @@ function ComputerDetails({ computer, onBack }) {
       network_sent: metricMsg.network_sent,
       network_received: metricMsg.network_received,
       recorded_at: metricMsg.recorded_at,
-    });
-
-    setHistoricalMetrics((prev) => {
-      if (!Array.isArray(prev)) return prev;
-      const isDuplicate = prev.some(
-        (m) => m.recorded_at === metricMsg.recorded_at
-      );
-      if (isDuplicate) return prev;
-      const newPoint = {
-        id: `live-${Date.now()}`,
-        computer_id: metricMsg.computer_id,
-        cpu_usage: metricMsg.cpu_usage,
-        ram_usage: metricMsg.ram_usage,
-        disk_usage: metricMsg.disk_usage,
-        network_sent: metricMsg.network_sent,
-        network_received: metricMsg.network_received,
-        recorded_at: metricMsg.recorded_at,
-      };
-      return [newPoint, ...prev].slice(0, 300);
     });
   }, []);
 
@@ -504,10 +367,6 @@ function ComputerDetails({ computer, onBack }) {
     onStatusUpdate: handleLiveStatus,
   });
 
-  const handleTimeRangeChange = (newRange) => {
-    setTimeRange(newRange);
-    loadHistoricalMetrics(newRange);
-  };
 
   /* =====================================================
      NO COMPUTER SELECTED
@@ -668,16 +527,6 @@ function ComputerDetails({ computer, onBack }) {
     );
   });
 
-  const handleUsageTimeRangeChange = (range) => {
-    setUsageTimeRange(range);
-    loadUsage(range);
-  };
-
-  const filteredUsage = usageList.filter((item) => {
-    if (!usageSearch.trim()) return true;
-    const q = usageSearch.toLowerCase();
-    return item.application_name && item.application_name.toLowerCase().includes(q);
-  });
 
   const filteredCommands = commandList.filter((cmd) => {
     const matchesStatus =
@@ -694,21 +543,6 @@ function ComputerDetails({ computer, onBack }) {
     return matchesStatus && matchesSearch;
   });
 
-  const totalUsageSeconds = filteredUsage.reduce(
-    (acc, curr) => acc + (curr.duration_seconds || 0),
-    0
-  );
-
-  const appDurationMap = {};
-  filteredUsage.forEach((item) => {
-    const name = item.application_name || "Unknown";
-    appDurationMap[name] = (appDurationMap[name] || 0) + (item.duration_seconds || 0);
-  });
-
-  const topApplications = Object.entries(appDurationMap)
-    .map(([name, duration]) => ({ name, duration }))
-    .sort((a, b) => b.duration - a.duration)
-    .slice(0, 5);
 
   const hardware = details.hardware || {};
   const uptimeText = (() => {
@@ -810,13 +644,10 @@ function ComputerDetails({ computer, onBack }) {
           TAB 2: MATRIX (HISTORICAL METRICS & CHARTS)
       ================================================= */}
       {activeTab === "matrix" && (
-        <MetricChart
-          metrics={historicalMetrics}
-          loading={historyLoading}
-          error={historyError}
-          timeRange={timeRange}
-          onTimeRangeChange={handleTimeRangeChange}
-          onRefresh={() => loadHistoricalMetrics(timeRange)}
+        <MatrixTab
+          computerId={computerId}
+          computer={details}
+          onTabChange={setActiveTab}
         />
       )}
 
@@ -1985,280 +1816,9 @@ function ComputerDetails({ computer, onBack }) {
           TAB 3: APPLICATION USAGE HISTORY
       ================================================= */}
       {activeTab === "history" && (
-        <div className="table-card" style={{ marginTop: "24px" }}>
-        <div
-          className="page-section-header"
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "18px 22px",
-            borderBottom: "1px solid #edf0f4",
-            flexWrap: "wrap",
-            gap: "12px",
-          }}
-        >
-          <div>
-            <h3 style={{ margin: 0, fontSize: "16px", color: "#07144a" }}>
-              Application Usage History
-            </h3>
-            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#68748b" }}>
-              Completed application sessions and runtime duration tracking.
-            </p>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-            {/* Time range selector */}
-            <div className="range-selector" style={{ display: "flex", gap: "4px" }}>
-              {["1h", "6h", "24h", "all"].map((r) => (
-                <button
-                  key={r}
-                  type="button"
-                  className={usageTimeRange === r ? "active" : ""}
-                  onClick={() => handleUsageTimeRangeChange(r)}
-                  style={{
-                    padding: "4px 10px",
-                    fontSize: "12px",
-                    borderRadius: "4px",
-                    border: usageTimeRange === r ? "1px solid #0962df" : "1px solid #e2e8f0",
-                    background: usageTimeRange === r ? "#0962df" : "#ffffff",
-                    color: usageTimeRange === r ? "#ffffff" : "#475569",
-                    cursor: "pointer",
-                    fontWeight: usageTimeRange === r ? 600 : 400,
-                  }}
-                >
-                  {r === "all" ? "All Time" : r.toUpperCase()}
-                </button>
-              ))}
-            </div>
-
-            <div
-              className="table-search"
-              style={{ width: "220px", height: "36px" }}
-            >
-              <input
-                value={usageSearch}
-                onChange={(e) => setUsageSearch(e.target.value)}
-                placeholder="Search application..."
-                style={{ fontSize: "12px" }}
-              />
-              <Icon type="search" size={16} />
-            </div>
-
-            <button
-              className="export"
-              onClick={() => loadUsage(usageTimeRange)}
-              disabled={usageLoading}
-              title="Refresh application usage history from server"
-              style={{ width: "auto", height: "36px", padding: "0 14px" }}
-            >
-              <Icon type="refresh" size={14} />
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {/* Summary Badges (When data exists) */}
-        {!usageLoading && !usageError && filteredUsage.length > 0 && (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "14px",
-              padding: "16px 22px",
-              background: "#f8fafc",
-              borderBottom: "1px solid #edf0f4",
-            }}
-          >
-            <div style={{ background: "#ffffff", padding: "12px 16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.5px" }}>
-                Total Sessions
-              </div>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "#0f172a", marginTop: "4px" }}>
-                {filteredUsage.length}
-              </div>
-            </div>
-
-            <div style={{ background: "#ffffff", padding: "12px 16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.5px" }}>
-                Total Active Time
-              </div>
-              <div style={{ fontSize: "18px", fontWeight: 700, color: "#0962df", marginTop: "4px" }}>
-                {formatDuration(totalUsageSeconds)}
-              </div>
-            </div>
-
-            <div style={{ background: "#ffffff", padding: "12px 16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-              <div style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.5px" }}>
-                Top Application
-              </div>
-              <div style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginTop: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {topApplications[0] ? `${topApplications[0].name} (${formatDuration(topApplications[0].duration)})` : "—"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Top Applications Duration Breakdown Bar */}
-        {!usageLoading && !usageError && topApplications.length > 0 && totalUsageSeconds > 0 && (
-          <div style={{ padding: "14px 22px", borderBottom: "1px solid #edf0f4" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "12px", fontWeight: 600, color: "#334155" }}>Top Applications by Usage Time</span>
-              <span style={{ fontSize: "11px", color: "#64748b" }}>Share of recorded runtime</span>
-            </div>
-            <div style={{ display: "flex", height: "10px", borderRadius: "5px", overflow: "hidden", background: "#f1f5f9" }}>
-              {topApplications.map((app, idx) => {
-                const colors = ["#0962df", "#159b55", "#f39b13", "#8b5cf6", "#ec4899"];
-                const pct = (app.duration / totalUsageSeconds) * 100;
-                return (
-                  <div
-                    key={app.name}
-                    title={`${app.name}: ${formatDuration(app.duration)} (${pct.toFixed(1)}%)`}
-                    style={{
-                      width: `${pct}%`,
-                      background: colors[idx % colors.length],
-                      minWidth: pct > 0 ? "4px" : "0",
-                    }}
-                  />
-                );
-              })}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", marginTop: "10px" }}>
-              {topApplications.map((app, idx) => {
-                const colors = ["#0962df", "#159b55", "#f39b13", "#8b5cf6", "#ec4899"];
-                const pct = (app.duration / totalUsageSeconds) * 100;
-                return (
-                  <div key={app.name} style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "11px", color: "#475569" }}>
-                    <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: colors[idx % colors.length] }} />
-                    <strong>{app.name}</strong>
-                    <span>({formatDuration(app.duration)} · {pct.toFixed(0)}%)</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {usageLoading && usageList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <Icon type="refresh" size={32} />
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>Loading usage history...</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>Fetching application runtime sessions from server.</p>
-          </div>
-        ) : usageError && usageList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#dc2626" }}>Failed to load usage history</h4>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>{usageError}</p>
-            <button
-              className="refresh"
-              onClick={() => loadUsage(usageTimeRange)}
-              style={{ display: "inline-flex" }}
-            >
-              Try Again
-            </button>
-          </div>
-        ) : usageList.length === 0 ? (
-          <div className="empty-state" style={{ padding: "40px 20px" }}>
-            <Icon type="reports" size={36} />
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No application usage recorded</h4>
-            <p style={{ margin: 0, fontSize: "13px", color: "#68748b" }}>The client agent has not reported application sessions for this computer yet.</p>
-          </div>
-        ) : filteredUsage.length === 0 ? (
-          <div className="empty-state" style={{ padding: "30px 20px" }}>
-            <h4 style={{ margin: "10px 0 4px", fontSize: "15px", color: "#101a3d" }}>No matching sessions found</h4>
-            <p style={{ margin: "0 0 12px", fontSize: "13px", color: "#68748b" }}>No application usage matches &quot;{usageSearch}&quot;.</p>
-            <button
-              className="export"
-              onClick={() => setUsageSearch("")}
-              style={{ display: "inline-flex" }}
-            >
-              Clear Search
-            </button>
-          </div>
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th style={{ width: "35%" }}>Application</th>
-                  <th style={{ width: "25%" }}>Session Started</th>
-                  <th style={{ width: "25%" }}>Session Ended</th>
-                  <th style={{ width: "15%" }}>Active Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredUsage.map((session) => (
-                  <tr key={session.id || `${session.application_name}-${session.started_at}`}>
-                    <td>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "32px",
-                            height: "32px",
-                            borderRadius: "6px",
-                            background: "#f0fdf4",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "#16a34a",
-                            flexShrink: 0,
-                          }}
-                        >
-                          <Icon type="computer" size={16} />
-                        </div>
-                        <strong style={{ color: "#1e293b", fontSize: "12px", fontFamily: "monospace" }}>
-                          {session.application_name}
-                        </strong>
-                      </div>
-                    </td>
-                    <td style={{ color: "#475569", fontSize: "12px" }}>
-                      {formatDateTime(session.started_at)}
-                    </td>
-                    <td style={{ color: "#64748b", fontSize: "12px" }}>
-                      {formatDateTime(session.ended_at)}
-                    </td>
-                    <td>
-                      <code
-                        style={{
-                          fontSize: "12px",
-                          fontWeight: 600,
-                          color: "#0962df",
-                          background: "#eff6ff",
-                          padding: "2px 8px",
-                          borderRadius: "4px",
-                        }}
-                      >
-                        {formatDuration(session.duration_seconds)}
-                      </code>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {usageList.length > 0 && (
-          <div
-            style={{
-              padding: "12px 20px",
-              fontSize: "12px",
-              color: "#64748b",
-              borderTop: "1px solid #edf0f4",
-              background: "#f8fafc",
-            }}
-          >
-            Showing <strong>{filteredUsage.length}</strong> of{" "}
-            <strong>{usageList.length}</strong> application usage sessions
-          </div>
-        )}
-      </div>
+        <HistoryTab
+          computerId={computerId}
+        />
       )}
 
       {/* =================================================

@@ -1,0 +1,46 @@
+.matrix-monitoring-tab {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 20px;
+}
+
+.matrix-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  margin-bottom: 20px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.matrix-error-banner .error-icon {
+  font-size: 1rem;
+}
+
+.matrix-error-banner .error-msg {
+  flex: 1;
+  font-weight: 500;
+}
+
+.matrix-retry-btn {
+  background: #ffffff;
+  border: 1px solid #fca5a5;
+  color: #b91c1c;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.matrix-retry-btn:hover {
+  background: #fee2e2;
+  border-color: #ef4444;
+}

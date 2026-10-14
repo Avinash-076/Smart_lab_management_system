@@ -92,15 +92,39 @@ def get_hardware_info() -> dict[str, Any]:
 
     boot_time = datetime.fromtimestamp(psutil.boot_time())
 
+    # Partition capacity collection (non-blocking)
+    partitions: list[dict[str, Any]] = []
+    try:
+        for part in psutil.disk_partitions(all=False):
+            try:
+                p_usage = psutil.disk_usage(part.mountpoint)
+                partitions.append(
+                    {
+                        "device": part.device,
+                        "mountpoint": part.mountpoint,
+                        "fstype": part.fstype,
+                        "total_gb": round(p_usage.total / (1024**3), 2),
+                        "used_gb": round(p_usage.used / (1024**3), 2),
+                        "free_gb": round(p_usage.free / (1024**3), 2),
+                        "percent": float(p_usage.percent),
+                    }
+                )
+            except (PermissionError, OSError):
+                continue
+    except Exception:
+        pass
+
     return {
         "cpu_usage": float(cpu_usage),
         "cpu_count": psutil.cpu_count(logical=True),
         "ram_total_gb": round(memory.total / (1024**3), 2),
         "ram_used_gb": round(memory.used / (1024**3), 2),
+        "ram_available_gb": round(memory.available / (1024**3), 2),
         "ram_percent": float(memory.percent),
         "disk_total_gb": round(disk.total / (1024**3), 2),
         "disk_used_gb": round(disk.used / (1024**3), 2),
         "disk_percent": float(disk.percent),
+        "partitions": partitions,
         "boot_time": boot_time.strftime("%Y-%m-%d %H:%M:%S"),
     }
 

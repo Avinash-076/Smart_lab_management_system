@@ -41,6 +41,16 @@ class UsageSession(Base):
         nullable=False,
     )
 
+    process_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    user: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -70,6 +80,11 @@ class UsageSession(Base):
             "ix_usage_sessions_computer_started",
             "computer_id",
             "started_at",
+        ),
+        Index(
+            "ix_usage_sessions_computer_app",
+            "computer_id",
+            "application_name",
         ),
         UniqueConstraint(
             "computer_id",

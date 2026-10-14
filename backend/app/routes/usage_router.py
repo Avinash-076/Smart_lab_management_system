@@ -6,6 +6,7 @@ from fastapi import (
     Depends,
     HTTPException,
     Query,
+    Response,
     status,
 )
 from sqlalchemy.exc import (
@@ -22,6 +23,7 @@ from app.database import get_db
 from app.models.agent_credential import AgentCredential
 from app.schemas.usage_schema import (
     UsageSessionResponse,
+    UsageSummaryResponse,
     UsageUpload,
 )
 from app.services import (
@@ -112,11 +114,47 @@ def parse_query_datetime(val: str | None) -> datetime | None:
 
 
 @router.get(
+    "/{computer_id}/summary",
+    response_model=UsageSummaryResponse,
+)
+def get_usage_summary(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+    time_range: str = Query(default="today"),
+    start_time: str | None = Query(default=None),
+    end_time: str | None = Query(default=None),
+    user: str | None = Query(default=None),
+    application: str | None = Query(default=None),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    parsed_start = parse_query_datetime(start_time)
+    parsed_end = parse_query_datetime(end_time)
+
+    return usage_service.get_usage_summary_for_computer(
+        db=db,
+        computer_id=computer_id,
+        time_range_preset=time_range,
+        start_time=parsed_start,
+        end_time=parsed_end,
+        user=user,
+        application=application,
+    )
+
+
+@router.get(
     "/{computer_id}",
     response_model=list[UsageSessionResponse],
 )
 def get_usage(
     computer_id: int,
+    response: Response,
     db: DbSession,
     _user=Depends(
         require_permission("VIEW_COMPUTERS")
@@ -132,6 +170,8 @@ def get_usage(
     ),
     start_time: str | None = Query(default=None),
     end_time: str | None = Query(default=None),
+    user: str | None = Query(default=None),
+    application: str | None = Query(default=None),
 ):
     computer = computer_service.get_computer_by_id(
         db,
@@ -147,6 +187,16 @@ def get_usage(
     parsed_start = parse_query_datetime(start_time)
     parsed_end = parse_query_datetime(end_time)
 
+    total_count = usage_service.get_usage_count_for_computer(
+        db=db,
+        computer_id=computer_id,
+        start_time=parsed_start,
+        end_time=parsed_end,
+        user=user,
+        application=application,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
     return usage_service.get_usage_for_computer(
         db=db,
         computer_id=computer_id,
@@ -154,6 +204,8 @@ def get_usage(
         offset=offset,
         start_time=parsed_start,
         end_time=parsed_end,
+        user=user,
+        application=application,
     )
 
 

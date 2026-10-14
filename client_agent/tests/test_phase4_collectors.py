@@ -533,6 +533,24 @@ class TestNetworkCountersD06:
         assert payload["network_sent"] == 5000000
         assert payload["network_received"] == 10000000
 
+    def test_get_hardware_info_includes_ram_available_and_partitions(self):
+        """get_hardware_info must return ram_available_gb and partitions list."""
+        info = get_hardware_info()
+        assert "ram_available_gb" in info
+        assert "partitions" in info
+        assert isinstance(info["partitions"], list)
+
+    def test_get_network_info_computes_throughput_rate_and_preserves_cumulative(self):
+        """get_network_info must return cumulative counters and non-negative throughput rates."""
+        info = get_network_info()
+        assert "bytes_sent" in info
+        assert "bytes_received" in info
+        assert "upload_mbps" in info
+        assert "download_mbps" in info
+        assert info["upload_mbps"] >= 0.0
+        assert info["download_mbps"] >= 0.0
+
+
 
 # ============================================================================
 # D-07: Software Cache Empty-Result Bug

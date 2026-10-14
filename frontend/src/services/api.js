@@ -324,6 +324,10 @@ export async function fetchWithAuth(endpoint, options = {}) {
     throw new ApiError(message, response.status, data?.detail, data);
   }
 
+  if (options.includeHeaders) {
+    return { data, headers: response.headers };
+  }
+
   return data;
 }
 

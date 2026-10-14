@@ -45,8 +45,39 @@ export async function getComputerMetrics(id, options = {}) {
   return fetchWithAuth(`/metrics/${id}${query}`);
 }
 
+export async function getComputerMetricSummary(id, options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.start_time) {
+      params.set(
+        "start_time",
+        options.start_time instanceof Date
+          ? options.start_time.toISOString()
+          : options.start_time
+      );
+    }
+    if (options.end_time) {
+      params.set(
+        "end_time",
+        options.end_time instanceof Date
+          ? options.end_time.toISOString()
+          : options.end_time
+      );
+    }
+    if (options.range_preset) {
+      params.set("range_preset", options.range_preset);
+    }
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/metrics/${id}/summary${query}`);
+}
+
+
 export async function getComputerUsage(id, options = {}) {
   let query = "";
+  let includeHeaders = false;
   if (options && typeof options === "object") {
     const params = new URLSearchParams();
     if (options.limit !== undefined) params.set("limit", options.limit);
@@ -67,10 +98,44 @@ export async function getComputerUsage(id, options = {}) {
           : options.end_time
       );
     }
+    if (options.user) params.set("user", options.user);
+    if (options.application) params.set("application", options.application);
+    if (options.includeHeaders) includeHeaders = true;
     const qs = params.toString();
     if (qs) query = `?${qs}`;
   }
-  return fetchWithAuth(`/clients/${id}/usage${query}`);
+  return fetchWithAuth(
+    `/clients/${id}/usage${query}`,
+    includeHeaders ? { includeHeaders: true } : {}
+  );
+}
+
+export async function getComputerUsageSummary(id, options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.start_time) {
+      params.set(
+        "start_time",
+        options.start_time instanceof Date
+          ? options.start_time.toISOString()
+          : options.start_time
+      );
+    }
+    if (options.end_time) {
+      params.set(
+        "end_time",
+        options.end_time instanceof Date
+          ? options.end_time.toISOString()
+          : options.end_time
+      );
+    }
+    if (options.user) params.set("user", options.user);
+    if (options.application) params.set("application", options.application);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/clients/${id}/usage/summary${query}`);
 }
 
 export async function deleteComputer(id) {

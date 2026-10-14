@@ -25,6 +25,7 @@ from app.database import get_db
 from app.models.agent_credential import AgentCredential
 
 from app.schemas.process_schema import (
+    ProcessRankingsResponse,
     ProcessResponse,
     ProcessUpload,
 )
@@ -157,6 +158,41 @@ def get_processes(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get(
+    "/{computer_id}/rankings",
+    response_model=ProcessRankingsResponse,
+)
+def get_process_rankings(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+    limit: int = Query(
+        default=5,
+        ge=1,
+        le=20,
+    ),
+):
+    computer = computer_service.get_computer_by_id(
+        db,
+        computer_id,
+    )
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return process_service.get_process_rankings(
+        db=db,
+        computer_id=computer_id,
+        limit=limit,
+    )
+
 
 
 # ============================================================

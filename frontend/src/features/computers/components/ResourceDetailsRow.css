@@ -1,0 +1,297 @@
+.resource-details-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+@media (max-width: 1200px) {
+  .resource-details-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.detail-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px 20px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.detail-card-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-card-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #1e293b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.detail-card-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.detail-loading-skeleton {
+  width: 100%;
+  height: 90px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  animation: pulse-skeleton 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse-skeleton {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Disk Partitions Body */
+.partitions-list {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.partition-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.partition-label-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2px;
+}
+
+.partition-name {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+}
+
+.partition-pct-row {
+  margin-bottom: 6px;
+}
+
+.partition-pct-val {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+}
+
+.partition-bar-track {
+  width: 100%;
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.partition-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.partition-bar-fill.orange {
+  background: #f59e0b;
+}
+
+.partition-bar-fill.blue {
+  background: #3b82f6;
+}
+
+.partition-subtext {
+  font-size: 0.6875rem;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+/* Memory Details Card */
+.memory-stacked-track {
+  display: flex;
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: #f1f5f9;
+  margin-top: 6px;
+  margin-bottom: 20px;
+}
+
+.memory-segment-fill {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.memory-segment-fill.in-use {
+  background: #10b981;
+}
+
+.memory-segment-fill.available {
+  background: #cbd5e1;
+}
+
+.memory-legend-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.memory-legend-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.legend-dot-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.legend-dot.green {
+  background: #10b981;
+}
+
+.legend-dot.grey {
+  background: #cbd5e1;
+}
+
+.legend-dot.blue {
+  background: #94a3b8;
+}
+
+.legend-lbl {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.legend-val {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+  padding-left: 14px;
+}
+
+/* Network Details Card */
+.network-speeds-grid {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.speed-dial-box {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.speed-circle-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.speed-circle-icon.down {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.speed-circle-icon.up {
+  background: #f5f3ff;
+  color: #8b5cf6;
+}
+
+.speed-info-stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.speed-value {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+  letter-spacing: -0.01em;
+}
+
+.speed-label {
+  font-size: 0.6875rem;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.network-cumulative-row {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 12px;
+}
+
+.cumulative-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cumul-label {
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+}
+
+.cumul-val {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+}

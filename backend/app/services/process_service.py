@@ -145,3 +145,86 @@ def delete_processes_for_computer(
     except SQLAlchemyError:
         db.rollback()
         raise
+
+
+def get_process_rankings(
+    db: Session,
+    computer_id: int,
+    limit: int = 5,
+) -> dict:
+    """
+    Retrieve ranked process lists for Matrix tab monitoring:
+    - Top CPU consumers
+    - Top Memory consumers
+    - Platform network attribution metadata
+    """
+    from app.models.computer_hardware import ComputerHardware
+
+    limit = min(max(limit, 1), 20)
+
+    hardware = db.scalars(
+        select(ComputerHardware).where(ComputerHardware.computer_id == computer_id)
+    ).first()
+    total_ram_mb = (
+        (hardware.ram_total_gb * 1024.0)
+        if (hardware and hardware.ram_total_gb)
+        else (16.0 * 1024.0)
+    )
+
+    # Top CPU processes
+    cpu_procs = list(
+        db.scalars(
+            select(Process)
+            .where(Process.computer_id == computer_id)
+            .order_by(
+                Process.cpu_percent.desc(),
+                Process.memory_percent.desc(),
+                Process.name.asc(),
+            )
+            .limit(limit)
+        ).all()
+    )
+
+    # Top Memory processes
+    mem_procs = list(
+        db.scalars(
+            select(Process)
+            .where(Process.computer_id == computer_id)
+            .order_by(
+                Process.memory_percent.desc(),
+                Process.cpu_percent.desc(),
+                Process.name.asc(),
+            )
+            .limit(limit)
+        ).all()
+    )
+
+    def _format_item(rank: int, p: Process) -> dict:
+        mem_mb = round((p.memory_percent / 100.0) * total_ram_mb, 1) if p.memory_percent else 0.0
+        return {
+            "rank": rank,
+            "pid": p.pid,
+            "name": p.name,
+            "user": p.user or "System",
+            "cpu_percent": round(p.cpu_percent, 1),
+            "memory_percent": round(p.memory_percent, 1),
+            "memory_mb": mem_mb,
+            "download_mb": None,
+            "upload_mb": None,
+            "total_mb": None,
+        }
+
+    top_cpu = [_format_item(i + 1, p) for i, p in enumerate(cpu_procs)]
+    top_mem = [_format_item(i + 1, p) for i, p in enumerate(mem_procs)]
+
+    return {
+        "computer_id": computer_id,
+        "top_cpu": top_cpu,
+        "top_memory": top_mem,
+        "network": {
+            "supported": False,
+            "status": "unavailable",
+            "reason": "Platform attribution unavailable: user-space process socket I/O is not reliably attributable without kernel-mode drivers on Windows.",
+            "items": [],
+        },
+    }
