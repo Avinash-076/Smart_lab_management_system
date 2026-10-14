@@ -531,22 +531,28 @@ class AgentWebSocketClient:
             return
 
         logger.info(f"Executing remote command: id={command_id}, type={command_type}")
+        t0 = time.monotonic()
         try:
             success, result_message = execute_command(command_type, payload)
         except Exception as exc:
             logger.exception(f"Unexpected error executing command {command_id}: {exc}")
             success, result_message = False, f"Internal execution error: {exc}"
+        duration_sec = max(0.0, round(time.monotonic() - t0, 3))
 
         # Persist result to durable outbox (Priority 1 = COMMAND)
         if self.outbox is not None:
             try:
+                cmd_payload = {
+                    "command_id": command_id,
+                    "success": success,
+                    "message": result_message,
+                }
+                if duration_sec is not None:
+                    cmd_payload["duration_seconds"] = duration_sec
+
                 self.outbox.enqueue(
                     event_type="command_result",
-                    payload={
-                        "command_id": command_id,
-                        "success": success,
-                        "message": result_message,
-                    },
+                    payload=cmd_payload,
                     idempotency_key=f"cmd_result_{command_id}",
                     priority=OutboxPriority.COMMAND,
                     max_attempts=10,

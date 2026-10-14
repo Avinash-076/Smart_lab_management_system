@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -29,7 +29,12 @@ class CommandResult(Base):
     )
 
     message: Mapped[str | None] = mapped_column(
-        String(255),
+        String(1000),
+        nullable=True,
+    )
+
+    duration_seconds: Mapped[float | None] = mapped_column(
+        Float,
         nullable=True,
     )
 

@@ -25,7 +25,7 @@ from app.schemas.usage_schema import UsageSessionResponse, UsageSummaryResponse
 from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
 from app.schemas.notification_schema import NotificationResponse
-from app.schemas.command_schema import CommandResponse
+from app.schemas.command_schema import CommandResponse, CommandSummaryResponse
 from app.schemas.computer_hardware_schema import (
     ComputerHardwareUpload,
     ComputerHardwareResponse,
@@ -484,13 +484,36 @@ def get_computer_notifications(
 
 
 @router.get(
+    "/{computer_id}/commands/summary",
+    response_model=CommandSummaryResponse,
+)
+def get_computer_commands_summary(
+    computer_id: int,
+    db: DbSession,
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+    return command_service.get_command_summary_for_computer(db, computer_id)
+
+
+@router.get(
     "/{computer_id}/commands",
     response_model=list[CommandResponse],
 )
 def get_computer_commands(
     computer_id: int,
+    response: Response,
     db: DbSession,
     _user=Depends(require_permission("VIEW_COMPUTERS")),
+    search: str | None = Query(default=None),
+    command_status: str | None = Query(default=None, alias="status"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ):
@@ -502,9 +525,23 @@ def get_computer_commands(
             detail="Computer not found",
         )
 
+    total_count = command_service.get_commands_count_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        status=command_status,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
     return command_service.get_commands_for_computer(
         db=db,
         computer_id=computer_id,
+        search=search,
+        status=command_status,
+        start_date=start_date,
+        end_date=end_date,
         limit=limit,
         offset=offset,
     )

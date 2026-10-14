@@ -1,0 +1,171 @@
+/* Command Summary Cards Grid */
+.command-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  flex: 1;
+}
+
+.command-metric-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 104px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.command-metric-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.command-metric-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.command-metric-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.command-metric-icon-box.icon-box-blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.command-metric-icon-box.icon-box-green {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.command-metric-icon-box.icon-box-red {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.command-metric-icon-box.icon-box-orange {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.command-metric-text-group {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.command-metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  text-transform: capitalize;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.command-metric-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.command-metric-value-time {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.command-metric-unit {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin-left: 2px;
+}
+
+.command-metric-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.command-metric-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+}
+
+.command-metric-badge.badge-green {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.command-metric-badge.badge-red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.command-metric-subtext {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.command-metric-action {
+  margin-top: 10px;
+}
+
+.command-run-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: #f0f7ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.command-run-btn:hover {
+  background: #0962df;
+  border-color: #0962df;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(9, 98, 223, 0.2);
+}
+
+@media (max-width: 1400px) {
+  .command-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .command-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

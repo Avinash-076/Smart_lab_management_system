@@ -1,0 +1,248 @@
+/* Command Details Panel */
+.cmd-details-panel {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  animation: fadeIn 0.2s ease;
+}
+
+.cmd-details-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.cmd-details-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.cmd-details-close-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.cmd-details-close-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* Banner */
+.cmd-details-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.cmd-details-banner.success {
+  background: #ecfdf5;
+  color: #065f46;
+  border: 1px solid #a7f3d0;
+}
+
+.cmd-details-banner.failed {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.cmd-details-banner.pending {
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.cmd-details-banner.delivered {
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+.cmd-details-banner.cancelled {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+/* Meta list */
+.cmd-details-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 14px;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 90px 12px 1fr;
+  align-items: baseline;
+  font-size: 12.5px;
+}
+
+.meta-label {
+  color: #64748b;
+  font-weight: 500;
+}
+
+.meta-colon {
+  color: #94a3b8;
+}
+
+.meta-value {
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.meta-value.font-medium {
+  font-weight: 600;
+}
+
+.meta-value.status-text.success {
+  color: #059669;
+  font-weight: 600;
+}
+
+.meta-value.status-text.failed {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+.meta-value.status-text.pending {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.meta-value.status-text.delivered {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.meta-value.message-quote {
+  font-style: italic;
+  color: #334155;
+}
+
+/* Details Tabs */
+.cmd-details-tabs {
+  display: flex;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+}
+
+.cmd-details-tab {
+  position: relative;
+  background: none;
+  border: none;
+  padding: 6px 0 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.cmd-details-tab:hover {
+  color: #0f172a;
+}
+
+.cmd-details-tab.active {
+  color: #0962df;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: #0962df;
+  border-radius: 2px 2px 0 0;
+}
+
+/* Tab Content Box */
+.cmd-details-content-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+  min-height: 90px;
+}
+
+.result-text-area {
+  padding: 12px 36px 12px 12px;
+}
+
+.result-message {
+  margin: 0;
+  font-size: 12.5px;
+  color: #334155;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.raw-text-area {
+  padding: 10px 36px 10px 10px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.raw-json {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.copy-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.copy-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.copied-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #059669;
+}

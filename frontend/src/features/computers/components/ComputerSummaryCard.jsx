@@ -2,6 +2,7 @@ import Icon from "../../../components/ui/Icon";
 import { parseUptimeString } from "../utils/computerUtils";
 import SoftwareSummaryCards from "./SoftwareSummaryCards";
 import ProcessSummaryCards from "./ProcessSummaryCards";
+import CommandSummaryCards from "./CommandSummaryCards";
 import "./ComputerSummaryCard.css";
 
 function ComputerIllustration() {
@@ -82,6 +83,9 @@ export default function ComputerSummaryCard({
   softwareLoading = false,
   processSummary = null,
   processLoading = false,
+  commandSummary = null,
+  commandLoading = false,
+  onRunCommand = null,
   onScanNow = null,
   scanning = false,
 }) {
@@ -191,6 +195,12 @@ export default function ComputerSummaryCard({
           loading={processLoading}
           onScanNow={onScanNow}
           scanning={scanning}
+        />
+      ) : activeTab === "commands" ? (
+        <CommandSummaryCards
+          summary={commandSummary}
+          loading={commandLoading}
+          onRunCommand={onRunCommand}
         />
       ) : (
         <div className="summary-metrics-grid">

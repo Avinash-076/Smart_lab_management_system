@@ -1,0 +1,461 @@
+/* Execute Command Panel Card */
+.execute-command-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.execute-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.execute-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.execute-icon-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: #0962df;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.execute-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.execute-subtitle {
+  font-size: 13px;
+  color: #64748b;
+  margin: 2px 0 0 0;
+}
+
+.execute-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.execute-status-indicator .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.execute-status-indicator .status-dot.online {
+  background: #10b981;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.execute-status-indicator .status-dot.offline {
+  background: #94a3b8;
+}
+
+.execute-status-indicator .status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #334155;
+}
+
+/* Command Selector Grid */
+.command-selector-section {
+  margin-bottom: 16px;
+}
+
+.section-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 8px;
+}
+
+.command-options-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.command-option-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  width: 100%;
+}
+
+.command-option-card:hover:not(:disabled) {
+  border-color: #93c5fd;
+  background: #f8fbff;
+}
+
+.command-option-card.selected {
+  border-color: #0962df;
+  background: #f0f7ff;
+  box-shadow: 0 0 0 1px #0962df;
+}
+
+.command-option-icon {
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.command-option-card.selected .command-option-icon {
+  color: #0962df;
+}
+
+.command-option-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.command-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.command-option-card.selected .command-option-title {
+  color: #0962df;
+}
+
+.command-option-desc {
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+/* Feedback Banner */
+.execute-feedback-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.execute-feedback-banner.success {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  color: #065f46;
+}
+
+.execute-feedback-banner.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.feedback-text {
+  flex: 1;
+}
+
+.feedback-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-size: 14px;
+  opacity: 0.6;
+}
+
+.feedback-close:hover {
+  opacity: 1;
+}
+
+/* Command Form Container */
+.command-form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.message-command-layout {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+}
+
+.message-input-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #0f172a;
+  resize: vertical;
+  background: #ffffff;
+  transition: border-color 0.15s ease;
+}
+
+.message-textarea:focus {
+  outline: none;
+  border-color: #0962df;
+  box-shadow: 0 0 0 3px rgba(9, 98, 223, 0.12);
+}
+
+.char-counter-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.char-counter {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.message-info-box {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  gap: 12px;
+}
+
+.info-bullets {
+  margin: 0;
+  padding-left: 16px;
+  color: #0369a1;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.info-bullets li {
+  margin-bottom: 4px;
+}
+
+.info-bullets li:last-child {
+  margin-bottom: 0;
+}
+
+/* Confirm Boxes for Lock, Restart, Shutdown */
+.action-confirm-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.action-confirm-box.lock-box {
+  background: #f8fbff;
+  border-color: #bfdbfe;
+}
+
+.action-confirm-box.warning-box {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.action-confirm-box.danger-box {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.confirm-text h4 {
+  margin: 0 0 4px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.confirm-text p {
+  margin: 0 0 10px 0;
+  font-size: 12.5px;
+  color: #475569;
+  line-height: 1.5;
+}
+
+.confirm-text code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-family: monospace;
+}
+
+.confirm-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #1e293b;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.confirm-checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #0962df;
+}
+
+/* Action Buttons Bar */
+.execute-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.execute-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 18px;
+  background: #0962df;
+  border: 1px solid #0962df;
+  color: #ffffff;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.execute-submit-btn:hover:not(:disabled) {
+  background: #074ec0;
+  border-color: #074ec0;
+  box-shadow: 0 2px 6px rgba(9, 98, 223, 0.25);
+}
+
+.execute-submit-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.execute-submit-btn.restart {
+  background: #d97706;
+  border-color: #d97706;
+}
+
+.execute-submit-btn.restart:hover:not(:disabled) {
+  background: #b45309;
+  border-color: #b45309;
+}
+
+.execute-submit-btn.shutdown {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.execute-submit-btn.shutdown:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.execute-clear-btn {
+  padding: 9px 18px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.execute-clear-btn:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #1e293b;
+}
+
+.spinner-inline {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 1100px) {
+  .command-options-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .message-command-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .command-options-grid {
+    grid-template-columns: 1fr;
+  }
+  .execute-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

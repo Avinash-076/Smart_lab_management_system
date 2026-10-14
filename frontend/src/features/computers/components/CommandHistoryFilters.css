@@ -1,0 +1,153 @@
+/* Command History Filters Bar */
+.cmd-filters-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cmd-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 280px;
+  flex: 1;
+}
+
+.cmd-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.cmd-search-input {
+  width: 100%;
+  padding: 8px 32px 8px 36px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0f172a;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.cmd-search-input:focus {
+  background: #ffffff;
+  border-color: #0962df;
+  box-shadow: 0 0 0 3px rgba(9, 98, 223, 0.1);
+}
+
+.cmd-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.cmd-search-clear:hover {
+  color: #475569;
+}
+
+.cmd-filter-item {
+  display: flex;
+  align-items: center;
+}
+
+.cmd-filter-select {
+  padding: 8px 28px 8px 12px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.15s ease;
+}
+
+.cmd-filter-select:focus {
+  border-color: #0962df;
+  box-shadow: 0 0 0 3px rgba(9, 98, 223, 0.1);
+}
+
+.cmd-apply-btn {
+  padding: 8px 16px;
+  background: #0962df;
+  color: #ffffff;
+  border: 1px solid #0962df;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cmd-apply-btn:hover:not(:disabled) {
+  background: #074ec0;
+  border-color: #074ec0;
+  box-shadow: 0 2px 6px rgba(9, 98, 223, 0.25);
+}
+
+.cmd-apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cmd-reset-btn {
+  padding: 8px 14px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cmd-reset-btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.cmd-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #ffffff;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cmd-export-btn:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+  color: #0f172a;
+}
+
+@media (max-width: 900px) {
+  .cmd-search-wrapper {
+    min-width: 100%;
+  }
+}

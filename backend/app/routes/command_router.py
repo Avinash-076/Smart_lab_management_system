@@ -1,9 +1,12 @@
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
+    Response,
     status,
 )
 
@@ -22,6 +25,7 @@ from app.schemas.command_schema import (
     CommandResponse,
     CommandResultSubmit,
     CommandResultResponse,
+    CommandSummaryResponse,
 )
 from app.services import (
     audit_service,
@@ -114,6 +118,7 @@ async def issue_command(
 def get_command_details(
     command_id: int,
     db: DbSession,
+    computer_id: int | None = Query(default=None),
     _user=Depends(
         require_permission("VIEW_COMPUTERS")
     ),
@@ -127,7 +132,9 @@ def get_command_details(
         command_id=command_id,
     )
 
-    if command is None:
+    if command is None or (
+        computer_id is not None and command.computer_id != computer_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Command not found",
@@ -137,10 +144,10 @@ def get_command_details(
 
 
 @router.get(
-    "/{computer_id}",
-    response_model=list[CommandResponse],
+    "/{computer_id}/summary",
+    response_model=CommandSummaryResponse,
 )
-def get_command_history(
+def get_command_summary(
     computer_id: int,
     db: DbSession,
     _user=Depends(
@@ -148,7 +155,45 @@ def get_command_history(
     ),
 ):
     """
-    Get command history for a computer.
+    Get aggregated command metrics and recent activity for a computer.
+    """
+    computer = computer_service.get_computer_by_id(
+        db,
+        computer_id,
+    )
+
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return command_service.get_command_summary_for_computer(
+        db=db,
+        computer_id=computer_id,
+    )
+
+
+@router.get(
+    "/{computer_id}",
+    response_model=list[CommandResponse],
+)
+def get_command_history(
+    computer_id: int,
+    response: Response,
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+    search: str | None = Query(default=None),
+    command_status: str | None = Query(default=None, alias="status"),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """
+    Get command history for a computer with filtering and pagination.
     """
 
     computer = computer_service.get_computer_by_id(
@@ -162,9 +207,25 @@ def get_command_history(
             detail="Computer not found",
         )
 
+    total_count = command_service.get_commands_count_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        status=command_status,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
     return command_service.get_commands_for_computer(
         db=db,
         computer_id=computer_id,
+        search=search,
+        status=command_status,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
     )
 
 
@@ -175,6 +236,7 @@ def get_command_history(
 def cancel_command(
     command_id: int,
     db: DbSession,
+    computer_id: int | None = Query(default=None),
     _user=Depends(
         require_permission("ISSUE_COMMAND")
     ),
@@ -188,10 +250,97 @@ def cancel_command(
         command_id=command_id,
     )
 
-    if command is None:
+    if command is None or (
+        computer_id is not None and command.computer_id != computer_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Command not found",
+        )
+
+    try:
+        cancelled_command = command_service.cancel_command(
+            db=db,
+            command=command,
+        )
+
+        audit_service.log_action(
+            db=db,
+            result=AuditResult.success,
+            action="CANCEL_COMMAND",
+            user_id=_user.id,
+            target_type="COMMAND",
+            target_id=command_id,
+        )
+
+        return cancelled_command
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(e),
+        )
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to cancel command",
+        )
+
+
+@router.get(
+    "/{computer_id}/commands/{command_id}",
+    response_model=CommandResponse,
+)
+def get_computer_command_detail(
+    computer_id: int,
+    command_id: int,
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+):
+    """
+    Get detailed status and result for a single command scoped strictly to the specified computer.
+    """
+    command = command_service.get_command_by_id(
+        db=db,
+        command_id=command_id,
+    )
+
+    if command is None or command.computer_id != computer_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Command not found for this computer",
+        )
+
+    return command
+
+
+@router.post(
+    "/{computer_id}/commands/{command_id}/cancel",
+    response_model=CommandResponse,
+)
+def cancel_computer_command(
+    computer_id: int,
+    command_id: int,
+    db: DbSession,
+    _user=Depends(
+        require_permission("ISSUE_COMMAND")
+    ),
+):
+    """
+    Cancel a pending command scoped strictly to the specified computer.
+    """
+    command = command_service.get_command_by_id(
+        db=db,
+        command_id=command_id,
+    )
+
+    if command is None or command.computer_id != computer_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Command not found for this computer",
         )
 
     try:

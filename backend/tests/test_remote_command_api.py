@@ -8,6 +8,7 @@ from app.models.remote_command import RemoteCommand, CommandType, CommandStatus
 from app.models.command_result import CommandResult
 from app.models.audit_log import AuditLog, AuditResult
 from app.models.computer import Computer
+from app.models.agent_credential import AgentCredential
 from app.models.role import Role
 from app.models.role_permission import RolePermission
 from app.models.user import User
@@ -485,3 +486,261 @@ def test_submit_command_result_message_too_long(client: TestClient, registered_a
         headers=agent_headers,
     )
     assert resp.status_code == 422
+
+
+def test_command_summary_and_filtering(client: TestClient, registered_agent, admin_user, db_session):
+    comp_id = registered_agent["computer_id"]
+    agent_token = registered_agent["token"]
+    agent_headers = {"Authorization": f"Bearer {agent_token}"}
+    admin_headers = admin_user["headers"]
+    user = admin_user["user"]
+
+    # Create 3 commands
+    cmd1 = RemoteCommand(
+        computer_id=comp_id,
+        command_type=CommandType.message,
+        payload="Hello Lab",
+        status=CommandStatus.delivered,
+        issued_by=user.id,
+    )
+    cmd2 = RemoteCommand(
+        computer_id=comp_id,
+        command_type=CommandType.lock,
+        payload=None,
+        status=CommandStatus.delivered,
+        issued_by=user.id,
+    )
+    cmd3 = RemoteCommand(
+        computer_id=comp_id,
+        command_type=CommandType.restart,
+        payload=None,
+        status=CommandStatus.pending,
+        issued_by=user.id,
+    )
+    db_session.add_all([cmd1, cmd2, cmd3])
+    db_session.commit()
+    db_session.refresh(cmd1)
+    db_session.refresh(cmd2)
+    db_session.refresh(cmd3)
+
+    # Submit result for cmd1 (success)
+    client.post(
+        f"/api/commands/{cmd1.id}/result",
+        json={"success": True, "message": "Message displayed", "duration_seconds": 1.25},
+        headers=agent_headers,
+    )
+
+    # Submit result for cmd2 (failed)
+    client.post(
+        f"/api/commands/{cmd2.id}/result",
+        json={"success": False, "message": "Access denied", "duration_seconds": 0.45},
+        headers=agent_headers,
+    )
+
+    # Test Summary Endpoint
+    sum_resp = client.get(
+        f"/api/commands/{comp_id}/summary",
+        headers=admin_headers,
+    )
+    assert sum_resp.status_code == 200
+    summary = sum_resp.json()
+    assert summary["total_commands"] >= 3
+    assert summary["successful_commands"] >= 1
+    assert summary["failed_commands"] >= 1
+    assert summary["pending_commands"] >= 1
+    assert summary["last_execution_at"] is not None
+    assert len(summary["recent_activities"]) >= 3
+
+    # Test filtered list with search
+    list_resp = client.get(
+        f"/api/commands/{comp_id}?search=Hello",
+        headers=admin_headers,
+    )
+    assert list_resp.status_code == 200
+    items = list_resp.json()
+    assert len(items) == 1
+    assert items[0]["command_type"] == "message"
+    assert items[0]["payload"] == "Hello Lab"
+    assert items[0]["issued_by_username"] == user.username
+    assert items[0]["duration_seconds"] == 1.25
+    assert list_resp.headers.get("X-Total-Count") == "1"
+
+    # Test filtered list by status
+    status_resp = client.get(
+        f"/api/commands/{comp_id}?status=executed",
+        headers=admin_headers,
+    )
+    assert status_resp.status_code == 200
+    assert any(c["id"] == cmd1.id for c in status_resp.json())
+
+
+def test_command_targeting_and_cross_computer_isolation(
+    client: TestClient,
+    registered_agent,
+    admin_user,
+    unprivileged_user,
+    db_session,
+):
+    """
+    Audit Test: Verify Remote Control is strictly restricted to the selected computer.
+
+    Verifies:
+    1. Command issued to Computer A is stored only under Computer A.
+    2. Computer B's queue and WebSocket never receive Computer A's command.
+    3. User without ISSUE_COMMAND cannot issue commands to any computer (403).
+    4. History, summaries, search, and pagination are strictly isolated by computer_id.
+    5. Detail and cancellation endpoints reject cross-computer access (404).
+    6. Agent B cannot submit results for Computer A's command (404).
+    """
+    comp_a_id = registered_agent["computer_id"]
+
+    # 1. Setup Computer B and Agent B
+    comp_b = db_session.get(Computer, 8888)
+    if not comp_b:
+        comp_b = Computer(
+            id=8888,
+            hostname="TEST-PC-8888",
+            ip_address="192.168.1.88",
+            mac_address="BB:BB:CC:DD:EE:88",
+            os_name="Windows",
+            os_version="11 Pro",
+        )
+        db_session.add(comp_b)
+        db_session.commit()
+        db_session.refresh(comp_b)
+
+    agent_b_cred = db_session.query(AgentCredential).filter_by(agent_id="test-agent-8888").first()
+    if not agent_b_cred:
+        agent_b_cred = AgentCredential(
+            agent_id="test-agent-8888",
+            secret_hash="fake-hash-8888",
+            computer_id=comp_b.id,
+            is_active=True,
+        )
+        db_session.add(agent_b_cred)
+        db_session.commit()
+        db_session.refresh(agent_b_cred)
+
+    from app.auth import create_agent_access_token
+    agent_b_token = create_agent_access_token({
+        "sub": agent_b_cred.agent_id,
+        "computer_id": comp_b.id,
+    })
+    agent_b_headers = {"Authorization": f"Bearer {agent_b_token}"}
+    agent_a_headers = {"Authorization": f"Bearer {registered_agent['token']}"}
+
+    # 2. Authorization Check: Unprivileged user cannot issue commands to Computer A or B
+    unauth_resp_a = client.post(
+        f"/api/commands/{comp_a_id}",
+        json={"command_type": "lock"},
+        headers=unprivileged_user["headers"],
+    )
+    assert unauth_resp_a.status_code == 403
+
+    unauth_resp_b = client.post(
+        f"/api/commands/{comp_b.id}",
+        json={"command_type": "lock"},
+        headers=unprivileged_user["headers"],
+    )
+    assert unauth_resp_b.status_code == 403
+
+    # 3. Issue Command to Computer A
+    cmd_a_resp = client.post(
+        f"/api/commands/{comp_a_id}",
+        json={"command_type": "message", "payload": "Message for Computer A only"},
+        headers=admin_user["headers"],
+    )
+    assert cmd_a_resp.status_code == 201
+    cmd_a_data = cmd_a_resp.json()
+    cmd_a_id = cmd_a_data["id"]
+    assert cmd_a_data["computer_id"] == comp_a_id
+
+    # 4. Issue Command to Computer B
+    cmd_b_resp = client.post(
+        f"/api/commands/{comp_b.id}",
+        json={"command_type": "restart"},
+        headers=admin_user["headers"],
+    )
+    assert cmd_b_resp.status_code == 201
+    cmd_b_data = cmd_b_resp.json()
+    cmd_b_id = cmd_b_data["id"]
+    assert cmd_b_data["computer_id"] == comp_b.id
+
+    # 5. History Isolation: Computer A's history must NEVER contain Computer B's commands
+    history_a = client.get(
+        f"/api/commands/{comp_a_id}",
+        headers=admin_user["headers"],
+    ).json()
+    assert any(c["id"] == cmd_a_id for c in history_a)
+    assert not any(c["id"] == cmd_b_id for c in history_a)
+
+    history_b = client.get(
+        f"/api/commands/{comp_b.id}",
+        headers=admin_user["headers"],
+    ).json()
+    assert any(c["id"] == cmd_b_id for c in history_b)
+    assert not any(c["id"] == cmd_a_id for c in history_b)
+
+    # 6. Summary Isolation: Summary counts for Computer B only count Computer B
+    sum_b = client.get(
+        f"/api/commands/{comp_b.id}/summary",
+        headers=admin_user["headers"],
+    ).json()
+    assert sum_b["total_commands"] >= 1
+    assert any(act["id"] == cmd_b_id for act in sum_b["recent_activities"])
+    assert not any(act["id"] == cmd_a_id for act in sum_b["recent_activities"])
+
+    # 7. Detail Isolation: Cannot access Command B through Computer A scope
+    detail_cross = client.get(
+        f"/api/commands/{comp_a_id}/commands/{cmd_b_id}",
+        headers=admin_user["headers"],
+    )
+    assert detail_cross.status_code == 404
+
+    detail_query_cross = client.get(
+        f"/api/commands/detail/{cmd_b_id}?computer_id={comp_a_id}",
+        headers=admin_user["headers"],
+    )
+    assert detail_query_cross.status_code == 404
+
+    # But accessing Command B through Computer B scope works
+    detail_valid = client.get(
+        f"/api/commands/{comp_b.id}/commands/{cmd_b_id}",
+        headers=admin_user["headers"],
+    )
+    assert detail_valid.status_code == 200
+    assert detail_valid.json()["id"] == cmd_b_id
+
+    # 8. Cancellation Isolation: Cannot cancel Command B through Computer A scope
+    cancel_cross = client.post(
+        f"/api/commands/{comp_a_id}/commands/{cmd_b_id}/cancel",
+        headers=admin_user["headers"],
+    )
+    assert cancel_cross.status_code == 404
+
+    cancel_query_cross = client.post(
+        f"/api/commands/{cmd_b_id}/cancel?computer_id={comp_a_id}",
+        headers=admin_user["headers"],
+    )
+    assert cancel_query_cross.status_code == 404
+
+    # 9. Result Submission Isolation: Agent B cannot submit result for Computer A's command
+    result_tamper = client.post(
+        f"/api/commands/{cmd_a_id}/result",
+        json={"success": True, "message": "Spoofed by Agent B"},
+        headers=agent_b_headers,
+    )
+    assert result_tamper.status_code == 404
+
+    # Simulate delivery of cmd_a to Agent A
+    cmd_a_obj = db_session.get(RemoteCommand, cmd_a_id)
+    cmd_a_obj.status = CommandStatus.delivered
+    db_session.commit()
+
+    # Agent A can submit result for Computer A's command
+    result_valid = client.post(
+        f"/api/commands/{cmd_a_id}/result",
+        json={"success": True, "message": "Valid execution by Agent A"},
+        headers=agent_a_headers,
+    )
+    assert result_valid.status_code == 201

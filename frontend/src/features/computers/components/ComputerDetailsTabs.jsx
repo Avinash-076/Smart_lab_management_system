@@ -7,7 +7,7 @@ const TABS = [
   { id: "history", label: "History", icon: "clock" },
   { id: "software", label: "Software", icon: "software" },
   { id: "processes", label: "Processes", icon: "details" },
-  { id: "commands", label: "Command History", icon: "command" },
+  { id: "commands", label: "Remote Control", icon: "command" },
 ];
 
 export default function ComputerDetailsTabs({ activeTab, onTabChange }) {
