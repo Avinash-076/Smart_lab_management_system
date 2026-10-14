@@ -396,3 +396,73 @@ def test_agent_process_upload_unauthenticated(client):
         json={"processes": [{"pid": 100, "name": "test.exe"}]},
     )
     assert res.status_code == 401
+
+
+def test_get_process_summary_success(client, sample_computers_with_processes, test_process_user):
+    """
+    GET /api/clients/{id}/processes/summary returns aggregated analytics.
+    """
+    comp_a = sample_computers_with_processes["comp_a"]
+    token = test_process_user["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    res = client.get(
+        f"/api/clients/{comp_a.id}/processes/summary",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_running"] == 3
+    assert data["total_cpu_percent"] == 38.7  # 12.5 + 25.0 + 1.2
+    assert "status_distribution" in data
+    assert len(data["status_distribution"]) > 0
+    assert "top_cpu_processes" in data
+    assert len(data["top_cpu_processes"]) == 3
+    assert data["top_cpu_processes"][0]["name"] == "code.exe"
+    assert data["top_cpu_processes"][0]["cpu_percent"] == 25.0
+
+
+def test_get_processes_filtering_and_pagination(client, sample_computers_with_processes, test_process_user):
+    """
+    GET /api/clients/{id}/processes supports search, status, and pagination with X-Total-Count.
+    """
+    comp_a = sample_computers_with_processes["comp_a"]
+    token = test_process_user["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Search by name
+    res = client.get(
+        f"/api/clients/{comp_a.id}/processes?search=chrome",
+        headers=headers,
+    )
+    assert res.status_code == 200
+    assert len(res.json()) == 1
+    assert res.json()[0]["name"] == "chrome.exe"
+    assert res.headers.get("X-Total-Count") == "1"
+
+    # Search by PID
+    res_pid = client.get(
+        f"/api/clients/{comp_a.id}/processes?search=1234",
+        headers=headers,
+    )
+    assert res_pid.status_code == 200
+    assert len(res_pid.json()) == 1
+    assert res_pid.json()[0]["pid"] == 1234
+
+    # Filter by status
+    res_status = client.get(
+        f"/api/clients/{comp_a.id}/processes?status=running",
+        headers=headers,
+    )
+    assert res_status.status_code == 200
+    assert len(res_status.json()) == 3
+    assert res_status.headers.get("X-Total-Count") == "3"
+
+    # Limit and offset pagination
+    res_page = client.get(
+        f"/api/clients/{comp_a.id}/processes?limit=1&offset=1",
+        headers=headers,
+    )
+    assert res_page.status_code == 200
+    assert len(res_page.json()) == 1
+    assert res_page.headers.get("X-Total-Count") == "3"

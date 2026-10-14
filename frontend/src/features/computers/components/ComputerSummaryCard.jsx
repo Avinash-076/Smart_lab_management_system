@@ -1,6 +1,7 @@
 import Icon from "../../../components/ui/Icon";
 import { parseUptimeString } from "../utils/computerUtils";
 import SoftwareSummaryCards from "./SoftwareSummaryCards";
+import ProcessSummaryCards from "./ProcessSummaryCards";
 import "./ComputerSummaryCard.css";
 
 function ComputerIllustration() {
@@ -79,6 +80,8 @@ export default function ComputerSummaryCard({
   activeTab = "hardware",
   softwareSummary = null,
   softwareLoading = false,
+  processSummary = null,
+  processLoading = false,
   onScanNow = null,
   scanning = false,
 }) {
@@ -179,6 +182,13 @@ export default function ComputerSummaryCard({
         <SoftwareSummaryCards
           summary={softwareSummary}
           loading={softwareLoading}
+          onScanNow={onScanNow}
+          scanning={scanning}
+        />
+      ) : activeTab === "processes" ? (
+        <ProcessSummaryCards
+          summary={processSummary}
+          loading={processLoading}
           onScanNow={onScanNow}
           scanning={scanning}
         />

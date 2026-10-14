@@ -64,6 +64,16 @@ class Process(Base):
         default=0,
     )
 
+    memory_mb: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+    )
+
+    executable_path: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     status: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
@@ -97,5 +107,10 @@ class Process(Base):
             "ix_processes_computer_collected_at",
             "computer_id",
             "collected_at",
+        ),
+        Index(
+            "ix_processes_computer_status",
+            "computer_id",
+            "status",
         ),
     )

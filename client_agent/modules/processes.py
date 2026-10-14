@@ -79,6 +79,8 @@ def get_running_processes(
             "memory_percent",
             "status",
             "create_time",
+            "memory_info",
+            "exe",
         ]
     ):
         try:
@@ -98,6 +100,22 @@ def get_running_processes(
             memory_percent = info.get("memory_percent") or 0
             status = info.get("status")
             create_time = info.get("create_time")
+
+            memory_info = info.get("memory_info")
+            memory_mb = None
+            if memory_info is not None and hasattr(memory_info, "rss"):
+                try:
+                    memory_mb = round(float(memory_info.rss) / (1024.0 * 1024.0), 1)
+                except (ValueError, TypeError):
+                    memory_mb = None
+
+            exe_path = info.get("exe")
+            executable_path = None
+            if exe_path:
+                try:
+                    executable_path = str(exe_path).strip()[:500]
+                except Exception:
+                    executable_path = None
 
             start_time = None
             if create_time:
@@ -120,6 +138,8 @@ def get_running_processes(
                     "user": None,
                     "cpu_percent": round(max(0.0, float(cpu_percent)), 2),
                     "memory_percent": round(max(0.0, float(memory_percent)), 2),
+                    "memory_mb": memory_mb,
+                    "executable_path": executable_path,
                     "status": str(status) if status else None,
                     "start_time": start_time,
                 }

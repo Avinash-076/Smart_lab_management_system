@@ -16,7 +16,11 @@ from app.schemas.computer_schema import (
     ComputerPatch,
 )
 from app.schemas.software_schema import SoftwareResponse, SoftwareSummaryResponse
-from app.schemas.process_schema import ProcessResponse, ProcessRankingsResponse
+from app.schemas.process_schema import (
+    ProcessRankingsResponse,
+    ProcessResponse,
+    ProcessSummaryResponse,
+)
 from app.schemas.usage_schema import UsageSessionResponse, UsageSummaryResponse
 from app.schemas.issue_schema import IssueResponse
 from app.schemas.maintenance_schema import MaintenanceResponse
@@ -167,12 +171,54 @@ def get_computer_software(
 
 
 @router.get(
+    "/{computer_id}/processes/summary",
+    response_model=ProcessSummaryResponse,
+)
+def get_computer_process_summary(
+    computer_id: int,
+    db: DbSession,
+    search: str | None = Query(default=None),
+    process_status: str | None = Query(default=None, alias="status"),
+    cpu_min: float | None = Query(default=None),
+    memory_min_mb: float | None = Query(default=None),
+    user: str | None = Query(default=None),
+    _user=Depends(require_permission("VIEW_COMPUTERS")),
+):
+    computer = computer_service.get_computer_by_id(db, computer_id)
+    if computer is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Computer not found",
+        )
+
+    return process_service.get_process_summary_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        status=process_status,
+        cpu_min=cpu_min,
+        memory_min_mb=memory_min_mb,
+        user=user,
+    )
+
+
+@router.get(
     "/{computer_id}/processes",
     response_model=list[ProcessResponse],
 )
 def get_computer_processes(
     computer_id: int,
+    response: Response,
     db: DbSession,
+    search: str | None = Query(default=None),
+    process_status: str | None = Query(default=None, alias="status"),
+    cpu_min: float | None = Query(default=None),
+    memory_min_mb: float | None = Query(default=None),
+    user: str | None = Query(default=None),
+    sort_by: str = Query(default="cpu_percent"),
+    sort_order: str = Query(default="desc"),
+    limit: int | None = Query(default=500, ge=1, le=5000),
+    offset: int = Query(default=0, ge=0),
     _user=Depends(require_permission("VIEW_COMPUTERS")),
 ):
     computer = computer_service.get_computer_by_id(db, computer_id)
@@ -183,9 +229,29 @@ def get_computer_processes(
             detail="Computer not found",
         )
 
+    total_count = process_service.get_processes_count_for_computer(
+        db=db,
+        computer_id=computer_id,
+        search=search,
+        status=process_status,
+        cpu_min=cpu_min,
+        memory_min_mb=memory_min_mb,
+        user=user,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
     return process_service.get_processes_for_computer(
         db=db,
         computer_id=computer_id,
+        search=search,
+        status=process_status,
+        cpu_min=cpu_min,
+        memory_min_mb=memory_min_mb,
+        user=user,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
     )
 
 

@@ -28,6 +28,16 @@ class ProcessItem(BaseModel):
         ge=0,
     )
 
+    memory_mb: float | None = Field(
+        default=None,
+        ge=0,
+    )
+
+    executable_path: str | None = Field(
+        default=None,
+        max_length=500,
+    )
+
     status: str | None = Field(
         default=None,
         max_length=50,
@@ -51,16 +61,44 @@ class ProcessResponse(BaseModel):
     computer_id: int
     pid: int
     name: str
-    user: str | None
+    user: str | None = None
     cpu_percent: float
     memory_percent: float
-    status: str | None
-    start_time: str | None
+    memory_mb: float | None = None
+    executable_path: str | None = None
+    status: str | None = None
+    start_time: str | None = None
     collected_at: datetime
 
     model_config = ConfigDict(
         from_attributes=True,
     )
+
+
+class ProcessStatusDistributionItem(BaseModel):
+    status: str
+    count: int
+    percentage: float
+
+
+class TopCpuProcessItem(BaseModel):
+    pid: int
+    name: str
+    cpu_percent: float
+    user: str | None = None
+
+
+class ProcessSummaryResponse(BaseModel):
+    total_running: int
+    total_cpu_percent: float
+    total_memory_mb: float
+    total_memory_percent: float
+    system_ram_gb: float | None = None
+    last_scan: datetime | None = None
+    status_distribution: list[ProcessStatusDistributionItem] = Field(default_factory=list)
+    top_cpu_processes: list[TopCpuProcessItem] = Field(default_factory=list)
+    users: list[str] = Field(default_factory=list)
+    statuses: list[str] = Field(default_factory=list)
 
 
 class ProcessRankingItem(BaseModel):
@@ -87,4 +125,4 @@ class ProcessRankingsResponse(BaseModel):
     computer_id: int
     top_cpu: list[ProcessRankingItem]
     top_memory: list[ProcessRankingItem]
-    network: NetworkAttributionInfo
+    network: NetworkAttributionInfo

@@ -1,0 +1,167 @@
+/* =====================================================
+   PROCESS STATUS DISTRIBUTION CARD STYLING
+   Accurately matches reference image donut & legend
+===================================================== */
+
+.process-analytics-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.process-analytics-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.process-analytics-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.process-analytics-icon-badge {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: #eff6ff;
+  color: #0962df;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.process-analytics-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.process-status-content {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  flex: 1;
+}
+
+.process-donut-wrapper {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.process-donut-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.process-donut-slice {
+  cursor: pointer;
+  transition: stroke-width 0.2s ease, opacity 0.2s ease;
+}
+
+.process-donut-slice:hover {
+  opacity: 0.9;
+}
+
+.process-donut-center-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.process-donut-center-number {
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.process-donut-center-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.process-status-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.process-legend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.process-legend-row:hover,
+.process-legend-row.hovered {
+  background-color: #f8fafc;
+}
+
+.process-legend-name-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.process-legend-color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.process-legend-status-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.process-legend-stats {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.process-legend-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.process-legend-pct {
+  color: #64748b;
+  font-weight: 400;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .process-status-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+  }
+}

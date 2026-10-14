@@ -1,0 +1,24 @@
+/* =====================================================
+   PROCESSES TAB LAYOUT & STYLING
+   Accurately matches reference image layout & spacing
+===================================================== */
+
+.processes-tab-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.processes-analytics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  width: 100%;
+}
+
+@media (max-width: 1024px) {
+  .processes-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
