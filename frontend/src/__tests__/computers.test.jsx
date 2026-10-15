@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import ComputerSummaryCards from "../features/computers/components/ComputerSummaryCards";
-import ComputerFilters from "../features/computers/components/ComputerFilters";
-import ComputerTable from "../features/computers/components/ComputerTable";
-import ComputerPagination from "../features/computers/components/ComputerPagination";
-import DeleteConfirmModal from "../features/computers/components/DeleteConfirmModal";
+import ComputerSummaryCards from "../features/computers/components/computer-cards/ComputerSummaryCards";
+import ComputerFilters from "../features/computers/components/computer-list/ComputerFilters";
+import ComputerTable from "../features/computers/components/computer-list/ComputerTable";
+import ComputerPagination from "../features/computers/components/computer-list/ComputerPagination";
+import DeleteConfirmModal from "../features/computers/components/computer-modals/DeleteConfirmModal";
 import {
   calculateComputerStats,
   isWindowsOS,

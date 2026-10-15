@@ -11,15 +11,15 @@ import {
 import { getComputerProcessesSummary } from "../../../services/processService";
 import { getComputerCommandsSummary } from "../../../services/commandService";
 import Icon from "../../../components/ui/Icon";
-import MatrixTab from "../components/MatrixTab";
-import ComputerSummaryCard from "../components/ComputerSummaryCard";
-import ComputerDetailsTabs from "../components/ComputerDetailsTabs";
-import HardwareInfoTab from "../components/HardwareInfoTab";
-import HistoryTab from "../components/HistoryTab";
-import SoftwareTab from "../components/SoftwareTab";
-import ProcessesTab from "../components/ProcessesTab";
-import RemoteControlTab from "../components/RemoteControlTab";
-import EditComputerModal from "../components/EditComputerModal";
+import MatrixTab from "../components/matrix/MatrixTab";
+import ComputerSummaryCard from "../components/computer-cards/ComputerSummaryCard";
+import ComputerDetailsTabs from "../components/details-layout/ComputerDetailsTabs";
+import HardwareInfoTab from "../components/hardware-info/HardwareInfoTab";
+import HistoryTab from "../components/history/HistoryTab";
+import SoftwareTab from "../components/software/SoftwareTab";
+import ProcessesTab from "../components/processes/ProcessesTab";
+import RemoteControlTab from "../components/remote-control/RemoteControlTab";
+import EditComputerModal from "../components/computer-modals/EditComputerModal";
 import { useComputerWebSocket } from "../hooks/useComputerWebSocket";
 import "./ComputerDetails.css";
 

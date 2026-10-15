@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import SoftwareSummaryCards from "../features/computers/components/SoftwareSummaryCards";
-import SoftwareFilters from "../features/computers/components/SoftwareFilters";
-import SoftwareTypeDistribution from "../features/computers/components/SoftwareTypeDistribution";
-import TopSoftwarePublishers from "../features/computers/components/TopSoftwarePublishers";
-import InstalledSoftwareTable from "../features/computers/components/InstalledSoftwareTable";
-import SoftwareTab from "../features/computers/components/SoftwareTab";
+import SoftwareSummaryCards from "../features/computers/components/software/SoftwareSummaryCards";
+import SoftwareFilters from "../features/computers/components/software/SoftwareFilters";
+import SoftwareTypeDistribution from "../features/computers/components/software/SoftwareTypeDistribution";
+import TopSoftwarePublishers from "../features/computers/components/software/TopSoftwarePublishers";
+import InstalledSoftwareTable from "../features/computers/components/software/InstalledSoftwareTable";
+import SoftwareTab from "../features/computers/components/software/SoftwareTab";
 import {
   getComputerSoftware,
   getComputerSoftwareSummary,

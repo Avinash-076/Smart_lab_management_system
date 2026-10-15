@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import HistoryFilters from "../features/computers/components/HistoryFilters";
-import ApplicationUsageTrend from "../features/computers/components/ApplicationUsageTrend";
-import TopApplicationsChart from "../features/computers/components/TopApplicationsChart";
-import ApplicationUsageTable from "../features/computers/components/ApplicationUsageTable";
-import HistoryTab from "../features/computers/components/HistoryTab";
+import HistoryFilters from "../features/computers/components/history/HistoryFilters";
+import ApplicationUsageTrend from "../features/computers/components/history/ApplicationUsageTrend";
+import TopApplicationsChart from "../features/computers/components/history/TopApplicationsChart";
+import ApplicationUsageTable from "../features/computers/components/history/ApplicationUsageTable";
+import HistoryTab from "../features/computers/components/history/HistoryTab";
 import {
   getComputerUsage,
   getComputerUsageSummary,

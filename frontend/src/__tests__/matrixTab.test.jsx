@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import LiveResourceHeader from "../features/computers/components/LiveResourceHeader";
-import MatrixChartsGrid from "../features/computers/components/MatrixChartsGrid";
-import ResourceDetailsRow from "../features/computers/components/ResourceDetailsRow";
-import TopProcessesRow from "../features/computers/components/TopProcessesRow";
+import LiveResourceHeader from "../features/computers/components/matrix/LiveResourceHeader";
+import MatrixChartsGrid from "../features/computers/components/matrix/MatrixChartsGrid";
+import ResourceDetailsRow from "../features/computers/components/matrix/ResourceDetailsRow";
+import TopProcessesRow from "../features/computers/components/matrix/TopProcessesRow";
 import { getComputerMetricSummary } from "../services/computerService";
 import { getComputerProcessRankings } from "../services/processService";
 import { setTokens } from "../services/api";

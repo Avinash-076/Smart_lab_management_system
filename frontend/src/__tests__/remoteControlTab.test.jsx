@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import CommandSummaryCards from "../features/computers/components/CommandSummaryCards";
-import ExecuteCommandPanel from "../features/computers/components/ExecuteCommandPanel";
-import RecentCommandActivity from "../features/computers/components/RecentCommandActivity";
-import CommandHistoryFilters from "../features/computers/components/CommandHistoryFilters";
-import CommandHistoryTable from "../features/computers/components/CommandHistoryTable";
-import CommandDetailsPanel from "../features/computers/components/CommandDetailsPanel";
-import RemoteControlTab from "../features/computers/components/RemoteControlTab";
+import CommandSummaryCards from "../features/computers/components/remote-control/CommandSummaryCards";
+import ExecuteCommandPanel from "../features/computers/components/remote-control/ExecuteCommandPanel";
+import RecentCommandActivity from "../features/computers/components/remote-control/RecentCommandActivity";
+import CommandHistoryFilters from "../features/computers/components/remote-control/CommandHistoryFilters";
+import CommandHistoryTable from "../features/computers/components/remote-control/CommandHistoryTable";
+import CommandDetailsPanel from "../features/computers/components/remote-control/CommandDetailsPanel";
+import RemoteControlTab from "../features/computers/components/remote-control/RemoteControlTab";
 import {
   getComputerCommands,
   getComputerCommandsSummary,

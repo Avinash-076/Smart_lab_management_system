@@ -17,7 +17,7 @@ import Sidebar from "../components/layout/Sidebar";
 import Header from "../components/layout/Header";
 
 import Dashboard from "../features/dashboard/Dashboard";
-import ComputerList from "../features/computers/pages/ComputerList";
+import ComputersPage from "../features/computers/pages/ComputersPage";
 import ComputerDetails from "../features/computers/pages/ComputerDetails";
 import SoftwareInventory from "../features/software/pages/SoftwareInventory";
 import IssueManagement from "../features/issues/pages/IssueManagement";
@@ -229,7 +229,7 @@ function App() {
 
       case "computers":
         return (
-          <ComputerList
+          <ComputersPage
             onViewComputer={openComputerDetails}
           />
         );

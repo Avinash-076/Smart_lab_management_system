@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { renderToString } from "react-dom/server";
-import ProcessSummaryCards from "../features/computers/components/ProcessSummaryCards";
-import ProcessFilters from "../features/computers/components/ProcessFilters";
-import ProcessStatusDistribution from "../features/computers/components/ProcessStatusDistribution";
-import TopProcessesByCPU from "../features/computers/components/TopProcessesByCPU";
-import RunningProcessesTable from "../features/computers/components/RunningProcessesTable";
-import ProcessesTab from "../features/computers/components/ProcessesTab";
+import ProcessSummaryCards from "../features/computers/components/processes/ProcessSummaryCards";
+import ProcessFilters from "../features/computers/components/processes/ProcessFilters";
+import ProcessStatusDistribution from "../features/computers/components/processes/ProcessStatusDistribution";
+import TopProcessesByCPU from "../features/computers/components/processes/TopProcessesByCPU";
+import RunningProcessesTable from "../features/computers/components/processes/RunningProcessesTable";
+import ProcessesTab from "../features/computers/components/processes/ProcessesTab";
 import {
   getComputerProcesses,
   getComputerProcessesSummary,
