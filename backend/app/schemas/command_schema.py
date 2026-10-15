@@ -29,6 +29,8 @@ class CommandResultResponse(BaseModel):
 class CommandResponse(BaseModel):
     id: int
     computer_id: int
+    computer_hostname: str | None = None
+    computer_ip: str | None = None
     command_type: CommandType
     payload: str | None
     status: CommandStatus
@@ -52,3 +54,38 @@ class CommandSummaryResponse(BaseModel):
     failure_rate_percent: float
     last_execution_at: datetime | None = None
     recent_activities: list[CommandResponse] = Field(default_factory=list)
+
+
+class BatchCommandCreate(BaseModel):
+    computer_ids: list[int] = Field(min_length=1, max_length=500)
+    command_type: CommandType
+    payload: str | None = Field(default=None, max_length=255)
+
+
+class BatchCommandResultItem(BaseModel):
+    computer_id: int
+    computer_hostname: str | None = None
+    command_id: int | None = None
+    command_type: CommandType
+    status: CommandStatus | None = None
+    success: bool
+    error: str | None = None
+
+
+class BatchCommandResponse(BaseModel):
+    total_targets: int
+    dispatched_count: int
+    failed_count: int
+    results: list[BatchCommandResultItem] = Field(default_factory=list)
+
+
+class FleetOverviewResponse(BaseModel):
+    total_computers: int
+    online_computers: int
+    offline_computers: int
+    online_percentage: float
+    offline_percentage: float
+    commands_24h: int
+    commands_24h_success: int
+    commands_24h_failed: int
+    commands_24h_pending: int

@@ -154,3 +154,135 @@ export async function exportCommandsToCsv(computerId, options = {}, computerName
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+export async function getFleetOverview() {
+  return fetchWithAuth("/commands/overview");
+}
+
+export async function issueBatchCommand(batchData) {
+  return fetchWithAuth("/commands/batch", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(batchData),
+  });
+}
+
+export async function getGlobalCommands(options = {}) {
+  const {
+    search,
+    command_type,
+    status,
+    computer_id,
+    start_date,
+    end_date,
+    limit = 10,
+    offset = 0,
+    includeHeaders = true,
+  } = options;
+
+  const qs = buildQueryString({
+    search,
+    command_type,
+    status,
+    computer_id,
+    start_date,
+    end_date,
+    limit,
+    offset,
+  });
+
+  const res = await fetchWithAuth(`/commands${qs}`, {
+    includeHeaders: true,
+  });
+
+  const totalHeader = res.headers?.get("x-total-count");
+  const totalCount =
+    totalHeader !== null && totalHeader !== undefined
+      ? parseInt(totalHeader, 10)
+      : Array.isArray(res.data)
+      ? res.data.length
+      : 0;
+
+  if (includeHeaders) {
+    return {
+      data: Array.isArray(res.data) ? res.data : [],
+      totalCount: isNaN(totalCount) ? 0 : totalCount,
+      headers: res.headers,
+    };
+  }
+
+  return Array.isArray(res.data) ? res.data : [];
+}
+
+export async function exportGlobalCommandsToCsv(options = {}) {
+  const res = await getGlobalCommands({
+    ...options,
+    limit: 2000,
+    offset: 0,
+    includeHeaders: true,
+  });
+
+  const items = res.data || [];
+  const headers = [
+    "Command ID",
+    "Time",
+    "Command Type",
+    "Target Computer",
+    "Target IP",
+    "Issued By",
+    "Status",
+    "Duration",
+    "Payload",
+    "Result Message",
+  ];
+
+  const escapeCsv = (str) => {
+    if (str === null || str === undefined) return '""';
+    const escaped = String(str).replace(/"/g, '""');
+    return `"${escaped}"`;
+  };
+
+  const rows = items.map((cmd) => {
+    const executedAt = cmd.created_at
+      ? new Date(cmd.created_at).toLocaleString()
+      : "—";
+    const duration =
+      cmd.duration_seconds !== null && cmd.duration_seconds !== undefined
+        ? `${cmd.duration_seconds}s`
+        : "—";
+
+    return [
+      `#${cmd.id}`,
+      escapeCsv(executedAt),
+      escapeCsv(cmd.command_type?.toUpperCase() || "—"),
+      escapeCsv(cmd.computer_hostname || `PC-${cmd.computer_id}`),
+      escapeCsv(cmd.computer_ip || "—"),
+      escapeCsv(cmd.issued_by_username || `User #${cmd.issued_by || "—"}`),
+      escapeCsv(cmd.status || "—"),
+      escapeCsv(duration),
+      escapeCsv(cmd.payload || ""),
+      escapeCsv(cmd.result?.message || ""),
+    ];
+  });
+
+  const csvContent = [
+    headers.join(","),
+    ...rows.map((row) => row.join(",")),
+  ].join("\r\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return blob;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const dateStr = new Date().toISOString().split("T")[0];
+  link.setAttribute("href", url);
+  link.setAttribute("download", `global_commands_history_${dateStr}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}

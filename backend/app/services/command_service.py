@@ -1,10 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import cast, distinct, func, or_, select, String
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app.models.remote_command import RemoteCommand, CommandStatus
 from app.models.command_result import CommandResult
+from app.models.computer import Computer
+from app.models.client_status import ClientStatus
 from app.models.user import User
 from app.schemas.command_schema import CommandCreate, CommandResultSubmit
 from app.websocket.connection_manager import manager
@@ -401,3 +403,269 @@ def submit_result(
         raise
 
     return result
+
+
+def get_fleet_command_overview(db: Session) -> dict:
+    """
+    Compute fleet-wide computer metrics and 24-hour command execution statistics.
+    """
+    total_computers = db.scalar(select(func.count(Computer.id))) or 0
+    online_computers = (
+        db.scalar(
+            select(func.count(ClientStatus.id)).where(
+                ClientStatus.status == "online"
+            )
+        )
+        or 0
+    )
+    offline_computers = max(0, total_computers - online_computers)
+
+    online_percentage = (
+        round((online_computers / total_computers) * 100, 1)
+        if total_computers > 0
+        else 0.0
+    )
+    offline_percentage = (
+        round((offline_computers / total_computers) * 100, 1)
+        if total_computers > 0
+        else 0.0
+    )
+
+    now_utc = datetime.now(timezone.utc)
+    since_24h = now_utc - timedelta(hours=24)
+
+    status_counts = dict(
+        db.execute(
+            select(RemoteCommand.status, func.count(RemoteCommand.id))
+            .where(RemoteCommand.created_at >= since_24h)
+            .group_by(RemoteCommand.status)
+        ).all()
+    )
+
+    commands_24h = sum(status_counts.values())
+    commands_24h_success = status_counts.get(CommandStatus.executed, 0)
+    commands_24h_failed = status_counts.get(CommandStatus.failed, 0)
+    commands_24h_pending = status_counts.get(
+        CommandStatus.pending, 0
+    ) + status_counts.get(CommandStatus.delivered, 0)
+
+    return {
+        "total_computers": total_computers,
+        "online_computers": online_computers,
+        "offline_computers": offline_computers,
+        "online_percentage": online_percentage,
+        "offline_percentage": offline_percentage,
+        "commands_24h": commands_24h,
+        "commands_24h_success": commands_24h_success,
+        "commands_24h_failed": commands_24h_failed,
+        "commands_24h_pending": commands_24h_pending,
+    }
+
+
+def _build_global_command_filter_conditions(
+    computer_id: int | None = None,
+    command_type: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+):
+    conditions = []
+
+    if computer_id is not None:
+        conditions.append(RemoteCommand.computer_id == computer_id)
+
+    if command_type and command_type.lower() != "all":
+        conditions.append(
+            func.lower(cast(RemoteCommand.command_type, String))
+            == command_type.lower().strip()
+        )
+
+    if status and status.lower() != "all":
+        status_clean = status.lower().strip()
+        if status_clean in ("success", "executed"):
+            conditions.append(RemoteCommand.status == CommandStatus.executed)
+        elif status_clean in ("failed", "failure"):
+            conditions.append(RemoteCommand.status == CommandStatus.failed)
+        elif status_clean in ("pending",):
+            conditions.append(RemoteCommand.status == CommandStatus.pending)
+        elif status_clean in ("delivered",):
+            conditions.append(RemoteCommand.status == CommandStatus.delivered)
+        elif status_clean in ("cancelled", "canceled"):
+            conditions.append(RemoteCommand.status == CommandStatus.cancelled)
+
+    if start_date:
+        conditions.append(RemoteCommand.created_at >= start_date)
+
+    if end_date:
+        conditions.append(RemoteCommand.created_at <= end_date)
+
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        conditions.append(
+            or_(
+                func.lower(cast(RemoteCommand.command_type, String)).like(term),
+                func.lower(RemoteCommand.payload).like(term),
+                func.lower(CommandResult.message).like(term),
+                func.lower(User.username).like(term),
+                func.lower(Computer.hostname).like(term),
+                func.lower(Computer.ip_address).like(term),
+            )
+        )
+
+    return conditions
+
+
+def get_global_commands(
+    db: Session,
+    search: str | None = None,
+    command_type: str | None = None,
+    status: str | None = None,
+    computer_id: int | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[RemoteCommand]:
+    conditions = _build_global_command_filter_conditions(
+        computer_id=computer_id,
+        command_type=command_type,
+        status=status,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    query = (
+        select(RemoteCommand)
+        .join(Computer, RemoteCommand.computer_id == Computer.id)
+        .outerjoin(CommandResult, RemoteCommand.id == CommandResult.command_id)
+        .outerjoin(User, RemoteCommand.issued_by == User.id)
+        .options(
+            joinedload(RemoteCommand.computer),
+            joinedload(RemoteCommand.result),
+            joinedload(RemoteCommand.issuer),
+        )
+        .where(*conditions)
+        .order_by(RemoteCommand.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+
+    return list(db.scalars(query).unique().all())
+
+
+def get_global_commands_count(
+    db: Session,
+    search: str | None = None,
+    command_type: str | None = None,
+    status: str | None = None,
+    computer_id: int | None = None,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> int:
+    conditions = _build_global_command_filter_conditions(
+        computer_id=computer_id,
+        command_type=command_type,
+        status=status,
+        search=search,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    count_query = (
+        select(func.count(distinct(RemoteCommand.id)))
+        .select_from(RemoteCommand)
+        .join(Computer, RemoteCommand.computer_id == Computer.id)
+        .outerjoin(CommandResult, RemoteCommand.id == CommandResult.command_id)
+        .outerjoin(User, RemoteCommand.issued_by == User.id)
+        .where(*conditions)
+    )
+
+    return db.scalar(count_query) or 0
+
+
+async def batch_dispatch_commands(
+    db: Session,
+    computer_ids: list[int],
+    command_type,
+    payload: str | None,
+    issued_by: int,
+) -> dict:
+    """
+    Dispatch commands to multiple computers with individual isolation,
+    per-target error handling, and auditing.
+    """
+    # De-duplicate preserving order
+    seen = set()
+    unique_ids = []
+    for cid in computer_ids:
+        if cid not in seen:
+            seen.add(cid)
+            unique_ids.append(cid)
+
+    results = []
+    dispatched_count = 0
+    failed_count = 0
+
+    cmd_data = CommandCreate(
+        command_type=command_type,
+        payload=payload,
+    )
+
+    for cid in unique_ids:
+        computer = db.scalar(select(Computer).where(Computer.id == cid))
+        if computer is None:
+            failed_count += 1
+            results.append(
+                {
+                    "computer_id": cid,
+                    "computer_hostname": None,
+                    "command_id": None,
+                    "command_type": command_type,
+                    "status": None,
+                    "success": False,
+                    "error": "Computer not found",
+                }
+            )
+            continue
+
+        try:
+            cmd = await create_and_dispatch_command(
+                db=db,
+                computer_id=cid,
+                command_data=cmd_data,
+                issued_by=issued_by,
+            )
+            dispatched_count += 1
+            results.append(
+                {
+                    "computer_id": cid,
+                    "computer_hostname": computer.hostname,
+                    "command_id": cmd.id,
+                    "command_type": cmd.command_type,
+                    "status": cmd.status,
+                    "success": True,
+                    "error": None,
+                }
+            )
+        except Exception as exc:
+            failed_count += 1
+            results.append(
+                {
+                    "computer_id": cid,
+                    "computer_hostname": computer.hostname,
+                    "command_id": None,
+                    "command_type": command_type,
+                    "status": None,
+                    "success": False,
+                    "error": str(exc),
+                }
+            )
+
+    return {
+        "total_targets": len(unique_ids),
+        "dispatched_count": dispatched_count,
+        "failed_count": failed_count,
+        "results": results,
+    }

@@ -21,11 +21,14 @@ from app.auth import (
 from app.models.agent_credential import AgentCredential
 from app.models.audit_log import AuditResult
 from app.schemas.command_schema import (
+    BatchCommandCreate,
+    BatchCommandResponse,
     CommandCreate,
     CommandResponse,
     CommandResultSubmit,
     CommandResultResponse,
     CommandSummaryResponse,
+    FleetOverviewResponse,
 )
 from app.services import (
     audit_service,
@@ -44,6 +47,105 @@ router = APIRouter(
     prefix="/commands",
     tags=["Commands"],
 )
+
+
+@router.get(
+    "/overview",
+    response_model=FleetOverviewResponse,
+)
+def get_fleet_overview(
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+):
+    """
+    Get live fleet-wide computer metrics and 24h command statistics.
+    """
+    return command_service.get_fleet_command_overview(db)
+
+
+@router.post(
+    "/batch",
+    response_model=BatchCommandResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def issue_batch_commands(
+    batch_data: BatchCommandCreate,
+    db: DbSession,
+    _user=Depends(
+        require_permission("ISSUE_COMMAND")
+    ),
+):
+    """
+    Create and dispatch remote commands to multiple computers.
+    Each target computer receives an attributable command.
+    Partial failures are captured per computer.
+    """
+    res = await command_service.batch_dispatch_commands(
+        db=db,
+        computer_ids=batch_data.computer_ids,
+        command_type=batch_data.command_type,
+        payload=batch_data.payload,
+        issued_by=_user.id,
+    )
+
+    audit_service.log_action(
+        db=db,
+        result=AuditResult.success if res["dispatched_count"] > 0 else AuditResult.failure,
+        action=f"BATCH_COMMAND_{batch_data.command_type.value.upper()}",
+        user_id=_user.id,
+        target_type="COMPUTERS",
+        target_id=None,
+    )
+
+    return res
+
+
+@router.get(
+    "",
+    response_model=list[CommandResponse],
+)
+def get_global_command_history(
+    response: Response,
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+    search: str | None = Query(default=None),
+    command_type: str | None = Query(default=None),
+    command_status: str | None = Query(default=None, alias="status"),
+    computer_id: int | None = Query(default=None),
+    start_date: datetime | None = Query(default=None),
+    end_date: datetime | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """
+    Get global command history across all authorized computers with filtering and pagination.
+    """
+    total_count = command_service.get_global_commands_count(
+        db=db,
+        search=search,
+        command_type=command_type,
+        status=command_status,
+        computer_id=computer_id,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+
+    return command_service.get_global_commands(
+        db=db,
+        search=search,
+        command_type=command_type,
+        status=command_status,
+        computer_id=computer_id,
+        start_date=start_date,
+        end_date=end_date,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.post(

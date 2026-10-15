@@ -91,6 +91,14 @@ class RemoteCommand(Base):
     )
 
     @property
+    def computer_hostname(self) -> str | None:
+        return self.computer.hostname if self.computer else None
+
+    @property
+    def computer_ip(self) -> str | None:
+        return self.computer.ip_address if self.computer else None
+
+    @property
     def issued_by_username(self) -> str | None:
         return self.issuer.username if self.issuer else None
 

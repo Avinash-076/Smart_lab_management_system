@@ -64,6 +64,10 @@ const PAGE_CONFIG = {
     title: "Computers",
     subtitle: "View and manage all lab computers.",
   },
+  "remote-control": {
+    title: "Global Remote Control",
+    subtitle: "Manage and execute commands across multiple computers",
+  },
   details: {
     title: "Computer Details",
     subtitle: "Complete computer telemetry, hardware specifications, and system status.",

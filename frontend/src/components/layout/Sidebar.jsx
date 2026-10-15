@@ -54,6 +54,7 @@ function Sidebar({ active, navigate, logout, sidebarOpen = true }) {
   const navItems = [
     ["grid", "Dashboard", "dashboard"],
     ["computer", "Computers", "computers"],
+    ["remote", "Global Remote Control", "remote-control"],
     ["software", "Software Inventory", "software"],
     ["issue", "Issue Management", "issues"],
     ["maintenance", "Maintenance Records", "maintenance"],

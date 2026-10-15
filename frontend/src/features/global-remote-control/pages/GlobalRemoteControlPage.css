@@ -1,0 +1,14 @@
+.global-remote-page {
+  padding: 24px;
+  background-color: #f8fafc;
+  min-height: calc(100vh - 64px);
+  max-width: 1600px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+@media (max-width: 768px) {
+  .global-remote-page {
+    padding: 16px;
+  }
+}

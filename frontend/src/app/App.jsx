@@ -19,6 +19,7 @@ import Header from "../components/layout/Header";
 import Dashboard from "../features/dashboard/Dashboard";
 import ComputersPage from "../features/computers/pages/ComputersPage";
 import ComputerDetails from "../features/computers/pages/ComputerDetails";
+import GlobalRemoteControlPage from "../features/global-remote-control/pages/GlobalRemoteControlPage";
 import SoftwareInventory from "../features/software/pages/SoftwareInventory";
 import IssueManagement from "../features/issues/pages/IssueManagement";
 import MaintenanceRecords from "../features/maintenance/pages/MaintenanceRecords";
@@ -30,6 +31,7 @@ import AuditLogs from "../features/audit/pages/AuditLogs";
 const navItems = [
   ["home", "Dashboard", "dashboard"],
   ["computer", "Computers", "computers"],
+  ["remote", "Global Remote Control", "remote-control"],
   ["software", "Software Inventory", "software"],
   ["issue", "Issue Management", "issues"],
   ["maintenance", "Maintenance Records", "maintenance"],
@@ -62,6 +64,7 @@ function parsePath(pathname) {
 
   const validPages = [
     "dashboard",
+    "remote-control",
     "software",
     "issues",
     "maintenance",
@@ -239,6 +242,13 @@ function App() {
           <ComputerDetails
             computer={selectedComputer}
             onBack={() => navigate("computers")}
+          />
+        );
+
+      case "remote-control":
+        return (
+          <GlobalRemoteControlPage
+            onViewComputer={openComputerDetails}
           />
         );
 

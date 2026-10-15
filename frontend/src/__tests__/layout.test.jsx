@@ -23,6 +23,7 @@ describe("Shared Authenticated Layout Components", () => {
     // Navigation items
     expect(html).toContain("Dashboard");
     expect(html).toContain("Computers");
+    expect(html).toContain("Global Remote Control");
     expect(html).not.toContain("Computer Details");
     expect(html).toContain("Software Inventory");
     expect(html).toContain("Issue Management");

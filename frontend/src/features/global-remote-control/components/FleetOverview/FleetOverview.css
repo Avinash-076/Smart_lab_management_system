@@ -1,0 +1,202 @@
+.fleet-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .fleet-overview-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .fleet-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fleet-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fleet-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.fleet-card-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.fleet-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fleet-icon-wrapper.blue {
+  background-color: #eff6ff;
+  color: #3157d5;
+}
+
+.fleet-icon-wrapper.green {
+  background-color: #ecfdf5;
+  color: #10b981;
+}
+
+.fleet-icon-wrapper.red {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.fleet-icon-wrapper.indigo {
+  background-color: #eef2ff;
+  color: #4f46e5;
+}
+
+.fleet-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.fleet-card-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.fleet-card-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.fleet-card-value {
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.fleet-badge-pct {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.fleet-badge-pct.green {
+  color: #059669;
+  background-color: #d1fae5;
+}
+
+.fleet-badge-pct.red {
+  color: #dc2626;
+  background-color: #fee2e2;
+}
+
+.fleet-card-sub {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.fleet-card-trend {
+  font-size: 0.75rem;
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.fleet-card-trend.green {
+  color: #10b981;
+}
+
+.fleet-card-trend.red {
+  color: #ef4444;
+}
+
+.fleet-card-status-dots {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.fleet-dot-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+}
+
+.fleet-dot-item .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.fleet-dot-item .dot.green {
+  background-color: #10b981;
+}
+
+.fleet-dot-item .dot.red {
+  background-color: #ef4444;
+}
+
+/* Sparkline bar indicator */
+.fleet-card-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 38px;
+  width: 32px;
+  padding-bottom: 2px;
+}
+
+.fleet-card-chart span {
+  flex: 1;
+  border-radius: 2px;
+  opacity: 0.45;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.fleet-card:hover .fleet-card-chart span {
+  opacity: 0.8;
+  transform: scaleY(1.05);
+}
+
+.fleet-card-chart.blue span {
+  background-color: #3157d5;
+}
+
+.fleet-card-chart.green span {
+  background-color: #10b981;
+}
+
+.fleet-card-chart.red span {
+  background-color: #ef4444;
+}
+
+.fleet-card-chart.indigo span {
+  background-color: #4f46e5;
+}
