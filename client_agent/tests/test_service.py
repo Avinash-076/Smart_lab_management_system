@@ -455,7 +455,8 @@ class TestMsgExeHandling:
 
     def test_msg_exe_failure_fallback_to_log(self):
         """Verify msg.exe non-zero exit (e.g. no active sessions) falls back to log recording safely."""
-        with patch("subprocess.run") as mock_run:
+        with patch("server.command_handler._send_wts_message", return_value=False), \
+             patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="No session exists", stdout="")
             status, msg = handle_message("Shutdown alert")
             assert status is True
@@ -463,7 +464,8 @@ class TestMsgExeHandling:
 
     def test_msg_exe_timeout_fallback_to_log(self):
         """Verify msg.exe timeout falls back to log recording without raising or hanging."""
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="msg", timeout=3)):
+        with patch("server.command_handler._send_wts_message", return_value=False), \
+             patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="msg", timeout=3)):
             status, msg = handle_message("Immediate notice")
             assert status is True
             assert "Notice recorded in agent log: Immediate notice" in msg

@@ -1,3 +1,4 @@
+import { parseApiDate } from "../../utils/computerUtils";
 import "./RecentCommandActivity.css";
 
 function formatActivityTitle(cmd) {
@@ -39,8 +40,8 @@ function formatActivityTitle(cmd) {
 function formatActivityTime(timestamp) {
   if (!timestamp) return "—";
   try {
-    const d = new Date(timestamp);
-    if (isNaN(d.getTime())) return timestamp;
+    const d = parseApiDate(timestamp) || new Date(timestamp);
+    if (!d || isNaN(d.getTime())) return timestamp;
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
     const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

@@ -56,6 +56,7 @@ CONFIG_FOLDER = os.path.join(DATA_DIR, "config")
 OUTBOX_FOLDER = os.path.join(DATA_FOLDER, "outbox")
 OUTBOX_DB_PATH = os.path.join(OUTBOX_FOLDER, "outbox.db")
 SOFTWARE_STATE_FILE = os.path.join(DATA_FOLDER, "software_state.json")
+HARDWARE_STATE_FILE = os.path.join(DATA_FOLDER, "hardware_state.json")
 USAGE_STATE_FILE = os.path.join(DATA_FOLDER, "usage_state.json")
 ISSUE_STATE_FILE = os.path.join(DATA_FOLDER, "issue_state.json")
 DIAGNOSTIC_FOLDER = os.path.join(DATA_FOLDER, "diagnostic")
@@ -89,6 +90,7 @@ def get_path_layout(data_dir: str | None = None) -> dict[str, str]:
         "diagnostic": diagnostic,
         "diagnostic_file": os.path.join(diagnostic, "client_data.json"),
         "software_state": os.path.join(data, "software_state.json"),
+        "hardware_state": os.path.join(data, "hardware_state.json"),
         "usage_state": os.path.join(data, "usage_state.json"),
         "issue_state": os.path.join(data, "issue_state.json"),
     }

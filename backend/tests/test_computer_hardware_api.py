@@ -221,3 +221,47 @@ def test_computer_without_hardware_returns_null(client, db_session, auth_headers
         db_session.commit()
     except Exception:
         db_session.rollback()
+
+
+def test_hardware_partial_update_preserves_existing_fields(client, registered_computer_and_agent, auth_headers):
+    """Verify that uploading partial hardware fields does not erase previously known fields."""
+    computer, _, token = registered_computer_and_agent
+
+    initial_payload = {
+        "manufacturer": "Dell Inc.",
+        "model": "OptiPlex 7080",
+        "processor_name": "Intel Core i5-10400",
+        "ram_total_gb": 16.0,
+        "storage_total_gb": 512.0,
+    }
+    res1 = client.post(
+        "/api/clients/hardware",
+        json=initial_payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res1.status_code == 200
+
+    # Partial update sends only processor_name and ram_total_gb; other fields are None
+    partial_payload = {
+        "processor_name": "Intel Core i7-10700",
+        "ram_total_gb": 32.0,
+    }
+    res2 = client.post(
+        "/api/clients/hardware",
+        json=partial_payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert res2.status_code == 200
+
+    hw_res = client.get(
+        f"/api/clients/{computer.id}/hardware",
+        headers=auth_headers,
+    )
+    assert hw_res.status_code == 200
+    hw_data = hw_res.json()
+    assert hw_data["processor_name"] == "Intel Core i7-10700"
+    assert hw_data["ram_total_gb"] == 32.0
+    # Preserved fields
+    assert hw_data["manufacturer"] == "Dell Inc."
+    assert hw_data["model"] == "OptiPlex 7080"
+    assert hw_data["storage_total_gb"] == 512.0

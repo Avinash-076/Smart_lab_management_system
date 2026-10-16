@@ -21,6 +21,7 @@ def save_or_update_hardware(
     db: Session,
     computer_id: int,
     hardware_data: ComputerHardwareUpload,
+    commit: bool = True,
 ) -> ComputerHardware:
     hardware = get_hardware_by_computer_id(db, computer_id)
 
@@ -34,9 +35,13 @@ def save_or_update_hardware(
         db.add(hardware)
     else:
         for field, value in data_dict.items():
-            setattr(hardware, field, value)
+            if value is not None:
+                setattr(hardware, field, value)
         hardware.updated_at = datetime.utcnow()
 
-    db.commit()
-    db.refresh(hardware)
+    if commit:
+        db.commit()
+        db.refresh(hardware)
+    else:
+        db.flush()
     return hardware

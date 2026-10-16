@@ -1,12 +1,13 @@
 import { useState } from "react";
 import Icon from "../../../../components/ui/Icon";
+import { parseApiDate } from "../../../computers/utils/computerUtils";
 import "./GlobalCommandDetailModal.css";
 
 function formatTimestamp(ts) {
   if (!ts) return "—";
   try {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
+    const d = parseApiDate(ts) || new Date(ts);
+    if (!d || isNaN(d.getTime())) return ts;
     return d.toLocaleString("en-US", {
       month: "short",
       day: "numeric",

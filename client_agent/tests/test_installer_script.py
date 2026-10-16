@@ -241,3 +241,20 @@ def test_compiled_installer_artifact_freshness():
             f"Stale installer detected! Setup EXE ({setup_mtime}) is older than "
             f"packaged distribution executable ({dist_mtime}). Inno Setup compilation required."
         )
+
+
+def test_registration_mode_selection_and_re_enrollment_support(iss_content: str):
+    """Verify installer provides UI choice to re-register with fresh key and passes --force."""
+    assert "EnrollmentModePage := CreateCustomPage(" in iss_content
+    assert "KeepCredsRadio := TNewRadioButton.Create(" in iss_content
+    assert "ReEnrollRadio := TNewRadioButton.Create(" in iss_content
+    assert "--force" in iss_content
+    assert "hardware_state.json" in iss_content
+
+
+def test_uninstaller_optional_clean_removal_prompt(iss_content: str):
+    """Verify uninstaller offers user-friendly prompt to remove ProgramData on clean uninstall."""
+    assert "procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);" in iss_content
+    assert "usPostUninstall" in iss_content
+    assert "DelTree(DataDir, True, True, True);" in iss_content
+    assert "MB_DEFBUTTON2" in iss_content

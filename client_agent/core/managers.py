@@ -42,7 +42,14 @@ from core.health import safe_run
 from core.logger import logger
 from core.outbox import DurableOutbox, OutboxDeliveryWorker, OutboxPriority
 from core.outbox.models import OutboxRecord, OutboxStatus
-from modules.hardware import get_hardware_info
+from modules.hardware import (
+    compute_hardware_fingerprint,
+    get_detailed_hardware_specs,
+    get_hardware_info,
+    load_hardware_state,
+    record_hardware_delivered,
+    record_hardware_enqueued,
+)
 from modules.issues import (
     detect_issues,
     record_issue_delivered,
@@ -57,11 +64,13 @@ from modules.software import (
 )
 from modules.system_info import get_system_info
 from modules.usage import collect_usage_sessions
+from paths import HARDWARE_STATE_FILE
 from server.auth import get_access_token
 from server.communication import AgentWebSocketClient, WebSocketState
 from server.enroll import is_enrolled
 from server.sender import (
     build_metric_payload,
+    send_hardware_specs,
     send_issue,
     send_metrics,
     send_process_inventory,
@@ -171,6 +180,18 @@ def _resolve_send_metrics(payload: dict[str, Any], token: str) -> dict[str, Any]
     if fn is not None:
         return fn(payload, token)
     return send_metrics(payload, token)
+
+
+def _resolve_send_hardware_specs(payload: dict[str, Any], token: str) -> dict[str, Any]:
+    fn = None
+    try:
+        import core.runtime as rt
+        fn = getattr(rt, "send_hardware_specs", None)
+    except Exception:
+        pass
+    if fn is not None:
+        return fn(payload, token)
+    return send_hardware_specs(payload, token)
 
 
 # ============================================================================
@@ -361,6 +382,7 @@ class OutboxManager:
         enable_outbox: bool = True,
         software_state_file: str | None = None,
         issue_state_file: str | None = None,
+        hardware_state_file: str | None = None,
     ):
         self.enabled = enable_outbox
         if outbox is not None:
@@ -375,6 +397,7 @@ class OutboxManager:
         self.delivery_worker: OutboxDeliveryWorker | None = None
         self.software_state_file = software_state_file
         self.issue_state_file = issue_state_file
+        self.hardware_state_file = hardware_state_file
         self._lock = threading.Lock()
 
     @property
@@ -407,6 +430,12 @@ class OutboxManager:
                     if issue_key and incident_id:
                         record_issue_delivered(issue_key, incident_id, self.issue_state_file)
                         logger.info(f"Issue delivery confirmed (key={issue_key}, incident={incident_id}).")
+                elif item.event_type == "hardware":
+                    specs = item.payload
+                    if specs and isinstance(specs, dict):
+                        fp = compute_hardware_fingerprint(specs)
+                        record_hardware_delivered(fp, self.hardware_state_file)
+                        logger.info(f"Hardware specifications delivery confirmed (fp={fp[:12]}...).")
 
             self.delivery_worker = OutboxDeliveryWorker(
                 outbox=self.outbox,
@@ -566,6 +595,13 @@ class CollectorManager:
         if hasattr(res, "data"):
             return res.data or []
         return res if isinstance(res, list) else []
+
+    def collect_hardware_specs(self) -> dict[str, Any]:
+        """Collect static detailed hardware specifications."""
+        res = safe_run("Detailed Hardware Specs", get_detailed_hardware_specs)
+        if hasattr(res, "data"):
+            return res.data or {}
+        return res if isinstance(res, dict) else {}
 
     def submit_task(
         self,
@@ -941,6 +977,86 @@ class UploadManager:
         issues = data.get("issues")
         if issues:
             self.upload_issues(issues, token_manager, outbox_manager, state_file=issue_state_file)
+
+    def upload_hardware_specs(
+        self,
+        specs: dict[str, Any] | Any,
+        token_manager: TokenManager,
+        outbox_manager: OutboxManager,
+        state_file: str | None = None,
+        force: bool = False,
+    ) -> bool:
+        """Assemble and enqueue detailed hardware specifications."""
+        if not ENABLE_HARDWARE_INFO:
+            return False
+        if isinstance(specs, dict) and "hardware" in specs:
+            specs = specs["hardware"]
+        specs = getattr(specs, "data", specs)
+        if not specs or not isinstance(specs, dict):
+            return False
+
+        fingerprint = compute_hardware_fingerprint(specs)
+        state = load_hardware_state(state_file)
+        last_delivered = state.get("last_delivered_fingerprint")
+
+        if not force and last_delivered is not None and last_delivered == fingerprint:
+            logger.info(f"Hardware specifications unchanged (already delivered, fp={fingerprint[:12]}...); skipping upload.")
+            return False
+
+        if outbox_manager.enabled and outbox_manager.outbox is not None:
+            try:
+                comp_id = _resolve_computer_id()
+                key = (
+                    f"hardware_{comp_id}_{fingerprint[:16]}_{uuid.uuid4().hex[:8]}"
+                    if force
+                    else f"hardware_{comp_id}_{fingerprint[:16]}"
+                )
+                if not force:
+                    existing_record = outbox_manager.outbox.get_record_by_idempotency_key(key)
+                    if existing_record is not None:
+                        if existing_record.status == OutboxStatus.DEAD_LETTER:
+                            logger.warning(f"Hardware specs record {existing_record.id} was DEAD_LETTER; requeuing.")
+                            outbox_manager.outbox.requeue_dead_letter(existing_record.id)
+                            record_hardware_enqueued(fingerprint, state_file)
+                            return True
+                        elif existing_record.status in (OutboxStatus.PENDING, OutboxStatus.PROCESSING):
+                            logger.info(f"Hardware specs already pending in outbox (id={existing_record.id}).")
+                            record_hardware_enqueued(fingerprint, state_file)
+                            return False
+
+                outbox_manager.outbox.enqueue(
+                    event_type="hardware",
+                    payload=specs,
+                    idempotency_key=key,
+                    priority=OutboxPriority.TELEMETRY,
+                )
+                logger.info("Hardware specifications enqueued to durable outbox.")
+                record_hardware_enqueued(fingerprint, state_file)
+                return True
+            except Exception as e:
+                logger.exception(f"Failed to enqueue hardware specs to outbox: {e}")
+                return False
+
+        # Direct HTTP fallback
+        try:
+            _resolve_send_hardware_specs(specs, token_manager.token)
+            logger.info("Hardware specifications sent successfully.")
+            record_hardware_delivered(fingerprint, state_file)
+            return True
+        except HTTPError as e:
+            if e.response is not None and e.response.status_code == 401:
+                try:
+                    token_manager.refresh()
+                    _resolve_send_hardware_specs(specs, token_manager.token)
+                    record_hardware_delivered(fingerprint, state_file)
+                    return True
+                except Exception as retry_err:
+                    logger.exception(f"Hardware specs retry failed: {retry_err}")
+            else:
+                logger.exception(f"Hardware specs upload failed: {e}")
+        except Exception as e:
+            logger.exception(f"Hardware specs upload failed: {e}")
+        return False
 
 
 # ============================================================================

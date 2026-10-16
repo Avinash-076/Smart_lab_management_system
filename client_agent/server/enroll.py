@@ -97,14 +97,26 @@ def enroll(
         "os_version": sys_info["os_version"],
     }
 
+    hardware_specs = None
+    try:
+        from modules.hardware import get_detailed_hardware_specs
+        hardware_specs = get_detailed_hardware_specs()
+    except Exception as hw_err:
+        from core.logger import logger
+        logger.warning(f"Failed to probe hardware specifications during enrollment: {hw_err}")
+
+    register_payload: dict[str, Any] = {
+        "enrollment_key": enrollment_key,
+        "device": device,
+    }
+    if hardware_specs:
+        register_payload["hardware"] = hardware_specs
+
     session = create_secure_session()
     response = session.post(
         f"{base_url}/api/agent/register",
-        json={
-            "enrollment_key": enrollment_key,
-            "device": device,
-        },
-        timeout=10,
+        json=register_payload,
+        timeout=15,
     )
     response.raise_for_status()
 
@@ -147,6 +159,13 @@ def enroll(
             raise RuntimeError("Persisted server URL could not be verified after write.")
     except Exception as verify_err:
         raise RuntimeError(f"Failed to verify persisted service credentials: {verify_err}") from verify_err
+
+    if hardware_specs:
+        try:
+            from modules.hardware import compute_hardware_fingerprint, record_hardware_delivered
+            record_hardware_delivered(compute_hardware_fingerprint(hardware_specs))
+        except Exception:
+            pass
 
     return {
         "agent_id": agent_id,

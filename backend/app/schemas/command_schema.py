@@ -1,7 +1,15 @@
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
+from datetime import datetime, timezone
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 from app.models.remote_command import CommandType, CommandStatus
+
+
+def _serialize_utc(dt: datetime | None) -> str | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat().replace("+00:00", "Z")
 
 
 class CommandCreate(BaseModel):
@@ -23,6 +31,10 @@ class CommandResultResponse(BaseModel):
     duration_seconds: float | None = None
     completed_at: datetime
 
+    @field_serializer("completed_at", when_used="always")
+    def serialize_completed_at(self, v: datetime) -> str:
+        return _serialize_utc(v)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -40,6 +52,10 @@ class CommandResponse(BaseModel):
     created_at: datetime
     result: CommandResultResponse | None = None
 
+    @field_serializer("created_at", when_used="always")
+    def serialize_created_at(self, v: datetime) -> str:
+        return _serialize_utc(v)
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -54,6 +70,10 @@ class CommandSummaryResponse(BaseModel):
     failure_rate_percent: float
     last_execution_at: datetime | None = None
     recent_activities: list[CommandResponse] = Field(default_factory=list)
+
+    @field_serializer("last_execution_at", when_used="always")
+    def serialize_last_execution_at(self, v: datetime | None) -> str | None:
+        return _serialize_utc(v)
 
 
 class BatchCommandCreate(BaseModel):

@@ -1,5 +1,5 @@
 import Icon from "../../../../components/ui/Icon";
-import { parseUptimeString } from "../../utils/computerUtils";
+import { parseUptimeString, parseApiDate } from "../../utils/computerUtils";
 import SoftwareSummaryCards from "../software/SoftwareSummaryCards";
 import ProcessSummaryCards from "../processes/ProcessSummaryCards";
 import CommandSummaryCards from "../remote-control/CommandSummaryCards";
@@ -105,13 +105,15 @@ export default function ComputerSummaryCard({
   let lastSeenText = "—";
   if (computer.last_seen) {
     try {
-      const d = new Date(computer.last_seen);
-      const now = new Date();
-      const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      if (d.toDateString() === now.toDateString()) {
-        lastSeenText = `Today, ${timeStr}`;
-      } else {
-        lastSeenText = `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${timeStr}`;
+      const d = parseApiDate(computer.last_seen) || new Date(computer.last_seen);
+      if (d && !isNaN(d.getTime())) {
+        const now = new Date();
+        const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        if (d.toDateString() === now.toDateString()) {
+          lastSeenText = `Today, ${timeStr}`;
+        } else {
+          lastSeenText = `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${timeStr}`;
+        }
       }
     } catch {
       lastSeenText = "—";

@@ -163,6 +163,9 @@ PROCESS_COLLECTION_INTERVAL: int = int(os.getenv("SLMS_PROCESS_INTERVAL", "120")
 # Installed software scan interval (seconds) - E-05 (target 10-30 minutes).
 SOFTWARE_SCAN_INTERVAL: int = int(os.getenv("SLMS_SOFTWARE_INTERVAL", str(15 * 60)))
 
+# Static hardware inventory scan interval (seconds) - target 1 hour.
+HARDWARE_SCAN_INTERVAL: int = int(os.getenv("SLMS_HARDWARE_INTERVAL", str(3600)))
+
 # Maximum processes retained in inventory payload - E-04 (bounded payload).
 MAX_PROCESSES_INVENTORY: int = int(os.getenv("SLMS_MAX_PROCESSES", "500"))
 

@@ -399,10 +399,12 @@ def test_get_usage_summary_success(client, db_session, test_usage_user):
     """
     GET /api/clients/{id}/usage/summary returns aggregated analytics.
     """
+    import uuid
+    uid_hex = uuid.uuid4().hex[:6]
     comp = Computer(
-        hostname=f"PC-USAGE-SUMM-{int(datetime.now().timestamp() * 1000)}",
+        hostname=f"PC-USAGE-SUMM-{uid_hex}",
         ip_address="192.168.1.185",
-        mac_address=f"00:11:22:33:44:{int(datetime.now().timestamp()) % 80 + 10}",
+        mac_address=f"00:11:{uid_hex[:2]}:{uid_hex[2:4]}:{uid_hex[4:]}:99",
         os_name="Windows 11",
         os_version="22H2",
     )

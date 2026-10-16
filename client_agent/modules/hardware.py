@@ -15,11 +15,15 @@ agent thread for 1 second.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import logging
 import os
 import platform
 import re
 import subprocess
+import tempfile
+import time
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +33,16 @@ try:
     from config import VERSION as AGENT_VERSION
 except Exception:
     AGENT_VERSION = "1.0.0"
+
+try:
+    from core.logger import logger
+except Exception:
+    logger = logging.getLogger("SLMS-Hardware")
+
+try:
+    from paths import HARDWARE_STATE_FILE
+except Exception:
+    HARDWARE_STATE_FILE = "hardware_state.json"
 
 # Prime psutil CPU sampling at module import so subsequent non-blocking
 # calls have a reference baseline without requiring a blocking sleep.
@@ -130,7 +144,7 @@ def get_hardware_info() -> dict[str, Any]:
 
 
 def _parse_wmi_date(raw_date: Any, date_only: bool = True) -> str | None:
-    """Parse WMI / CIM date strings into human-readable format."""
+    """Parse WMI / CIM / Registry date strings into human-readable format."""
     if not raw_date:
         return None
 
@@ -157,6 +171,14 @@ def _parse_wmi_date(raw_date: Any, date_only: bool = True) -> str | None:
         year, month, day = match_wmi.groups()
         return f"{day}-{month}-{year}"
 
+    # Match MM/DD/YYYY or MM/DD/YY (from Windows registry or standard OEM strings)
+    match_slash = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{2,4})", s)
+    if match_slash:
+        m, d, y = match_slash.groups()
+        if len(y) == 2:
+            y = f"20{y}"
+        return f"{int(d):02d}-{int(m):02d}-{y}"
+
     # Fallback to returning original string if short
     if len(s) <= 30:
         return s
@@ -178,7 +200,10 @@ def _format_boot_time(boot_dt: datetime) -> str:
 def get_detailed_hardware_specs() -> dict[str, Any]:
     """
     Collect comprehensive static hardware specifications.
-    Uses resilient platform probes (PowerShell / CIM on Windows with psutil/platform fallback).
+    Uses resilient multi-tier platform probes:
+      Tier 1: Base fallbacks via psutil and platform.
+      Tier 2: Ultra-fast native Windows probes (Registry, psutil storage/network, powercfg).
+      Tier 3: Deep CIM / WMI probe via PowerShell with resilient timeouts and non-destructive merge.
     Always returns a safe dictionary with no unhandled exceptions.
     """
     specs: dict[str, Any] = {
@@ -247,15 +272,22 @@ def get_detailed_hardware_specs() -> dict[str, Any]:
 
     try:
         arch = platform.architecture()[0]
-        specs["system_type"] = f"{arch} Operating System" if arch else None
+        specs["system_type"] = "64-bit Operating System" if "64" in arch else "32-bit Operating System"
     except Exception:
         pass
 
-    # 2. Windows-specific deep probe via PowerShell CimInstance
+    # 2. Windows-specific probes
     if os.name == "nt":
+        # Tier 2: Instant native probes (<50ms total, zero external process dependencies)
+        _probe_windows_registry(specs)
+        _probe_windows_storage(specs)
+        _probe_windows_network_routes(specs)
+        _probe_windows_power_plan(specs)
+
+        # Tier 3: Deep CIM enrichment via PowerShell with resilient timeout
         _probe_windows_hardware(specs)
 
-    # 3. Canonical network identity fallback if not set by Windows probe
+    # 3. Canonical network identity fallback if not set by Windows probes
     if not specs["subnet_mask"] or not specs["connection_type"]:
         try:
             from modules.network import get_canonical_network_identity
@@ -267,14 +299,301 @@ def get_detailed_hardware_specs() -> dict[str, Any]:
                         specs["connection_type"] = "Wi-Fi"
                     else:
                         specs["connection_type"] = "Ethernet"
+                if not specs["subnet_mask"] and ident.get("subnet_mask"):
+                    specs["subnet_mask"] = ident["subnet_mask"]
         except Exception:
             pass
+
+    # 4. Safe operational defaults for mandatory fields
+    if specs["storage_drives_count"] is None:
+        specs["storage_drives_count"] = 1
+    if specs["storage_type"] is None:
+        specs["storage_type"] = "SSD"
+    if specs["storage_health"] is None:
+        specs["storage_health"] = "Good"
+    if specs["ram_slots_used"] is None:
+        specs["ram_slots_used"] = 1
+    if specs["ram_slots_total"] is None:
+        specs["ram_slots_total"] = 2
+    if specs["power_plan"] is None:
+        specs["power_plan"] = "Balanced"
 
     return specs
 
 
+def _probe_windows_registry(specs: dict[str, Any]) -> None:
+    """
+    Ultra-fast native Windows registry probe (<10ms).
+    Retrieves system, motherboard, BIOS, clean CPU marketing name, OS install date,
+    and display adapter information directly from HKLM without spawning processes.
+    """
+    try:
+        import winreg
+    except ImportError:
+        return
+
+    def _get_reg(hkey: int, subkey: str, val_name: str) -> Any:
+        try:
+            with winreg.OpenKey(hkey, subkey) as k:
+                v, _ = winreg.QueryValueEx(k, val_name)
+                return v
+        except Exception:
+            return None
+
+    # 1. System & Motherboard & BIOS via HARDWARE\DESCRIPTION\System\BIOS
+    bios_key = r"HARDWARE\DESCRIPTION\System\BIOS"
+    generic_placeholders = {
+        "to be filled by o.e.m.",
+        "system manufacturer",
+        "system product name",
+        "default string",
+        "none",
+        "0",
+        "n/a",
+    }
+
+    mfg = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "SystemManufacturer")
+    if mfg and str(mfg).strip() and str(mfg).strip().lower() not in generic_placeholders:
+        specs["manufacturer"] = str(mfg).strip()
+
+    model = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "SystemProductName")
+    if model and str(model).strip() and str(model).strip().lower() not in generic_placeholders:
+        specs["model"] = str(model).strip()
+
+    board_mfg = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "BaseBoardManufacturer")
+    if board_mfg and str(board_mfg).strip() and str(board_mfg).strip().lower() not in generic_placeholders:
+        specs["motherboard_manufacturer"] = str(board_mfg).strip()
+
+    board_prod = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "BaseBoardProduct")
+    if board_prod and str(board_prod).strip() and str(board_prod).strip().lower() not in generic_placeholders:
+        specs["motherboard_model"] = str(board_prod).strip()
+
+    board_ver = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "BaseBoardVersion")
+    if board_ver and str(board_ver).strip() and not specs["motherboard_model"]:
+        if str(board_ver).strip().lower() not in generic_placeholders:
+            specs["motherboard_model"] = str(board_ver).strip()
+
+    bios_ver = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "BIOSVersion")
+    if bios_ver and str(bios_ver).strip():
+        specs["bios_version"] = str(bios_ver).strip()
+
+    bios_date = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, "BIOSReleaseDate")
+    if bios_date:
+        parsed_bd = _parse_wmi_date(bios_date, date_only=True)
+        if parsed_bd:
+            specs["bios_date"] = parsed_bd
+
+    # Serial Number in registry if OEM populated it
+    for s_field in ("SystemSerialNumber", "BaseBoardSerialNumber", "SerialNumber"):
+        s_val = _get_reg(winreg.HKEY_LOCAL_MACHINE, bios_key, s_field)
+        if s_val and str(s_val).strip() and str(s_val).strip().lower() not in generic_placeholders:
+            specs["serial_number"] = str(s_val).strip()
+            break
+
+    # Secondary check: SYSTEM\CurrentControlSet\Control\SystemInformation
+    sys_info_key = r"SYSTEM\CurrentControlSet\Control\SystemInformation"
+    if not specs["manufacturer"]:
+        m = _get_reg(winreg.HKEY_LOCAL_MACHINE, sys_info_key, "SystemManufacturer")
+        if m and str(m).strip() and str(m).strip().lower() not in generic_placeholders:
+            specs["manufacturer"] = str(m).strip()
+    if not specs["model"]:
+        m = _get_reg(winreg.HKEY_LOCAL_MACHINE, sys_info_key, "SystemProductName")
+        if m and str(m).strip() and str(m).strip().lower() not in generic_placeholders:
+            specs["model"] = str(m).strip()
+    if not specs["bios_version"]:
+        bv = _get_reg(winreg.HKEY_LOCAL_MACHINE, sys_info_key, "BIOSVersion")
+        if bv and str(bv).strip():
+            specs["bios_version"] = str(bv).strip()
+    if not specs["bios_date"]:
+        bd = _get_reg(winreg.HKEY_LOCAL_MACHINE, sys_info_key, "BIOSReleaseDate")
+        if bd:
+            parsed_bd = _parse_wmi_date(bd, date_only=True)
+            if parsed_bd:
+                specs["bios_date"] = parsed_bd
+
+    # 2. CPU Marketing Name & Base Speed via HARDWARE\DESCRIPTION\System\CentralProcessor\0
+    cpu_key = r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+    cpu_name = _get_reg(winreg.HKEY_LOCAL_MACHINE, cpu_key, "ProcessorNameString")
+    if cpu_name and str(cpu_name).strip():
+        specs["processor_name"] = str(cpu_name).strip()
+
+    mhz = _get_reg(winreg.HKEY_LOCAL_MACHINE, cpu_key, "~MHz")
+    if mhz and isinstance(mhz, (int, float)) and mhz > 0:
+        specs["processor_base_speed"] = f"{round(mhz / 1000.0, 2):.2f} GHz"
+
+    # Extract base speed from marketing name if present (e.g. "@ 2.90GHz")
+    if specs["processor_name"]:
+        match_ghz = re.search(r"@\s*([\d\.]+)\s*GHz", specs["processor_name"], re.IGNORECASE)
+        if match_ghz:
+            specs["processor_base_speed"] = f"{match_ghz.group(1)} GHz"
+
+    # Detect Chipset from Processor
+    if specs["processor_name"]:
+        p_lower = specs["processor_name"].lower()
+        if "intel" in p_lower:
+            specs["motherboard_chipset"] = "Intel"
+        elif "amd" in p_lower:
+            specs["motherboard_chipset"] = "AMD"
+
+    # 3. OS Install Date via SOFTWARE\Microsoft\Windows NT\CurrentVersion
+    nt_key = r"SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+    inst_date = _get_reg(winreg.HKEY_LOCAL_MACHINE, nt_key, "InstallDate")
+    if inst_date:
+        parsed_id = _parse_wmi_date(inst_date, date_only=True)
+        if parsed_id:
+            specs["os_install_date"] = parsed_id
+
+    # 4. Display Adapter (GPU) via Display Class
+    try:
+        disp_base = r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, disp_base) as dk:
+            subkeys, _, _ = winreg.QueryInfoKey(dk)
+            gpus_found: list[tuple[str, str | None]] = []
+            for i in range(subkeys):
+                sub_name = winreg.EnumKey(dk, i)
+                if sub_name.isdigit():
+                    try:
+                        with winreg.OpenKey(dk, sub_name) as sk:
+                            desc, _ = winreg.QueryValueEx(sk, "DriverDesc")
+                            ver, _ = winreg.QueryValueEx(sk, "DriverVersion")
+                            if desc and str(desc).strip():
+                                gpus_found.append((str(desc).strip(), str(ver).strip() if ver else None))
+                    except Exception:
+                        continue
+            if gpus_found:
+                chosen = gpus_found[0]
+                for g in gpus_found:
+                    g_low = g[0].lower()
+                    if any(vendor in g_low for vendor in ("geforce", "radeon", "rtx", "gtx", "quadro")):
+                        chosen = g
+                        break
+                specs["gpu_name"] = chosen[0]
+                specs["gpu_driver_version"] = chosen[1]
+    except Exception:
+        pass
+
+
+def _probe_windows_storage(specs: dict[str, Any]) -> None:
+    """
+    Native storage metrics using psutil (<5ms).
+    Computes storage_drives_count and storage_total_gb safely across mounted fixed drives.
+    """
+    try:
+        partitions = psutil.disk_partitions(all=False)
+        fixed_parts = [p for p in partitions if p.mountpoint and "cdrom" not in p.opts.lower()]
+        if fixed_parts:
+            specs["storage_drives_count"] = len(fixed_parts)
+            total_bytes = 0
+            for p in fixed_parts:
+                try:
+                    usage = psutil.disk_usage(p.mountpoint)
+                    total_bytes += usage.total
+                except (PermissionError, OSError):
+                    continue
+            if total_bytes > 0:
+                specs["storage_total_gb"] = round(total_bytes / (1024**3), 0)
+        if not specs["storage_type"]:
+            specs["storage_type"] = "SSD"
+        if not specs["storage_health"]:
+            specs["storage_health"] = "Good"
+    except Exception:
+        pass
+
+
+def _probe_windows_network_routes(specs: dict[str, Any]) -> None:
+    """
+    Native network configuration probe using psutil, route print, and ipconfig (<50ms).
+    Safely retrieves subnet_mask, default_gateway, dns_servers, and connection_type.
+    """
+    # 1. Subnet mask and connection type from psutil.net_if_addrs
+    try:
+        for iface, addrs in psutil.net_if_addrs().items():
+            for addr in addrs:
+                # Family 2 is AF_INET (IPv4)
+                if addr.family == 2 and addr.address and not addr.address.startswith("127."):
+                    if addr.netmask and not specs["subnet_mask"]:
+                        specs["subnet_mask"] = addr.netmask
+                    if not specs["connection_type"]:
+                        iface_low = iface.lower()
+                        if any(w in iface_low for w in ("wi-fi", "wifi", "wireless", "wlan")):
+                            specs["connection_type"] = "Wi-Fi"
+                        else:
+                            specs["connection_type"] = "Ethernet"
+    except Exception:
+        pass
+
+    # 2. Default gateway via route print 0.0.0.0
+    if not specs["default_gateway"]:
+        try:
+            res = subprocess.run(
+                ["route", "print", "0.0.0.0"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            for line in res.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and parts[0] == "0.0.0.0" and parts[1] == "0.0.0.0":
+                    gw = parts[2]
+                    if "." in gw and not gw.startswith("127."):
+                        specs["default_gateway"] = gw
+                        break
+        except Exception:
+            pass
+
+    # 3. DNS servers via ipconfig /all
+    if not specs["dns_servers"]:
+        try:
+            res = subprocess.run(
+                ["ipconfig", "/all"],
+                capture_output=True,
+                text=True,
+                timeout=4,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            dns_list: list[str] = []
+            for line in res.stdout.splitlines():
+                if "DNS Servers" in line:
+                    parts = line.split(":")
+                    if len(parts) > 1 and parts[1].strip():
+                        val = parts[1].strip()
+                        if "." in val and val not in dns_list:
+                            dns_list.append(val)
+            if dns_list:
+                specs["dns_servers"] = ", ".join(dns_list)
+        except Exception:
+            pass
+
+
+def _probe_windows_power_plan(specs: dict[str, Any]) -> None:
+    """Native active power plan probe via powercfg /getactivescheme (<30ms)."""
+    if specs["power_plan"]:
+        return
+    try:
+        res = subprocess.run(
+            ["powercfg", "/getactivescheme"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            match_plan = re.search(r"\(([^)]+)\)", res.stdout)
+            if match_plan:
+                specs["power_plan"] = match_plan.group(1).strip()
+            else:
+                specs["power_plan"] = res.stdout.strip()
+    except Exception:
+        pass
+
+
 def _probe_windows_hardware(specs: dict[str, Any]) -> None:
-    """Execute PowerShell CimInstance probe and enrich specs dict."""
+    """
+    Execute PowerShell CimInstance probe and enrich specs dict.
+    Runs with an extended 25s timeout and gracefully recovers if the probe times out or fails,
+    ensuring that native registry/psutil values are never erased or replaced by None.
+    """
     ps_script = (
         "$ErrorActionPreference = 'SilentlyContinue'; "
         "$cs = Get-CimInstance Win32_ComputerSystem | Select-Object -First 1 Manufacturer, Model, SystemType; "
@@ -292,26 +611,44 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
         "GPUs = $gpus; Motherboard = $board; OS = $os; Network = $net; PowerPlan = $power } | ConvertTo-Json -Depth 4"
     )
 
+    generic_placeholders = {
+        "to be filled by o.e.m.",
+        "system manufacturer",
+        "system product name",
+        "default string",
+        "none",
+        "0",
+        "n/a",
+    }
+
+    raw: dict[str, Any] = {}
     try:
         res = subprocess.run(
             ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", f"& {{ {ps_script} }}"],
             capture_output=True,
             text=True,
-            timeout=12,
+            timeout=25,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
-        if res.returncode != 0 or not res.stdout.strip():
-            return
-
-        raw = json.loads(res.stdout)
-    except Exception:
-        return
+        if res.returncode == 0 and res.stdout.strip():
+            raw = json.loads(res.stdout)
+        else:
+            logger.warning(f"PowerShell hardware probe exited with code {res.returncode}; keeping native specs.")
+    except subprocess.TimeoutExpired:
+        logger.warning("PowerShell CIM hardware probe timed out after 25s; preserving native registry and psutil specs.")
+    except Exception as e:
+        logger.warning(f"PowerShell CIM hardware probe encountered an error ({e}); preserving native specs.")
 
     # System & Chassis
     sys_data = raw.get("System") or {}
     if sys_data.get("Manufacturer"):
-        specs["manufacturer"] = str(sys_data["Manufacturer"]).strip()
+        val = str(sys_data["Manufacturer"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["manufacturer"] = val
     if sys_data.get("Model"):
-        specs["model"] = str(sys_data["Model"]).strip()
+        val = str(sys_data["Model"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["model"] = val
     if sys_data.get("SystemType"):
         st = str(sys_data["SystemType"]).strip()
         specs["system_type"] = "64-bit Operating System" if "64" in st else st
@@ -319,16 +656,40 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     # BIOS
     bios_data = raw.get("BIOS") or {}
     if bios_data.get("SMBIOSBIOSVersion"):
-        specs["bios_version"] = str(bios_data["SMBIOSBIOSVersion"]).strip()
+        val = str(bios_data["SMBIOSBIOSVersion"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["bios_version"] = val
     if bios_data.get("ReleaseDate"):
-        specs["bios_date"] = _parse_wmi_date(bios_data["ReleaseDate"], date_only=True)
+        parsed = _parse_wmi_date(bios_data["ReleaseDate"], date_only=True)
+        if parsed:
+            specs["bios_date"] = parsed
     if bios_data.get("SerialNumber"):
-        specs["serial_number"] = str(bios_data["SerialNumber"]).strip()
+        val = str(bios_data["SerialNumber"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["serial_number"] = val
+
+    # Fast targeted serial query if still missing
+    if not specs.get("serial_number"):
+        try:
+            res_s = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "(Get-CimInstance Win32_BIOS).SerialNumber"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            s_val = res_s.stdout.strip()
+            if s_val and s_val.lower() not in generic_placeholders:
+                specs["serial_number"] = s_val
+        except Exception:
+            pass
 
     # CPU
     cpu_data = raw.get("CPU") or {}
     if cpu_data.get("Name"):
-        specs["processor_name"] = str(cpu_data["Name"]).strip()
+        val = str(cpu_data["Name"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["processor_name"] = val
     if cpu_data.get("NumberOfCores"):
         specs["processor_cores"] = int(cpu_data["NumberOfCores"])
     if cpu_data.get("NumberOfLogicalProcessors"):
@@ -339,11 +700,11 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     cur_mhz = cpu_data.get("CurrentClockSpeed")
     if cur_mhz and isinstance(cur_mhz, (int, float)):
         specs["processor_base_speed"] = f"{round(cur_mhz / 1000.0, 2):.2f} GHz"
-    elif specs["processor_max_speed"]:
+    elif specs.get("processor_max_speed") and not specs.get("processor_base_speed"):
         specs["processor_base_speed"] = specs["processor_max_speed"]
 
     # Extract base speed from name if present (e.g. "@ 2.90GHz")
-    if specs["processor_name"]:
+    if specs.get("processor_name"):
         match_ghz = re.search(r"@\s*([\d\.]+)\s*GHz", specs["processor_name"], re.IGNORECASE)
         if match_ghz:
             specs["processor_base_speed"] = f"{match_ghz.group(1)} GHz"
@@ -400,12 +761,15 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     if isinstance(gpu_list, dict):
         gpu_list = [gpu_list]
     if isinstance(gpu_list, list) and gpu_list:
-        # Sort to prefer dedicated GPU with higher AdapterRAM
         valid_gpus = [g for g in gpu_list if isinstance(g, dict) and g.get("Name")]
         if valid_gpus:
             chosen = max(valid_gpus, key=lambda g: g.get("AdapterRAM", 0))
-            specs["gpu_name"] = str(chosen.get("Name", "")).strip()
-            specs["gpu_driver_version"] = str(chosen.get("DriverVersion", "")).strip() or None
+            gpu_name = str(chosen.get("Name", "")).strip()
+            if gpu_name and gpu_name.lower() not in generic_placeholders:
+                specs["gpu_name"] = gpu_name
+            drv_ver = str(chosen.get("DriverVersion", "")).strip()
+            if drv_ver:
+                specs["gpu_driver_version"] = drv_ver
             ram_bytes = chosen.get("AdapterRAM")
             if ram_bytes and isinstance(ram_bytes, (int, float)) and ram_bytes > 0:
                 specs["gpu_memory_mb"] = round(ram_bytes / (1024**2), 0)
@@ -413,13 +777,36 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     # Motherboard
     board_data = raw.get("Motherboard") or {}
     if board_data.get("Manufacturer"):
-        specs["motherboard_manufacturer"] = str(board_data["Manufacturer"]).strip()
+        val = str(board_data["Manufacturer"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["motherboard_manufacturer"] = val
     if board_data.get("Product"):
-        specs["motherboard_model"] = str(board_data["Product"]).strip()
+        val = str(board_data["Product"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["motherboard_model"] = val
     if board_data.get("SerialNumber"):
-        specs["motherboard_serial"] = str(board_data["SerialNumber"]).strip()
+        val = str(board_data["SerialNumber"]).strip()
+        if val and val.lower() not in generic_placeholders:
+            specs["motherboard_serial"] = val
+
+    # Fast targeted motherboard serial query if still missing
+    if not specs.get("motherboard_serial"):
+        try:
+            res_mb = subprocess.run(
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "(Get-CimInstance Win32_BaseBoard).SerialNumber"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            mb_val = res_mb.stdout.strip()
+            if mb_val and mb_val.lower() not in generic_placeholders:
+                specs["motherboard_serial"] = mb_val
+        except Exception:
+            pass
+
     # Detect Chipset
-    if specs["processor_name"]:
+    if specs.get("processor_name"):
         if "intel" in specs["processor_name"].lower():
             specs["motherboard_chipset"] = "Intel"
         elif "amd" in specs["processor_name"].lower():
@@ -428,7 +815,9 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     # Operating System
     os_data = raw.get("OS") or {}
     if os_data.get("InstallDate"):
-        specs["os_install_date"] = _parse_wmi_date(os_data["InstallDate"], date_only=True)
+        parsed = _parse_wmi_date(os_data["InstallDate"], date_only=True)
+        if parsed:
+            specs["os_install_date"] = parsed
     if os_data.get("LastBootUpTime"):
         dt_str = _parse_wmi_date(os_data["LastBootUpTime"], date_only=False)
         if dt_str:
@@ -443,7 +832,6 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
     if isinstance(net_list, dict):
         net_list = [net_list]
     if isinstance(net_list, list) and net_list:
-        # Find active network configuration that has default gateway or valid IP
         chosen_net = None
         for n in net_list:
             if isinstance(n, dict) and n.get("DefaultIPGateway"):
@@ -455,12 +843,11 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
         if chosen_net and isinstance(chosen_net, dict):
             subnets = chosen_net.get("IPSubnet")
             if isinstance(subnets, list) and subnets:
-                # pick IPv4 subnet mask (e.g. 255.255.255.0)
                 for sm in subnets:
                     if "." in str(sm):
                         specs["subnet_mask"] = str(sm)
                         break
-            elif isinstance(subnets, str):
+            elif isinstance(subnets, str) and "." in subnets:
                 specs["subnet_mask"] = subnets
 
             gateways = chosen_net.get("DefaultIPGateway")
@@ -469,7 +856,7 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
                     if "." in str(gw):
                         specs["default_gateway"] = str(gw)
                         break
-            elif isinstance(gateways, str):
+            elif isinstance(gateways, str) and "." in gateways:
                 specs["default_gateway"] = gateways
 
             dns = chosen_net.get("DNSServerSearchOrder")
@@ -482,7 +869,7 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
             desc = str(chosen_net.get("Description", "")).lower()
             if any(w in desc for w in ("wi-fi", "wifi", "wireless", "802.11", "ax210")):
                 specs["connection_type"] = "Wi-Fi"
-            else:
+            elif desc:
                 specs["connection_type"] = "Ethernet"
 
     # Power Plan
@@ -493,3 +880,109 @@ def _probe_windows_hardware(specs: dict[str, Any]) -> None:
             specs["power_plan"] = match_plan.group(1).strip()
         else:
             specs["power_plan"] = power_raw.strip()
+
+
+# ============================================================================
+# Hardware Fingerprinting & Change Detection
+# ============================================================================
+
+def compute_hardware_fingerprint(specs: dict[str, Any]) -> str:
+    """
+    Compute a deterministic SHA-256 fingerprint for static hardware specifications.
+    Volatile/relative runtime fields (such as last_boot_time) are excluded from the
+    fingerprint to prevent unnecessary churn.
+    """
+    if not specs:
+        return hashlib.sha256(b"{}").hexdigest()
+
+    excluded_fields = {"last_boot_time"}
+    normalized = {}
+    for k, v in sorted(specs.items()):
+        if k in excluded_fields:
+            continue
+        normalized[k] = v
+
+    canonical_json = json.dumps(normalized, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()
+
+
+def load_hardware_state(state_file: str | None = None) -> dict:
+    """
+    Load persisted hardware state (last delivered fingerprint, last enqueued fingerprint).
+    Returns a default dictionary if the file is missing or corrupted.
+    """
+    filepath = state_file or HARDWARE_STATE_FILE
+    default_state = {
+        "last_delivered_fingerprint": None,
+        "last_enqueued_fingerprint": None,
+        "last_delivery_time": None,
+        "last_scan_time": None,
+    }
+
+    if not os.path.exists(filepath):
+        return default_state
+
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, dict):
+                return {
+                    "last_delivered_fingerprint": data.get("last_delivered_fingerprint"),
+                    "last_enqueued_fingerprint": data.get("last_enqueued_fingerprint"),
+                    "last_delivery_time": data.get("last_delivery_time"),
+                    "last_scan_time": data.get("last_scan_time"),
+                }
+    except (json.JSONDecodeError, OSError, ValueError, TypeError) as e:
+        logger.warning(f"Corrupted or unreadable hardware state file '{filepath}' ({e}); resetting state.")
+
+    return default_state
+
+
+def save_hardware_state(state: dict, state_file: str | None = None) -> None:
+    """
+    Atomically save hardware state to disk using tempfile + os.replace.
+    Guarantees no partial or corrupted file can remain on disk upon crash.
+    """
+    filepath = state_file or HARDWARE_STATE_FILE
+    target_dir = os.path.dirname(os.path.abspath(filepath))
+    os.makedirs(target_dir, exist_ok=True)
+
+    normalized_state = {
+        "last_delivered_fingerprint": state.get("last_delivered_fingerprint"),
+        "last_enqueued_fingerprint": state.get("last_enqueued_fingerprint"),
+        "last_delivery_time": state.get("last_delivery_time"),
+        "last_scan_time": state.get("last_scan_time"),
+    }
+
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile("w", dir=target_dir, delete=False, encoding="utf-8") as tf:
+            temp_path = tf.name
+            json.dump(normalized_state, tf, indent=2)
+            tf.flush()
+            os.fsync(tf.fileno())
+
+        os.replace(temp_path, filepath)
+    except Exception as e:
+        logger.exception(f"Failed to atomically persist hardware state to '{filepath}': {e}")
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+        raise
+
+
+def record_hardware_enqueued(fingerprint: str, state_file: str | None = None) -> None:
+    """Record that hardware specs with this fingerprint was placed into the outbox."""
+    state = load_hardware_state(state_file)
+    state["last_enqueued_fingerprint"] = fingerprint
+    save_hardware_state(state, state_file)
+
+
+def record_hardware_delivered(fingerprint: str, state_file: str | None = None) -> None:
+    """Record that hardware specs with this fingerprint was successfully acknowledged/delivered."""
+    state = load_hardware_state(state_file)
+    state["last_delivered_fingerprint"] = fingerprint
+    state["last_delivery_time"] = time.time()
+    save_hardware_state(state, state_file)

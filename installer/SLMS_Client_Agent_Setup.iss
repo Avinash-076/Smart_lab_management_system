@@ -68,6 +68,10 @@ const
   MODE_REPAIR = 2;
 
 var
+  EnrollmentModePage: TWizardPage;
+  KeepCredsRadio: TNewRadioButton;
+  ReEnrollRadio: TNewRadioButton;
+  ExistingCredsFound: Boolean;
   ServerUrlPage: TWizardPage;
   ServerUrlEdit: TNewEdit;
   EnrollmentKeyPage: TWizardPage;
@@ -102,8 +106,42 @@ end;
 procedure StopSLMSService();
 var
   ResultCode: Integer;
+  I: Integer;
+  StatusFile: string;
+  Lines: TArrayOfString;
+  IsStopped: Boolean;
 begin
   Exec('sc.exe', 'stop SLMSService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  StatusFile := ExpandConstant('{tmp}\slms_stop_status.log');
+
+  for I := 1 to 6 do
+  begin
+    IsStopped := False;
+    Exec('cmd.exe', '/c "sc.exe query SLMSService > "' + StatusFile + '" 2>&1"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    if FileExists(StatusFile) then
+    begin
+      if LoadStringsFromFile(StatusFile, Lines) then
+      begin
+        for ResultCode := 0 to GetArrayLength(Lines) - 1 do
+        begin
+          if (Pos('STATE', Lines[ResultCode]) > 0) and (Pos('STOPPED', Lines[ResultCode]) > 0) then
+          begin
+            IsStopped := True;
+            Break;
+          end;
+          if Pos('1060', Lines[ResultCode]) > 0 then
+          begin
+            IsStopped := True;
+            Break;
+          end;
+        end;
+      end;
+      DeleteFile(StatusFile);
+    end;
+    if IsStopped then
+      Break;
+    Sleep(500);
+  end;
 end;
 
 // Remove SLMSService during uninstallation or rollback
@@ -244,10 +282,64 @@ var
   ServerUrlHintLabel: TLabel;
   EnrollmentKeyLabel: TLabel;
   EnrollmentKeyHintLabel: TLabel;
+  ModeDescLabel: TLabel;
+  KeepCredsHint: TLabel;
+  ReEnrollHint: TLabel;
 begin
-  // 1. Server URL Page (Used during Fresh Install)
-  ServerUrlPage := CreateCustomPage(
+  ExistingCredsFound := FileExists(ExpandConstant('{commonappdata}\SLMS\config\service_credentials.enc'));
+
+  // 1. Workstation Registration Mode Page (Shown only when existing credentials exist)
+  EnrollmentModePage := CreateCustomPage(
     wpWelcome,
+    'Workstation Registration Mode',
+    'Choose whether to keep existing registration or re-register with a new key.'
+  );
+
+  ModeDescLabel := TLabel.Create(WizardForm);
+  ModeDescLabel.Parent := EnrollmentModePage.Surface;
+  ModeDescLabel.Caption := 'An existing workstation registration was detected on this computer.' + #13#10 +
+                           'Choose how you would like to proceed:';
+  ModeDescLabel.Left := 0;
+  ModeDescLabel.Top := ScaleY(10);
+  ModeDescLabel.Width := EnrollmentModePage.SurfaceWidth;
+  ModeDescLabel.WordWrap := True;
+
+  KeepCredsRadio := TNewRadioButton.Create(WizardForm);
+  KeepCredsRadio.Parent := EnrollmentModePage.Surface;
+  KeepCredsRadio.Caption := 'Keep existing workstation registration (Upgrade / Repair)';
+  KeepCredsRadio.Left := ScaleX(10);
+  KeepCredsRadio.Top := ModeDescLabel.Top + ModeDescLabel.Height + ScaleY(15);
+  KeepCredsRadio.Width := EnrollmentModePage.SurfaceWidth - ScaleX(20);
+  KeepCredsRadio.Font.Style := [fsBold];
+  KeepCredsRadio.Checked := True;
+
+  KeepCredsHint := TLabel.Create(WizardForm);
+  KeepCredsHint.Parent := EnrollmentModePage.Surface;
+  KeepCredsHint.Caption := 'Preserves existing credentials and runtime state. Select this if you are updating the agent software or repairing the service.';
+  KeepCredsHint.Left := ScaleX(28);
+  KeepCredsHint.Top := KeepCredsRadio.Top + KeepCredsRadio.Height + ScaleY(4);
+  KeepCredsHint.Width := EnrollmentModePage.SurfaceWidth - ScaleX(38);
+  KeepCredsHint.WordWrap := True;
+
+  ReEnrollRadio := TNewRadioButton.Create(WizardForm);
+  ReEnrollRadio.Parent := EnrollmentModePage.Surface;
+  ReEnrollRadio.Caption := 'Re-register as a new workstation (Enter fresh Enrollment Key)';
+  ReEnrollRadio.Left := ScaleX(10);
+  ReEnrollRadio.Top := KeepCredsHint.Top + KeepCredsHint.Height + ScaleY(16);
+  ReEnrollRadio.Width := EnrollmentModePage.SurfaceWidth - ScaleX(20);
+  ReEnrollRadio.Font.Style := [fsBold];
+
+  ReEnrollHint := TLabel.Create(WizardForm);
+  ReEnrollHint.Parent := EnrollmentModePage.Surface;
+  ReEnrollHint.Caption := 'Replaces existing credentials with a new enrollment key. Select this if this workstation was deleted on the server, revoked (HTTP 401), or connecting to a new server.';
+  ReEnrollHint.Left := ScaleX(28);
+  ReEnrollHint.Top := ReEnrollRadio.Top + ReEnrollRadio.Height + ScaleY(4);
+  ReEnrollHint.Width := EnrollmentModePage.SurfaceWidth - ScaleX(38);
+  ReEnrollHint.WordWrap := True;
+
+  // 2. Server URL Page (Used during Fresh Install or Re-registration)
+  ServerUrlPage := CreateCustomPage(
+    EnrollmentModePage.ID,
     'SLMS Server Configuration',
     'Specify the network address of the SLMS server.'
   );
@@ -276,7 +368,7 @@ begin
   ServerUrlHintLabel.Width := ServerUrlPage.SurfaceWidth;
   ServerUrlHintLabel.WordWrap := True;
 
-  // 2. Workstation Enrollment Key Page (Masked, Used during Fresh Install)
+  // 3. Workstation Enrollment Key Page (Masked, Used during Fresh Install or Re-registration)
   EnrollmentKeyPage := CreateCustomPage(
     ServerUrlPage.ID,
     'Workstation Enrollment',
@@ -309,13 +401,21 @@ begin
   EnrollmentKeyHintLabel.WordWrap := True;
 end;
 
-// Skip Server URL and Enrollment Key pages during Upgrade or Repair
+// Skip pages based on detected state and user choice
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
   Result := False;
-  if (InstallMode = MODE_UPGRADE) or (InstallMode = MODE_REPAIR) then
+
+  if PageID = EnrollmentModePage.ID then
   begin
-    if (PageID = ServerUrlPage.ID) or (PageID = EnrollmentKeyPage.ID) then
+    // Skip registration mode selection if no existing credentials were found
+    if not ExistingCredsFound then
+      Result := True;
+  end
+  else if (PageID = ServerUrlPage.ID) or (PageID = EnrollmentKeyPage.ID) then
+  begin
+    // If credentials existed and user chose to KEEP them, skip URL and Key pages
+    if ExistingCredsFound and KeepCredsRadio.Checked then
       Result := True;
   end;
 end;
@@ -332,7 +432,21 @@ var
 begin
   Result := True;
 
-  if CurPageID = ServerUrlPage.ID then
+  if CurPageID = EnrollmentModePage.ID then
+  begin
+    if ReEnrollRadio.Checked then
+    begin
+      InstallMode := MODE_FRESH_INSTALL;
+    end
+    else
+    begin
+      if DetectedState = STATE_BROKEN_SERVICE then
+        InstallMode := MODE_REPAIR
+      else
+        InstallMode := MODE_UPGRADE;
+    end;
+  end
+  else if CurPageID = ServerUrlPage.ID then
   begin
     Url := Trim(ServerUrlEdit.Text);
     if (Url = '') or (Url = 'https://') or (Url = 'http://') then
@@ -569,6 +683,12 @@ begin
       TempKeyFile := ExpandConstant('{tmp}\slms_enroll.key');
       TempOutFile := ExpandConstant('{tmp}\slms_enroll_out.log');
 
+      // Clear previous outbox and hardware state cache if re-enrolling
+      if FileExists(ExpandConstant('{commonappdata}\SLMS\data\hardware_state.json')) then
+        DeleteFile(ExpandConstant('{commonappdata}\SLMS\data\hardware_state.json'));
+      if FileExists(ExpandConstant('{commonappdata}\SLMS\data\outbox\outbox.db')) then
+        DeleteFile(ExpandConstant('{commonappdata}\SLMS\data\outbox\outbox.db'));
+
       // Write enrollment key to admin-protected temporary key file
       if not SaveStringToFile(TempKeyFile, ConfiguredEnrollmentKey, False) then
       begin
@@ -576,8 +696,8 @@ begin
         Exit;
       end;
 
-      // Execute headless enrollment via --key-file (No CLI secret exposure!)
-      EnrollCmd := '/c ""' + AgentExePath + '" enroll --url "' + ConfiguredServerUrl + '" --key-file "' + TempKeyFile + '" > "' + TempOutFile + '" 2>&1"';
+      // Execute headless enrollment via --key-file with --force (No CLI secret exposure, overwrites stale credentials!)
+      EnrollCmd := '/c ""' + AgentExePath + '" enroll --url "' + ConfiguredServerUrl + '" --key-file "' + TempKeyFile + '" --force > "' + TempOutFile + '" 2>&1"';
       Exec('cmd.exe', EnrollCmd, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
 
       // Temporary secret file cleanup: shred and delete immediately
@@ -725,6 +845,16 @@ begin
       if FileExists(TempOutFile) then
         DeleteFile(TempOutFile);
 
+      // Resilient fallback: if 'install' reported an error (e.g. service already exists),
+      // update the existing service configuration directly via sc.exe config
+      if ResultCode <> 0 then
+      begin
+        InstallCmd := '/c "sc.exe config SLMSService binpath= """' + AgentExePath + '"" run" DisplayName= "Smart Lab Management System (SLMS) Client Agent" start= auto > "' + TempOutFile + '" 2>&1"';
+        Exec('cmd.exe', InstallCmd, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        if FileExists(TempOutFile) then
+          DeleteFile(TempOutFile);
+      end;
+
       if ResultCode <> 0 then
       begin
         RollbackUpgradeAndAbort('Failed to configure SLMS Windows Service during upgrade.');
@@ -821,12 +951,29 @@ end;
 // ===========================================================================
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  DataDir: string;
 begin
   if CurUninstallStep = usUninstall then
   begin
     // 1. Stop and remove Windows service from SCM before deleting program files
     StopSLMSService();
     UninstallSLMSService();
-    // 2. Note: %ProgramData%\SLMS is strictly preserved by default!
+    // Note: %ProgramData%\SLMS is preserved by default unless confirmed by user
+  end
+  else if CurUninstallStep = usPostUninstall then
+  begin
+    // 2. Offer clean removal of %ProgramData%\SLMS for end users
+    DataDir := GetEnv('ProgramData') + '\SLMS';
+    if DirExists(DataDir) then
+    begin
+      if MsgBox('Do you also want to remove all workstation registration, configuration, and runtime data?' + #13#10#13#10 +
+                'Select "Yes" for a clean uninstall (recommended if re-registering or decommissioning this PC).' + #13#10 +
+                'Select "No" to keep credentials for future upgrades.',
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
+      begin
+        DelTree(DataDir, True, True, True);
+      end;
+    end;
   end;
 end;

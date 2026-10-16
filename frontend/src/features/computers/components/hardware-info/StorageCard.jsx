@@ -3,7 +3,10 @@ import "./StorageCard.css";
 
 export default function StorageCard({ hardware }) {
   const drives = hardware?.storage_drives_count ?? "—";
-  const capacity = hardware?.storage_total_gb ? `${hardware.storage_total_gb} GB` : "—";
+  const capacity =
+    hardware?.storage_total_gb !== undefined && hardware?.storage_total_gb !== null
+      ? `${hardware.storage_total_gb} GB`
+      : "—";
   const type = hardware?.storage_type || "—";
   const health = hardware?.storage_health || "—";
   const isHealthGood = typeof health === "string" && (health.toLowerCase().includes("good") || health.toLowerCase().includes("ok"));

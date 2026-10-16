@@ -116,14 +116,24 @@ def test_ingest_endpoint_inactive_agent_rejected(client, db_session, registered_
         db_session.commit()
 
 
-def test_delete_computer_with_dependent_records_succeeds(db_session, registered_agent):
+def test_delete_computer_with_dependent_records_succeeds(db_session):
     """Verify deleting a computer cleanly cascades and deletes all dependent records."""
     from app.services.computer_service import delete_computer, get_computer_by_id
     from app.models.system_metric import SystemMetric
+    import uuid
 
-    computer_id = registered_agent["computer_id"]
-    comp = get_computer_by_id(db_session, computer_id)
-    assert comp is not None
+    uid = uuid.uuid4().hex[:6]
+    comp = Computer(
+        hostname=f"DEL-TEST-{uid}",
+        ip_address="192.168.1.199",
+        mac_address=f"FE:ED:00:{uid[:2]}:{uid[2:4]}:{uid[4:]}",
+        os_name="Windows",
+        os_version="11 Pro",
+    )
+    db_session.add(comp)
+    db_session.commit()
+    db_session.refresh(comp)
+    computer_id = comp.id
 
     # Seed child records
     metric = SystemMetric(

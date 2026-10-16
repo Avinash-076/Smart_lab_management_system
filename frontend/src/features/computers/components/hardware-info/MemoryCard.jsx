@@ -2,13 +2,19 @@ import Icon from "../../../../components/ui/Icon";
 import "./MemoryCard.css";
 
 export default function MemoryCard({ hardware }) {
-  const total = hardware?.ram_total_gb ? `${hardware.ram_total_gb} GB` : "—";
-  const usable = hardware?.ram_usable_gb ? `${hardware.ram_usable_gb} GB` : "—";
+  const total =
+    hardware?.ram_total_gb !== undefined && hardware?.ram_total_gb !== null
+      ? `${hardware.ram_total_gb} GB`
+      : "—";
+  const usable =
+    hardware?.ram_usable_gb !== undefined && hardware?.ram_usable_gb !== null
+      ? `${hardware.ram_usable_gb} GB`
+      : "—";
   const type = hardware?.ram_type || "—";
   const speed = hardware?.ram_speed || "—";
   const slots =
     hardware?.ram_slots_used !== undefined && hardware?.ram_slots_used !== null
-      ? `${hardware.ram_slots_used} / ${hardware.ram_slots_total || hardware.ram_slots_used}`
+      ? `${hardware.ram_slots_used} / ${hardware.ram_slots_total ?? hardware.ram_slots_used}`
       : "—";
 
   const rows = [

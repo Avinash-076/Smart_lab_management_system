@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { parseApiDate } from "../../utils/computerUtils";
 import "./CommandDetailsPanel.css";
 
 function formatTimestamp(ts) {
   if (!ts) return "—";
   try {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
+    const d = parseApiDate(ts) || new Date(ts);
+    if (!d || isNaN(d.getTime())) return ts;
     return d.toLocaleString("en-US", {
       month: "short",
       day: "numeric",

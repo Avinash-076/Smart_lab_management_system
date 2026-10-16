@@ -50,6 +50,7 @@ def register_agent(
                 db=db,
                 enrollment_key=payload.enrollment_key,
                 device=payload.device,
+                hardware=payload.hardware,
             )
         )
 

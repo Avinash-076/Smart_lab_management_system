@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator, field_serializer
 from datetime import datetime
 from app.schemas.computer_hardware_schema import ComputerHardwareResponse
 
@@ -48,6 +48,24 @@ class ComputerResponse(ComputerBase):
     last_seen: datetime | None = None
     registered_at: datetime | None = None
     hardware: ComputerHardwareResponse | None = None
+
+    @field_serializer("last_seen", when_used="always")
+    def serialize_last_seen(self, v: datetime | None) -> str | None:
+        if v is None:
+            return None
+        from datetime import timezone
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        return v.isoformat().replace("+00:00", "Z")
+
+    @field_serializer("registered_at", when_used="always")
+    def serialize_registered_at(self, v: datetime | None) -> str | None:
+        if v is None:
+            return None
+        from datetime import timezone
+        if v.tzinfo is None:
+            v = v.replace(tzinfo=timezone.utc)
+        return v.isoformat().replace("+00:00", "Z")
 
     model_config = ConfigDict(from_attributes=True)
 

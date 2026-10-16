@@ -537,8 +537,29 @@ def install_service(
     try:
         res = subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=15)
         if res.returncode != 0:
-            print(f"Failed to create service: {res.stderr.strip() or res.stdout.strip()}")
-            return False
+            err_text = (res.stderr.strip() or res.stdout.strip()).upper()
+            if "1073" in err_text or "ALREADY EXISTS" in err_text:
+                logger.info(f"Service {SERVICE_NAME} already exists; reconciling configuration with sc.exe config...")
+                start_param = "auto" if startup_type.lower() in ("auto", "automatic") else "demand"
+                config_cmd = [
+                    "sc.exe",
+                    "config",
+                    SERVICE_NAME,
+                    "binpath=",
+                    bin_path,
+                    "start=",
+                    start_param,
+                    "DisplayName=",
+                    SERVICE_DISPLAY_NAME,
+                ]
+                if service_account and service_account.lower() != "localsystem":
+                    config_cmd.extend(["obj=", service_account])
+                res_config = subprocess.run(config_cmd, capture_output=True, text=True, check=False, timeout=15)
+                if res_config.returncode != 0:
+                    logger.warning(f"sc config output: {res_config.stderr.strip() or res_config.stdout.strip()}")
+            else:
+                print(f"Failed to create service: {res.stderr.strip() or res.stdout.strip()}")
+                return False
 
         # Set service description
         subprocess.run(

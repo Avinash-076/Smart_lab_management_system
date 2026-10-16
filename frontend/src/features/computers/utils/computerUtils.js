@@ -78,13 +78,34 @@ export function getOsIconInfo(computer) {
 }
 
 /**
+ * Safely parses a UTC timestamp string from the backend into a local Date object.
+ * If the string lacks a timezone offset or 'Z', treats it as UTC.
+ */
+export function parseApiDate(timestamp) {
+  if (!timestamp) return null;
+  if (timestamp instanceof Date) return timestamp;
+  let str = String(timestamp).trim();
+  if (!str) return null;
+  // If ISO-like date string without timezone offset or Z, treat as UTC
+  if (
+    /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}/.test(str) &&
+    !str.endsWith("Z") &&
+    !/[+-]\d{2}:?\d{2}$/.test(str)
+  ) {
+    str = str.replace(" ", "T") + "Z";
+  }
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+/**
  * Formats last seen timestamp into separate date and time strings.
  */
 export function formatLastSeen(dateStr) {
   if (!dateStr) return { date: "Never", time: "" };
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return { date: String(dateStr), time: "" };
+    const d = parseApiDate(dateStr) || new Date(dateStr);
+    if (!d || isNaN(d.getTime())) return { date: String(dateStr), time: "" };
 
     const date = d.toLocaleDateString("en-GB", {
       day: "numeric",

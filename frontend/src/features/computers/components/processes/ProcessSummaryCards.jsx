@@ -1,10 +1,11 @@
+import { parseApiDate } from "../../utils/computerUtils";
 import "./ProcessSummaryCards.css";
 
 function formatScanTime(timestamp) {
   if (!timestamp) return "Never";
   try {
-    const d = new Date(timestamp);
-    if (isNaN(d.getTime())) return timestamp;
+    const d = parseApiDate(timestamp) || new Date(timestamp);
+    if (!d || isNaN(d.getTime())) return timestamp;
     const now = new Date();
     const isToday = d.toDateString() === now.toDateString();
     const timeStr = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

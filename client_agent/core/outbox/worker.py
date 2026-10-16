@@ -22,6 +22,7 @@ from core.outbox.policy import (
 from core.outbox.storage import DurableOutbox
 from server.sender import (
     send_command_result,
+    send_hardware_specs,
     send_issue,
     send_metrics,
     send_process_inventory,
@@ -231,6 +232,9 @@ class OutboxDeliveryWorker:
                 "message": payload.get("message", ""),
             }
             send_command_result(int(cmd_id), result_payload, token)
+
+        elif event_type == "hardware":
+            send_hardware_specs(payload, token)
 
         else:
             raise ValueError(f"Unknown outbox event type: '{event_type}'")

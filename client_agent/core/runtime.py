@@ -23,7 +23,9 @@ from config import (
     PROCESS_COLLECTION_INTERVAL,
     SHOW_CONSOLE,
     SOFTWARE_SCAN_INTERVAL,
+    HARDWARE_SCAN_INTERVAL,
 )
+from paths import HARDWARE_STATE_FILE
 from core.collector import collect_all_data
 from core.credentials import get_credential_store
 from core.exporter import export_to_json
@@ -45,6 +47,7 @@ from server.communication import AgentWebSocketClient, WebSocketState
 from server.enroll import is_enrolled
 from server.sender import (
     build_metric_payload,
+    send_hardware_specs,
     send_issue,
     send_metrics,
     send_process_inventory,
@@ -112,8 +115,10 @@ class RuntimeManager:
         enable_outbox: bool = True,
         process_interval: float = PROCESS_COLLECTION_INTERVAL,
         software_interval: float = SOFTWARE_SCAN_INTERVAL,
+        hardware_interval: float = HARDWARE_SCAN_INTERVAL,
         software_state_file: str | None = None,
         issue_state_file: str | None = None,
+        hardware_state_file: str | None = None,
         single_instance: SingleInstanceMutex | None = None,
         enable_single_instance: bool = True,
     ):
@@ -122,8 +127,10 @@ class RuntimeManager:
         self.enable_outbox = enable_outbox
         self.process_interval = process_interval
         self.software_interval = software_interval
+        self.hardware_interval = hardware_interval
         self.software_state_file = software_state_file
         self.issue_state_file = issue_state_file
+        self.hardware_state_file = hardware_state_file or HARDWARE_STATE_FILE
         self.enable_single_instance = enable_single_instance
         self.single_instance = single_instance or SingleInstanceMutex()
 
@@ -134,6 +141,7 @@ class RuntimeManager:
             enable_outbox=enable_outbox,
             software_state_file=software_state_file,
             issue_state_file=issue_state_file,
+            hardware_state_file=self.hardware_state_file,
         )
         self.websocket_manager = WebSocketManager()
         self.collector_manager = CollectorManager(max_workers=2)
@@ -143,6 +151,7 @@ class RuntimeManager:
 
         self._last_process_collection: float | None = None
         self._last_software_scan: float | None = None
+        self._last_hardware_scan: float | None = None
         self.computer_id: int | None = None
         self._is_running = False
         self._lifecycle_lock = threading.Lock()
@@ -168,6 +177,14 @@ class RuntimeManager:
         if self._last_software_scan is None:
             return True
         return (now - self._last_software_scan) >= self.software_interval
+
+    def due_for_hardware_scan(self, now: float | None = None) -> bool:
+        """Check if hardware inventory scan is due based on cadence."""
+        if now is None:
+            now = time.monotonic()
+        if self._last_hardware_scan is None:
+            return True
+        return (now - self._last_hardware_scan) >= self.hardware_interval
 
     def _refresh_token_safe(self) -> str:
         """Refresh JWT access token and update token holder in-memory."""
@@ -264,10 +281,26 @@ class RuntimeManager:
                 return
             self.token_manager.refresh_if_due()
 
+        # 5. Hardware Specifications (1h cadence, runs on startup with initial_delay=0.0)
+        def _hardware_task():
+            if self.stop_event.is_set():
+                return
+            now = time.monotonic()
+            self._last_hardware_scan = now
+            logger.info("Collecting detailed hardware specifications...")
+            specs = self.collector_manager.collect_hardware_specs()
+            self.upload_manager.upload_hardware_specs(
+                specs,
+                self.token_manager,
+                self.outbox_manager,
+                state_file=self.hardware_state_file,
+            )
+
         # Register jobs on drift-free scheduler (H-04)
         self.scheduler.add_job("telemetry", MONITOR_INTERVAL, _telemetry_task, initial_delay=0.0)
         self.scheduler.add_job("processes", self.process_interval, _process_task, initial_delay=0.0)
         self.scheduler.add_job("software", self.software_interval, _software_task, initial_delay=0.0)
+        self.scheduler.add_job("hardware", self.hardware_interval, _hardware_task, initial_delay=0.0)
         self.scheduler.add_job("token_refresh", TOKEN_REFRESH_INTERVAL, _token_refresh_task, initial_delay=TOKEN_REFRESH_INTERVAL)
 
     def start(self) -> None:
@@ -512,6 +545,19 @@ def upload_issues(
     outbox_mgr = OutboxManager(outbox=outbox, enable_outbox=(outbox is not None))
     token_mgr = TokenManager(token_holder=token_holder)
     return mgr.upload_issues(data, token_mgr, outbox_mgr, state_file=state_file)
+
+
+def upload_hardware_specs(
+    data: dict[str, Any],
+    token_holder: TokenHolder,
+    outbox: DurableOutbox | None = None,
+    state_file: str | None = None,
+    force: bool = False,
+) -> bool:
+    mgr = UploadManager()
+    outbox_mgr = OutboxManager(outbox=outbox, enable_outbox=(outbox is not None))
+    token_mgr = TokenManager(token_holder=token_holder)
+    return mgr.upload_hardware_specs(data, token_mgr, outbox_mgr, state_file=state_file, force=force)
 
 
 def display_console_data(data: dict[str, Any]) -> None:

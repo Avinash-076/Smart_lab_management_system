@@ -15,10 +15,12 @@ from app.models.audit_log import AuditResult
 from app.models.computer import Computer
 from app.schemas.agent_schema import AgentRegisterResponse
 from app.schemas.computer_schema import ComputerCreate
+from app.schemas.computer_hardware_schema import ComputerHardwareUpload
 from app.services import (
     audit_service,
     computer_service,
     enrollment_service,
+    hardware_service,
 )
 
 
@@ -26,6 +28,7 @@ def register_with_enrollment_key(
     db: Session,
     enrollment_key: str,
     device: ComputerCreate,
+    hardware: ComputerHardwareUpload | None = None,
 ) -> AgentRegisterResponse | None:
 
     # -------------------------------------------------
@@ -113,6 +116,21 @@ def register_with_enrollment_key(
         db.add(credential)
 
         db.flush()
+
+        # -------------------------------------------------
+        # 4b. Optionally persist initial hardware specs.
+        # -------------------------------------------------
+        if hardware is not None:
+            try:
+                hardware_service.save_or_update_hardware(
+                    db=db,
+                    computer_id=computer.id,
+                    hardware_data=hardware,
+                    commit=False,
+                )
+            except Exception as hw_err:
+                import logging
+                logging.getLogger("slms").warning(f"Failed to persist initial hardware specs: {hw_err}")
 
         # -------------------------------------------------
         # 5. Commit everything together.

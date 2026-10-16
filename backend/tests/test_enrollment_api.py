@@ -212,3 +212,45 @@ def test_enrollment_validation_error_malformed_payload(client):
     }
     response = client.post("/api/agent/register", json=payload)
     assert response.status_code == 422
+
+
+def test_enrollment_with_hardware_specs_persists_data(client, db_session):
+    """Verify registration payload including hardware specs persists ComputerHardware atomically."""
+    admin = get_or_create_admin_user(db_session)
+    key_record, plaintext_key = create_enrollment_key(db=db_session, created_by=admin.id)
+
+    payload = {
+        "enrollment_key": plaintext_key,
+        "device": {
+            "hostname": "ENROLL-HW-001",
+            "ip_address": "192.168.1.180",
+            "mac_address": "12:34:56:78:9A:BC",
+            "os_name": "Windows",
+            "os_version": "11 Pro",
+        },
+        "hardware": {
+            "manufacturer": "ASUSTeK COMPUTER INC.",
+            "model": "Vivobook Pro 15",
+            "processor_name": "Intel(R) Core(TM) Ultra 7 155H",
+            "processor_cores": 16,
+            "ram_total_gb": 16.0,
+            "storage_total_gb": 1024.0,
+            "agent_version": "1.2.6",
+        },
+    }
+
+    response = client.post("/api/agent/register", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    comp_id = data["computer_id"]
+
+    from app.models.computer_hardware import ComputerHardware
+    hw = db_session.query(ComputerHardware).filter_by(computer_id=comp_id).first()
+    assert hw is not None
+    assert hw.manufacturer == "ASUSTeK COMPUTER INC."
+    assert hw.model == "Vivobook Pro 15"
+    assert hw.processor_name == "Intel(R) Core(TM) Ultra 7 155H"
+    assert hw.processor_cores == 16
+    assert hw.ram_total_gb == 16.0
+    assert hw.storage_total_gb == 1024.0
+    assert hw.agent_version == "1.2.6"

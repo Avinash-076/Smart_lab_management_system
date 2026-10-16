@@ -1,13 +1,14 @@
 import { useState } from "react";
 import Icon from "../../../../components/ui/Icon";
+import { parseApiDate } from "../../../computers/utils/computerUtils";
 import GlobalCommandDetailModal from "./GlobalCommandDetailModal";
 import "./GlobalCommandHistory.css";
 
 function formatTimestamp(ts) {
   if (!ts) return "—";
   try {
-    const d = new Date(ts);
-    if (isNaN(d.getTime())) return ts;
+    const d = parseApiDate(ts) || new Date(ts);
+    if (!d || isNaN(d.getTime())) return ts;
     return d.toLocaleString("en-GB", {
       day: "2-digit",
       month: "short",
