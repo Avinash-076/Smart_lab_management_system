@@ -71,6 +71,8 @@ from server.command_handler import (
 from server.communication import AgentWebSocketClient
 
 
+pytestmark = [pytest.mark.integration, pytest.mark.windows_only]
+
 # Unique pipe name for isolation in tests
 TEST_INTEG_PIPE_PREFIX = r"\\.\pipe\SLMS_Test_Integ_"
 
@@ -108,6 +110,7 @@ class TestRuntimeNotificationServerLifecycle:
         with patch.object(runtime, "_register_scheduled_jobs"), \
              patch.object(runtime.scheduler, "start"), \
              patch.object(runtime, "_refresh_token_safe", return_value="fake_token"), \
+             patch.object(runtime.token_manager, "refresh", return_value="fake_token"), \
              patch("core.runtime.is_enrolled", return_value=True), \
              patch("core.runtime.get_computer_id", return_value=42):
 
@@ -143,6 +146,7 @@ class TestRuntimeNotificationServerLifecycle:
         with patch.object(runtime, "_register_scheduled_jobs") as mock_reg, \
              patch.object(runtime.scheduler, "start") as mock_sched_start, \
              patch.object(runtime, "_refresh_token_safe", return_value="fake_token"), \
+             patch.object(runtime.token_manager, "refresh", return_value="fake_token"), \
              patch("core.runtime.is_enrolled", return_value=True), \
              patch("core.runtime.get_computer_id", return_value=42):
 

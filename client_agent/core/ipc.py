@@ -653,12 +653,12 @@ def validate_client_executable(
     except Exception as exc:
         return False, f"Failed to inspect process image for PID {pid}: {exc}"
 
-    image_path_obj = Path(image_path).resolve()
-    base_name = image_path_obj.name.lower()
+    norm_image = image_path.replace("\\", "/")
+    base_name = norm_image.rsplit("/", 1)[-1].lower()
 
     # Development & test runner environments: allow active Python interpreter
-    current_python_exe = Path(sys.executable).resolve()
-    if image_path_obj == current_python_exe or base_name in ("python.exe", "pythonw.exe"):
+    norm_python = str(Path(sys.executable).resolve()).replace("\\", "/")
+    if norm_image.lower() == norm_python.lower() or base_name in ("python.exe", "pythonw.exe", "python", "python3"):
         return True, image_path
 
     # Production environment: enforce allowed companion binary name strictly
@@ -668,9 +668,9 @@ def validate_client_executable(
 
     # Verify directory constraints if specified
     if allowed_dirs:
-        resolved_dirs = [str(Path(d).resolve()).lower() for d in allowed_dirs]
-        image_dir = str(image_path_obj.parent).lower()
-        if not any(image_dir == ad or image_dir.startswith(ad + os.sep) for ad in resolved_dirs):
+        resolved_dirs = [str(Path(d).resolve()).replace("\\", "/").rstrip("/").lower() for d in allowed_dirs]
+        image_dir = norm_image.rsplit("/", 1)[0].lower() if "/" in norm_image else ""
+        if not any(image_dir == ad or image_dir.startswith(ad + "/") for ad in resolved_dirs):
             return False, f"Executable outside allowed directories: {image_path}"
 
     return True, image_path
@@ -974,7 +974,7 @@ class NotificationPipeServer:
     def _handle_client_connection(self, h_pipe: Any) -> None:
         """Validate, authenticate, and service an active companion connection."""
         import ctypes
-        k32 = ctypes.windll.kernel32
+        k32 = getattr(getattr(ctypes, "windll", None), "kernel32", None)
 
         companion = None
         try:
@@ -1087,7 +1087,7 @@ class NotificationPipeServer:
             else:
                 # Cleanup handle if failed prior to companion registration
                 try:
-                    if is_valid_handle(h_pipe):
+                    if is_valid_handle(h_pipe) and k32 is not None:
                         k32.DisconnectNamedPipe(h_pipe)
                         k32.CloseHandle(h_pipe)
                 except Exception:

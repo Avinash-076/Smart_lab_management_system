@@ -31,6 +31,9 @@ from core.ipc import (
 from notifier.companion import NotificationCompanion, default_desktop_message_box
 
 
+pytestmark = pytest.mark.windows_only
+
+
 @pytest.mark.skipif(os.name != "nt", reason="Windows Named Pipe tests require Windows OS")
 class TestNotificationCompanion:
 
@@ -413,6 +416,7 @@ class TestNotificationCompanion:
         mock_lock.assert_called_once()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Win32 MessageBoxW and LockWorkStation require Windows")
 class TestDefaultDesktopMessageBox:
     """Test default Win32 message box fallback behavior."""
 
@@ -473,6 +477,7 @@ class TestNotifierDependencies:
         assert "SLMS Notification Companion" in res.stdout
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows session mutex and single-instance require Windows")
 class TestNotifierSingleInstance:
     """Regression tests verifying session-scoped single instance mutex and duplicate rejection."""
 

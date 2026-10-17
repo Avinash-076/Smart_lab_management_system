@@ -233,6 +233,7 @@ class TestClientExecutableValidation:
             assert "outside allowed directories" in err
 
 
+@pytest.mark.windows_only
 @pytest.mark.skipif(os.name != "nt", reason="Windows Named Pipe tests require Windows OS")
 class TestWindowsNamedPipeLifecycle:
     """End-to-end integration tests using real Windows Named Pipes."""

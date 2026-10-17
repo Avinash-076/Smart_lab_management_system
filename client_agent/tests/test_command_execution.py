@@ -14,8 +14,11 @@ running this test suite never locks, reboots, or halts the machine.
 """
 
 import ctypes
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from server.command_handler import (
     COMMAND_WHITELIST,
@@ -132,6 +135,8 @@ def test_handle_lock_companion_api_failed():
     assert "failed" in message.lower()
 
 
+@pytest.mark.windows_only
+@pytest.mark.skipif(os.name != "nt", reason="Direct user32.LockWorkStation execution requires Windows")
 def test_handle_lock_direct_interactive_confirmed():
     """Verify direct non-service execution returns True only when lock state is confirmed."""
     mock_user32 = MagicMock()
@@ -151,7 +156,7 @@ def test_handle_lock_direct_interactive_confirmed():
         kernel32 = mock_kernel32
 
     with patch("server.command_handler.get_notification_server", return_value=None), \
-         patch("ctypes.windll", _FakeWindll()), \
+         patch("ctypes.windll", _FakeWindll(), create=True), \
          patch("server.command_handler.query_session_lock_state", return_value=0):
         success, message = handle_lock(None)
 
@@ -159,6 +164,8 @@ def test_handle_lock_direct_interactive_confirmed():
     assert "confirmed" in message.lower()
 
 
+@pytest.mark.windows_only
+@pytest.mark.skipif(os.name != "nt", reason="Direct user32.LockWorkStation execution requires Windows")
 def test_handle_lock_direct_interactive_unconfirmed_never_returns_true():
     """Verify direct non-service execution returns False when lock state cannot be confirmed."""
     mock_user32 = MagicMock()
@@ -178,7 +185,7 @@ def test_handle_lock_direct_interactive_unconfirmed_never_returns_true():
         kernel32 = mock_kernel32
 
     with patch("server.command_handler.get_notification_server", return_value=None), \
-         patch("ctypes.windll", _FakeWindll()), \
+         patch("ctypes.windll", _FakeWindll(), create=True), \
          patch("server.command_handler.query_session_lock_state", return_value=1):  # Still unlocked
         success, message = handle_lock(None)
 
@@ -186,6 +193,8 @@ def test_handle_lock_direct_interactive_unconfirmed_never_returns_true():
     assert "REQUEST_ACCEPTED" in message or "not confirmed" in message.lower()
 
 
+@pytest.mark.windows_only
+@pytest.mark.skipif(os.name != "nt", reason="Direct user32.LockWorkStation execution requires Windows")
 def test_handle_lock_direct_interactive_os_failure():
     """Verify direct non-service execution returns False on LockWorkStation failure."""
     mock_user32 = MagicMock()
@@ -205,8 +214,8 @@ def test_handle_lock_direct_interactive_os_failure():
         kernel32 = mock_kernel32
 
     with patch("server.command_handler.get_notification_server", return_value=None), \
-         patch("ctypes.windll", _FakeWindll()), \
-         patch("ctypes.GetLastError", return_value=5):
+         patch("ctypes.windll", _FakeWindll(), create=True), \
+         patch("ctypes.GetLastError", return_value=5, create=True):
         success, message = handle_lock(None)
 
     assert success is False
