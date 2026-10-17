@@ -237,7 +237,9 @@ class TestServiceSecurityAndNonInteractiveConstraints:
 
     def test_service_does_not_use_messageboxw(self):
         """10. Verify command handler message command does not call user32.MessageBoxW."""
-        with patch("subprocess.run") as mock_run:
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTS disabled")), \
+             patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
 
             success, msg = execute_command("message", "Attention: Lab closing")
@@ -444,35 +446,46 @@ class TestMsgExeHandling:
 
     def test_msg_exe_success(self):
         """Verify normal message broadcast succeeds when msg.exe returns 0."""
-        with patch("subprocess.run") as mock_run:
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTS disabled")), \
+             patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             status, msg = handle_message("Lab closing in 10 minutes")
             assert status is True
-            assert "Notice broadcast" in msg
+            assert "Notice display request accepted" in msg
             args = mock_run.call_args[0][0]
             assert "msg" in args[0]
             assert "Lab closing in 10 minutes" in args
 
-    def test_msg_exe_failure_fallback_to_log(self):
-        """Verify msg.exe non-zero exit (e.g. no active sessions) falls back to log recording safely."""
-        with patch("server.command_handler._send_wts_message", return_value=False), \
+    def test_msg_exe_failure_returns_failure(self):
+        """Verify all mechanisms failing returns False and concise failure reason without logging as success."""
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTSSendMessage failed (Win32 error 5)")), \
+             patch("server.command_handler._send_task_message", return_value=(False, "Task Scheduler rejected interactive task: Access is denied")), \
+             patch("server.command_handler._send_user_session_message", return_value=(False, "CreateProcessAsUser failed")), \
              patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=1, stderr="No session exists", stdout="")
             status, msg = handle_message("Shutdown alert")
-            assert status is True
-            assert "Notice recorded in agent log: Shutdown alert" in msg
+            assert status is False
+            assert "Notice could not be displayed on client desktop" in msg
+            assert "Shutdown alert" not in msg
 
-    def test_msg_exe_timeout_fallback_to_log(self):
-        """Verify msg.exe timeout falls back to log recording without raising or hanging."""
-        with patch("server.command_handler._send_wts_message", return_value=False), \
+    def test_msg_exe_timeout_returns_failure(self):
+        """Verify msg.exe timeout when other mechanisms fail returns False without raising or hanging."""
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTSSendMessage failed")), \
+             patch("server.command_handler._send_task_message", return_value=(False, "Task Scheduler rejected")), \
+             patch("server.command_handler._send_user_session_message", return_value=(False, "CreateProcessAsUser failed")), \
              patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="msg", timeout=3)):
             status, msg = handle_message("Immediate notice")
-            assert status is True
-            assert "Notice recorded in agent log: Immediate notice" in msg
+            assert status is False
+            assert "Notice could not be displayed on client desktop" in msg
 
     def test_msg_exe_truncates_oversized_payload(self):
         """Verify oversized message payloads are truncated to 1024 characters to prevent buffer overflow."""
-        with patch("subprocess.run") as mock_run:
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTS disabled")), \
+             patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             long_msg = "X" * 3000
             status, msg = handle_message(long_msg)
@@ -482,7 +495,9 @@ class TestMsgExeHandling:
 
     def test_msg_exe_none_payload_handled(self):
         """Verify None payload uses default message string."""
-        with patch("subprocess.run") as mock_run:
+        with patch("server.command_handler._get_active_sessions", return_value=[1]), \
+             patch("server.command_handler._send_wts_message", return_value=(False, "WTS disabled")), \
+             patch("subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0)
             status, msg = handle_message(None)
             assert status is True

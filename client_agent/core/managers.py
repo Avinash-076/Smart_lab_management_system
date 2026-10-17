@@ -1090,6 +1090,7 @@ class ShutdownManager:
         collector_manager: CollectorManager | None = None,
         outbox_manager: OutboxManager | None = None,
         websocket_manager: WebSocketManager | None = None,
+        notification_server: Any | None = None,
         timeout: float = 5.0,
     ) -> None:
         """Execute staged teardown in safe dependency order."""
@@ -1130,5 +1131,12 @@ class ShutdownManager:
                 websocket_manager.stop()
             except Exception as exc:
                 logger.warning(f"ShutdownManager: Error stopping websocket manager: {exc}")
+
+        # 6. Stop Notification IPC Server
+        if notification_server:
+            try:
+                notification_server.stop()
+            except Exception as exc:
+                logger.warning(f"ShutdownManager: Error stopping notification server: {exc}")
 
         logger.info("ShutdownManager: All managers stopped cleanly.")

@@ -42,8 +42,8 @@ export default function CommandDetailsPanel({ command, onClose }) {
 
   if (!command) return null;
 
-  const isSuccess = command.status === "executed" || command.result?.success;
   const isFailed = command.status === "failed" || (command.result && !command.result.success);
+  const isSuccess = !isFailed && (command.status === "executed" || command.result?.success);
   const isPending = command.status === "pending";
   const isDelivered = command.status === "delivered";
 

@@ -533,7 +533,10 @@ class AgentWebSocketClient:
         logger.info(f"Executing remote command: id={command_id}, type={command_type}")
         t0 = time.monotonic()
         try:
-            success, result_message = execute_command(command_type, payload)
+            try:
+                success, result_message = execute_command(command_type, payload, command_id=command_id)
+            except TypeError:
+                success, result_message = execute_command(command_type, payload)
         except Exception as exc:
             logger.exception(f"Unexpected error executing command {command_id}: {exc}")
             success, result_message = False, f"Internal execution error: {exc}"

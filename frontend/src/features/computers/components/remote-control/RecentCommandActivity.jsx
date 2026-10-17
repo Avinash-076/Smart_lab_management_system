@@ -3,8 +3,8 @@ import "./RecentCommandActivity.css";
 
 function formatActivityTitle(cmd) {
   const type = cmd.command_type?.toLowerCase();
-  const isSuccess = cmd.status === "executed" || cmd.result?.success;
   const isFailed = cmd.status === "failed" || (cmd.result && !cmd.result.success);
+  const isSuccess = !isFailed && (cmd.status === "executed" || cmd.result?.success);
 
   if (type === "message") {
     return isSuccess
@@ -99,8 +99,8 @@ export default function RecentCommandActivity({
         ) : (
           <ul className="activity-list">
             {activities.slice(0, 5).map((act) => {
-              const isSuccess = act.status === "executed" || act.result?.success;
               const isFailed = act.status === "failed" || (act.result && !act.result.success);
+              const isSuccess = !isFailed && (act.status === "executed" || act.result?.success);
               const isDelivered = act.status === "delivered";
               const isPending = act.status === "pending";
 

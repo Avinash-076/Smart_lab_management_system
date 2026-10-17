@@ -8,9 +8,11 @@ optional enterprise CA bundle support, and secure header-based WebSocket authent
 from __future__ import annotations
 
 import os
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
-import requests
+if TYPE_CHECKING:
+    import requests
 
 
 class TransportSecurityError(ValueError):
@@ -135,10 +137,12 @@ def get_tls_verify_parameter() -> str | bool:
     return True
 
 
-def create_secure_session() -> requests.Session:
+def create_secure_session() -> Any:
     """
     Create a requests Session configured with strict TLS verification.
     """
+    import requests
+
     session = requests.Session()
     session.verify = get_tls_verify_parameter()
     return session

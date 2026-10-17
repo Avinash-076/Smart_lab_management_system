@@ -121,6 +121,8 @@ class RuntimeManager:
         hardware_state_file: str | None = None,
         single_instance: SingleInstanceMutex | None = None,
         enable_single_instance: bool = True,
+        notification_server: Any | None = None,
+        enable_notification_server: bool = True,
     ):
         self.stop_event = stop_event or threading.Event()
         self.is_service = is_service
@@ -133,6 +135,7 @@ class RuntimeManager:
         self.hardware_state_file = hardware_state_file or HARDWARE_STATE_FILE
         self.enable_single_instance = enable_single_instance
         self.single_instance = single_instance or SingleInstanceMutex()
+        self.enable_notification_server = enable_notification_server
 
         # Sub-managers
         self.token_manager = TokenManager(refresh_interval=TOKEN_REFRESH_INTERVAL)
@@ -148,6 +151,16 @@ class RuntimeManager:
         self.upload_manager = UploadManager()
         self.scheduler = Scheduler(stop_event=self.stop_event)
         self.shutdown_manager = ShutdownManager(stop_event=self.stop_event)
+
+        # Notification IPC Server (Session 0 Service & Desktop Companion IPC)
+        self.notification_server = notification_server
+        if self.notification_server is None and self.enable_notification_server:
+            if os.name == "nt" or os.environ.get("SLMS_ENABLE_TEST_IPC") == "1":
+                try:
+                    from core.ipc import NotificationPipeServer
+                    self.notification_server = NotificationPipeServer()
+                except Exception as ipc_init_err:
+                    logger.warning(f"Failed to initialize Notification IPC Server: {ipc_init_err}")
 
         self._last_process_collection: float | None = None
         self._last_software_scan: float | None = None
@@ -385,6 +398,15 @@ class RuntimeManager:
             if self.computer_id is not None:
                 self.websocket_manager.start(self.computer_id, self.token_manager, self.outbox_manager)
 
+            # Start Notification IPC Server
+            if self.notification_server is not None:
+                try:
+                    self.notification_server.start()
+                    from server.command_handler import set_notification_server
+                    set_notification_server(self.notification_server)
+                except Exception as ipc_start_err:
+                    logger.warning(f"Failed to start Notification IPC Server (will use legacy fallback): {ipc_start_err}")
+
             # Register jobs and start scheduler
             self._register_scheduled_jobs()
             self.scheduler.start()
@@ -413,11 +435,19 @@ class RuntimeManager:
             was_running = self._is_running
             self._is_running = False
 
+            # Clear global handler reference
+            try:
+                from server.command_handler import set_notification_server
+                set_notification_server(None)
+            except Exception:
+                pass
+
             self.shutdown_manager.shutdown(
                 scheduler=self.scheduler,
                 collector_manager=self.collector_manager,
                 outbox_manager=self.outbox_manager,
                 websocket_manager=self.websocket_manager,
+                notification_server=self.notification_server,
             )
 
             # Release single-instance mutex

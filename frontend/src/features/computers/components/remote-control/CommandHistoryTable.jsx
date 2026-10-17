@@ -150,8 +150,8 @@ export default function CommandHistoryTable({
             ) : (
               commands.map((cmd, idx) => {
                 const isSelected = selectedCommandId === cmd.id;
-                const isSuccess = cmd.status === "executed" || cmd.result?.success;
                 const isFailed = cmd.status === "failed" || (cmd.result && !cmd.result.success);
+                const isSuccess = !isFailed && (cmd.status === "executed" || cmd.result?.success);
                 const isPending = cmd.status === "pending";
                 const isDelivered = cmd.status === "delivered";
 

@@ -11,6 +11,7 @@
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Smart Lab Management System"
 #define MyAppExeName "SLMS_Client_Agent.exe"
+#define MyNotifierExeName "SLMS_Notifier.exe"
 #define MyAppId "{{8B96D7F4-429C-4E1E-9FB2-7F36575BC832}"
 
 [Setup]
@@ -49,8 +50,18 @@ RestartApplications=no
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-; Main executable packaged from compiled PyInstaller distribution
+; Main service executable packaged from compiled PyInstaller distribution
 Source: "..\client_agent\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+; Interactive notification companion packaged alongside service executable
+Source: "..\client_agent\dist\{#MyNotifierExeName}"; DestDir: "{app}"; Flags: ignoreversion restartreplace
+
+[Registry]
+; Register notification companion to run automatically for every interactive user desktop session at logon
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "SLMS_Notifier"; ValueData: """{app}\{#MyNotifierExeName}"""; Flags: uninsdeletevalue
+
+[Run]
+; Start notification companion for currently logged-in user upon setup completion (non-elevated standard user token)
+Filename: "{app}\{#MyNotifierExeName}"; Flags: nowait runasoriginaluser postinstall skipifsilent; Description: "Start Notification Companion"
 
 [Code]
 // ===========================================================================
@@ -83,6 +94,16 @@ var
   InstallMode: Integer;
   HasExeBackup: Boolean;
   BackupExePath: string;
+  HasNotifierBackup: Boolean;
+  BackupNotifierPath: string;
+
+// Terminate running companion process instances before file replacement or uninstallation
+procedure StopSLMSNotifier();
+var
+  ResultCode: Integer;
+begin
+  Exec('taskkill.exe', '/F /IM {#MyNotifierExeName}', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
 
 // Map exit codes from headless enrollment CLI to user-friendly messages
 function GetEnrollmentErrorMessage(ExitCode: Integer): string;
@@ -203,12 +224,16 @@ procedure RollbackFreshInstallAndAbort(Reason: string);
 var
   ResultCode: Integer;
   AgentExePath: string;
+  NotifierExePath: string;
   CredFile: string;
 begin
   AgentExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  NotifierExePath := ExpandConstant('{app}\{#MyNotifierExeName}');
   CredFile := ExpandConstant('{commonappdata}\SLMS\config\service_credentials.enc');
 
-  // 1. Stop and remove service
+  // 1. Stop companion and remove service
+  StopSLMSNotifier();
+  RegDeleteValue(HKEY_LOCAL_MACHINE, 'Software\Microsoft\Windows\CurrentVersion\Run', 'SLMS_Notifier');
   Exec('sc.exe', 'stop SLMSService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(1000);
   Exec('sc.exe', 'delete SLMSService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
@@ -217,9 +242,11 @@ begin
   if FileExists(CredFile) then
     DeleteFile(CredFile);
 
-  // 3. Delete installed executable
+  // 3. Delete installed executables
   if FileExists(AgentExePath) then
     DeleteFile(AgentExePath);
+  if FileExists(NotifierExePath) then
+    DeleteFile(NotifierExePath);
 
   // 4. Alert administrator with error details
   MsgBox('Installation Failed' + #13#10#13#10 + Reason, mbError, MB_OK);
@@ -233,16 +260,19 @@ procedure RollbackUpgradeAndAbort(Reason: string);
 var
   ResultCode: Integer;
   AgentExePath: string;
+  NotifierExePath: string;
   Restored: Boolean;
 begin
   AgentExePath := ExpandConstant('{app}\{#MyAppExeName}');
+  NotifierExePath := ExpandConstant('{app}\{#MyNotifierExeName}');
   Restored := False;
 
-  // 1. Stop service
+  // 1. Stop service and companion
+  StopSLMSNotifier();
   Exec('sc.exe', 'stop SLMSService', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
   Sleep(1000);
 
-  // 2. Restore previous executable from backup if available (Preserves credentials & ProgramData!)
+  // 2. Restore previous executables from backup if available (Preserves credentials & ProgramData!)
   if HasExeBackup and FileExists(BackupExePath) then
   begin
     if CopyFile(BackupExePath, AgentExePath, False) then
@@ -254,6 +284,13 @@ begin
     end;
     DeleteFile(BackupExePath);
     HasExeBackup := False;
+  end;
+
+  if HasNotifierBackup and FileExists(BackupNotifierPath) then
+  begin
+    CopyFile(BackupNotifierPath, NotifierExePath, False);
+    DeleteFile(BackupNotifierPath);
+    HasNotifierBackup := False;
   end;
 
   if Restored then
@@ -657,11 +694,12 @@ begin
 
   if CurStep = ssInstall then
   begin
-    // 1. Stop service prior to file replacement
+    // 1. Stop service and companion prior to file replacement
     StopSLMSService();
+    StopSLMSNotifier();
     Sleep(1000);
 
-    // 2. If upgrading existing installation, create a temporary backup copy of current executable
+    // 2. If upgrading existing installation, create a temporary backup copy of current executables
     if (InstallMode = MODE_UPGRADE) or (InstallMode = MODE_REPAIR) then
     begin
       if FileExists(AgentExePath) then
@@ -669,6 +707,12 @@ begin
         BackupExePath := ExpandConstant('{tmp}\SLMS_Client_Agent.exe.bak');
         if CopyFile(AgentExePath, BackupExePath, False) then
           HasExeBackup := True;
+      end;
+      if FileExists(ExpandConstant('{app}\{#MyNotifierExeName}')) then
+      begin
+        BackupNotifierPath := ExpandConstant('{tmp}\SLMS_Notifier.exe.bak');
+        if CopyFile(ExpandConstant('{app}\{#MyNotifierExeName}'), BackupNotifierPath, False) then
+          HasNotifierBackup := True;
       end;
     end;
   end
