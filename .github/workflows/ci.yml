@@ -115,10 +115,11 @@ jobs:
         run: |
           uv sync --all-groups
 
-      - name: Build PyInstaller Executable
+      - name: Build PyInstaller Executables
         working-directory: client_agent
         run: |
-          uv run pyinstaller --clean --noconfirm SLMS_Client_Agent.spec
+          uv run pyinstaller --clean --noconfirm SLMS_Notifier.spec
+          uv run pyinstaller --noconfirm SLMS_Client_Agent.spec
 
       - name: Install Inno Setup
         run: |
