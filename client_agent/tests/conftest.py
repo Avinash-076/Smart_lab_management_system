@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -9,3 +10,6 @@ WORKSPACE_ROOT = CLIENT_AGENT_ROOT.parent
 for p in (str(WORKSPACE_ROOT), str(CLIENT_AGENT_ROOT)):
     if p not in sys.path:
         sys.path.insert(0, p)
+
+# Enable test-runner session override for in-process IPC tests
+os.environ["SLMS_ALLOW_TEST_SESSION_SERVER"] = "1"

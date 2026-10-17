@@ -197,7 +197,8 @@ if os.name == "nt":
     k32.OpenProcess.restype = wintypes.HANDLE
 
 
-INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+# Win32 INVALID_HANDLE_VALUE is ((HANDLE)(LONG_PTR)-1)
+INVALID_HANDLE_VALUE = 0xFFFFFFFFFFFFFFFF if sys.maxsize > 2**32 else 0xFFFFFFFF
 
 
 def is_valid_handle(h: Any) -> bool:
@@ -1347,7 +1348,8 @@ class NotificationPipeClient:
             srv_pid, srv_sid = get_kernel_server_info(self._pipe_handle)
             # In production, service runs in Session 0. In dev/test runner, allow current session or test override.
             if (
-                srv_sid != 0
+                srv_pid != os.getpid()
+                and srv_sid != 0
                 and srv_sid != self.session_id
                 and os.environ.get("SLMS_ALLOW_TEST_SESSION_SERVER") != "1"
             ):

@@ -384,12 +384,13 @@ class TestWindowsNamedPipeLifecycle:
         assert "Timed out waiting for companion ACK" in desc
 
     def test_client_spoofed_session_rejected(self):
-        # Client lies in HELLO saying session_id is 9999 when kernel reports 5
+        # Client lies in HELLO saying session_id is 9999 when kernel reports real session
         client = NotificationPipeClient(pipe_name=self.pipe_name, session_id=9999)
-        connected = client.connect(timeout_sec=1.5)
-        assert connected is False
-        assert client.is_connected is False
-        assert 9999 not in self.server.get_connected_sessions()
+        with patch.dict(os.environ, {"SLMS_ALLOW_TEST_SESSION_SERVER": "0"}):
+            connected = client.connect(timeout_sec=1.5)
+            assert connected is False
+            assert client.is_connected is False
+            assert 9999 not in self.server.get_connected_sessions()
 
     def test_client_abrupt_disconnect_during_notification(self):
         client = NotificationPipeClient(pipe_name=self.pipe_name, session_id=5)
