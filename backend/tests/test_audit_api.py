@@ -254,3 +254,75 @@ def test_audit_logs_date_filters(client: TestClient, audit_admin_user, db_sessio
     data = resp.json()
     assert len(data["items"]) >= 1
     assert data["items"][0]["id"] == entry.id
+
+
+def test_audit_stats(client: TestClient, audit_admin_user, db_session):
+    user = audit_admin_user["user"]
+    audit_service.log_action(
+        db=db_session,
+        result=AuditResult.success,
+        action="TEST_COMMAND_REBOOT",
+        user_id=user.id,
+    )
+    audit_service.log_action(
+        db=db_session,
+        result=AuditResult.failure,
+        action="TEST_LOGIN_FAILED",
+        user_id=user.id,
+    )
+
+    resp = client.get("/api/audit-logs/stats", headers=audit_admin_user["headers"])
+    assert resp.status_code == 200
+    stats = resp.json()
+    assert "total" in stats
+    assert "success" in stats
+    assert "failure" in stats
+    assert "commands" in stats
+    assert "last_24h" in stats
+    assert stats["total"] >= 2
+    assert stats["success"] >= 1
+    assert stats["failure"] >= 1
+    assert stats["commands"] >= 1
+
+
+def test_audit_logs_export_csv(client: TestClient, audit_admin_user, db_session):
+    user = audit_admin_user["user"]
+    audit_service.log_action(
+        db=db_session,
+        result=AuditResult.success,
+        action="=CMD_INJECTION_TEST",
+        user_id=user.id,
+    )
+
+    resp = client.get("/api/audit-logs/export", headers=audit_admin_user["headers"])
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    assert "attachment; filename=" in resp.headers["content-disposition"]
+    text = resp.text
+    assert "Audit Log ID" in text
+    assert "Timestamp (UTC)" in text
+    assert "Actor Username" in text
+    assert "Action Code" in text
+    # Formula injection sanitized with leading single quote
+    assert "'=CMD_INJECTION_TEST" in text
+
+
+def test_audit_logs_date_to_boundary(client: TestClient, audit_admin_user, db_session):
+    user = audit_admin_user["user"]
+    entry = audit_service.log_action(
+        db=db_session,
+        result=AuditResult.success,
+        action="BOUNDARY_ACTION_TODAY",
+        user_id=user.id,
+    )
+
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    resp = client.get(
+        f"/api/audit-logs?action=BOUNDARY_ACTION_TODAY&date_from={today_str}&date_to={today_str}",
+        headers=audit_admin_user["headers"],
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) >= 1
+    assert data["items"][0]["id"] == entry.id
+

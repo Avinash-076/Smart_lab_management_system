@@ -32,9 +32,14 @@ def _recent_duplicate_exists(db: Session, computer_id: int, category: str) -> bo
 
 
 async def _create_notification(
-    db: Session, computer_id: int, category: str, severity: NotificationSeverity, message: str
+    db: Session,
+    computer_id: int,
+    category: str,
+    severity: NotificationSeverity,
+    message: str,
+    bypass_cooldown: bool = False,
 ) -> None:
-    if _recent_duplicate_exists(db, computer_id, category):
+    if not bypass_cooldown and _recent_duplicate_exists(db, computer_id, category):
         return
 
     try:
@@ -84,3 +89,30 @@ async def notify_offline(db: Session, computer_id: int) -> None:
     if not offline_alerts_enabled:
         return
     await _create_notification(db, computer_id, "offline", NotificationSeverity.warning, "Computer went offline")
+
+
+async def notify_issue(
+    db: Session,
+    computer_id: int,
+    title: str,
+    severity: str = "warning",
+) -> None:
+    from app.services.setting_service import get_setting_value
+
+    issue_alerts_enabled = bool(get_setting_value(db, "issue_alerts", True))
+    if not issue_alerts_enabled:
+        return
+
+    sev = (
+        NotificationSeverity.critical
+        if str(severity).lower() == "critical"
+        else NotificationSeverity.warning
+    )
+    await _create_notification(
+        db=db,
+        computer_id=computer_id,
+        category="issue",
+        severity=sev,
+        message=f"Issue reported: {title[:180]}",
+        bypass_cooldown=True,
+    )

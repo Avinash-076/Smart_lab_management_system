@@ -29,12 +29,14 @@
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #f1f5f9;
+  text-align: left;
 }
 
 .gcd-modal-header-info {
   display: flex;
   align-items: center;
   gap: 10px;
+  text-align: left;
 }
 
 .gcd-modal-title {
@@ -42,6 +44,7 @@
   font-weight: 700;
   color: #0f172a;
   margin: 0;
+  text-align: left;
 }
 
 .gcd-modal-badge {

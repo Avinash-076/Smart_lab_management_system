@@ -19,12 +19,14 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
+  text-align: left;
 }
 
 .maint-table-header-left {
   display: flex;
   align-items: center;
   gap: 0.85rem;
+  text-align: left;
 }
 
 .maint-table-header-icon {
@@ -44,12 +46,14 @@
   font-size: 1.05rem;
   font-weight: 700;
   color: #0f172a;
+  text-align: left;
 }
 
 .maint-table-header-subtitle {
   margin: 0.2rem 0 0 0;
   font-size: 0.8125rem;
   color: #64748b;
+  text-align: left;
 }
 
 .maint-table-count-badge {

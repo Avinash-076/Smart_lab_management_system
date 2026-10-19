@@ -1,0 +1,71 @@
+/* =====================================================
+   SETTINGS PAGE WRAPPER & CONTAINER (Standard SLMS Layout)
+===================================================== */
+
+.settings-page-wrapper {
+  padding: 24px 32px 48px;
+  background-color: var(--color-background, #f4f7fc);
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  font-family: var(--sans, 'Poppins', sans-serif);
+  color: var(--color-text-primary, #0f172a);
+  display: flex;
+  flex-direction: column;
+  animation: settingsPageFadeIn 0.2s ease-out;
+}
+
+@keyframes settingsPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-panels-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-loading-card {
+  padding: 60px 20px;
+  text-align: center;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.settings-loading-card p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.settings-spin {
+  animation: settingsRotate 1s linear infinite;
+  color: #2563eb;
+}
+
+@keyframes settingsRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 768px) {
+  .settings-page-wrapper {
+    padding: 16px 16px 36px;
+  }
+}

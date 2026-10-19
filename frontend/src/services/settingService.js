@@ -30,3 +30,8 @@ export async function resetSettings(keys) {
     body: JSON.stringify(keys ? { keys } : {}),
   });
 }
+
+export async function getAgentConfig() {
+  return fetchWithAuth("/settings/agent-config");
+}
+

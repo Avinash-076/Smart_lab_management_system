@@ -1,0 +1,22 @@
+/* =====================================================
+   AUDIT STATS GRID
+===================================================== */
+
+.audit-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .audit-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .audit-stats-grid {
+    grid-template-columns: 1fr;
+  }
+}

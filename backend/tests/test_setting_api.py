@@ -480,3 +480,102 @@ def test_runtime_data_retention_purge(db_session):
     # Old metric should be deleted, recent metric preserved
     assert db_session.get(SystemMetric, old_id) is None
     assert db_session.get(SystemMetric, recent_id) is not None
+
+
+def test_agent_config_endpoint(client, settings_test_setup, db_session):
+    """Verify that /api/settings/agent-config returns runtime configuration without error."""
+    # Update some settings first
+    client.patch(
+        "/api/settings",
+        json={"heartbeat_interval": 45, "collect_processes": False},
+        headers=settings_test_setup["admin_headers"],
+    )
+
+    resp = client.get("/api/settings/agent-config")
+    assert resp.status_code == 200
+    config = resp.json()
+
+    assert config["heartbeat_interval"] == 45
+    assert config["collect_processes"] is False
+    assert config["collect_software"] is True
+    assert config["auto_start_agent"] is True
+    assert "cpu_threshold" in config
+    assert "ram_threshold" in config
+    assert "disk_threshold" in config
+    assert "data_retention_days" in config
+
+
+def test_issue_alerts_setting_generates_notifications(client, settings_test_setup, db_session):
+    """Verify that creating an issue triggers a notification when issue_alerts is enabled, and none when disabled."""
+    from app.models.computer import Computer
+    from app.models.notification import Notification
+
+    comp = db_session.query(Computer).first()
+    if not comp:
+        comp = Computer(
+            hostname="Issue-Alert-PC",
+            ip_address="192.168.10.97",
+            mac_address="00:11:22:33:44:97",
+            os_name="Windows",
+            os_version="11",
+        )
+        db_session.add(comp)
+        db_session.commit()
+        db_session.refresh(comp)
+
+    # 1. With issue_alerts = True
+    client.patch(
+        "/api/settings",
+        json={"issue_alerts": True},
+        headers=settings_test_setup["admin_headers"],
+    )
+
+    issue_resp = client.post(
+        "/api/issues",
+        json={
+            "computer_id": comp.id,
+            "title": "Hardware Fault Detected",
+            "description": "RAM error",
+            "severity": "critical",
+        },
+        headers=settings_test_setup["admin_headers"],
+    )
+    assert issue_resp.status_code == 201
+
+    notif = (
+        db_session.query(Notification)
+        .filter_by(computer_id=comp.id, category="issue")
+        .order_by(Notification.id.desc())
+        .first()
+    )
+    assert notif is not None
+    assert "Hardware Fault Detected" in notif.message
+
+    # 2. With issue_alerts = False
+    client.patch(
+        "/api/settings",
+        json={"issue_alerts": False},
+        headers=settings_test_setup["admin_headers"],
+    )
+    db_session.query(Notification).filter_by(computer_id=comp.id, category="issue").delete()
+    db_session.commit()
+
+    issue_resp2 = client.post(
+        "/api/issues",
+        json={
+            "computer_id": comp.id,
+            "title": "Another Fault Suppressed",
+            "description": "Ignored alert",
+            "severity": "medium",
+        },
+        headers=settings_test_setup["admin_headers"],
+    )
+    assert issue_resp2.status_code == 201
+
+    notif_suppressed = (
+        db_session.query(Notification)
+        .filter_by(computer_id=comp.id, category="issue")
+        .first()
+    )
+    assert notif_suppressed is None
+

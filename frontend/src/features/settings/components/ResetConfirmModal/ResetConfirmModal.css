@@ -1,0 +1,233 @@
+/* =====================================================
+   RESET CONFIRMATION MODAL STYLES
+===================================================== */
+
+.settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  animation: settingsModalFadeIn 0.2s ease-out;
+}
+
+@keyframes settingsModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.settings-modal-container {
+  background-color: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: settingsModalSlideUp 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes settingsModalSlideUp {
+  from {
+    transform: translateY(10px) scale(0.98);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.settings-modal-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid #edf0f4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-align: left;
+}
+
+.settings-modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.settings-modal-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background-color: #fff7ed;
+  color: #ea580c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: left;
+}
+
+.settings-modal-subtitle {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  text-align: left;
+}
+
+.settings-modal-close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.settings-modal-close-btn:hover {
+  background-color: #f1f5f9;
+  color: #0f172a;
+}
+
+.settings-modal-body {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.settings-modal-warning-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background-color: #fffbeb;
+  border: 1px solid #fde68a;
+  padding: 12px 14px;
+  border-radius: 8px;
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.settings-modal-warning-box p {
+  margin: 0;
+  text-align: left;
+}
+
+.settings-modal-scope-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-modal-scope-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  text-align: left;
+}
+
+.settings-scope-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.settings-scope-option:hover {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.settings-scope-option input[type="radio"] {
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+.settings-scope-option strong {
+  display: block;
+  font-size: 13.5px;
+  color: #1e293b;
+  text-align: left;
+}
+
+.settings-scope-option p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  text-align: left;
+}
+
+.settings-modal-footer {
+  padding: 14px 22px;
+  border-top: 1px solid #edf0f4;
+  background-color: #f8fafc;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-modal-cancel-btn {
+  padding: 8px 16px;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-modal-cancel-btn:hover {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+.settings-modal-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background-color: #ea580c;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.settings-modal-confirm-btn:hover {
+  background-color: #c2410c;
+}

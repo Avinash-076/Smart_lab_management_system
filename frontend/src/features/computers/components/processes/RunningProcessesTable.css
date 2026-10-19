@@ -19,12 +19,14 @@
   justify-content: space-between;
   padding: 18px 22px;
   border-bottom: 1px solid #edf0f4;
+  text-align: left;
 }
 
 .running-table-title-group {
   display: flex;
   align-items: center;
   gap: 10px;
+  text-align: left;
 }
 
 .running-table-icon-badge {
@@ -44,6 +46,7 @@
   color: #0f172a;
   margin: 0;
   font-family: var(--heading, 'Poppins', sans-serif);
+  text-align: left;
 }
 
 .running-table-responsive-wrapper {

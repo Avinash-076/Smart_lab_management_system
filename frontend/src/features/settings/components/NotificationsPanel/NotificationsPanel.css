@@ -1,0 +1,91 @@
+/* =====================================================
+   TOGGLE LIST & ACCESSIBLE SWITCH STYLES
+===================================================== */
+
+.settings-toggle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settings-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  background-color: #f8fafc;
+  border: 1px solid #edf0f4;
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.settings-toggle-row:hover {
+  background-color: #ffffff;
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+.settings-toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+}
+
+.settings-toggle-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  text-align: left;
+}
+
+.settings-toggle-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.4;
+  text-align: left;
+}
+
+/* Switch */
+.settings-toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background-color: #cbd5e1;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.settings-toggle-switch:focus-visible {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+
+.settings-toggle-switch.is-active {
+  background-color: #2563eb;
+}
+
+.settings-toggle-switch:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-toggle-slider {
+  display: block;
+  width: 20px;
+  height: 20px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.settings-toggle-switch.is-active .settings-toggle-slider {
+  transform: translateX(20px);
+}

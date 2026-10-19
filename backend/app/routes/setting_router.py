@@ -35,6 +35,29 @@ def get_settings(
 
 
 @router.get(
+    "/agent-config",
+    summary="Retrieve operational configuration for client agents",
+)
+def get_agent_config(
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """
+    Retrieve operational parameters required by client agents (heartbeat, collection flags, thresholds).
+    Allows client agents and runtime monitors to configure polling intervals and alert thresholds.
+    """
+    return {
+        "heartbeat_interval": setting_service.get_setting_value(db, "heartbeat_interval", 30),
+        "collect_processes": setting_service.get_setting_value(db, "collect_processes", True),
+        "collect_software": setting_service.get_setting_value(db, "collect_software", True),
+        "auto_start_agent": setting_service.get_setting_value(db, "auto_start_agent", True),
+        "cpu_threshold": setting_service.get_setting_value(db, "cpu_threshold", 85),
+        "ram_threshold": setting_service.get_setting_value(db, "ram_threshold", 85),
+        "disk_threshold": setting_service.get_setting_value(db, "disk_threshold", 90),
+        "data_retention_days": setting_service.get_setting_value(db, "data_retention_days", 30),
+    }
+
+
+@router.get(
     "/{category}",
     response_model=list[SettingItemResponse],
     summary="Retrieve settings by category",

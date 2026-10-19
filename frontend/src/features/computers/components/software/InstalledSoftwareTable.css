@@ -18,12 +18,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  text-align: left;
 }
 
 .installed-table-title-group {
   display: flex;
   align-items: center;
   gap: 10px;
+  text-align: left;
 }
 
 .installed-table-icon-badge {
@@ -43,6 +45,7 @@
   font-weight: 700;
   color: #0f172a;
   font-family: var(--heading, 'Poppins', sans-serif);
+  text-align: left;
 }
 
 .installed-table-counter {

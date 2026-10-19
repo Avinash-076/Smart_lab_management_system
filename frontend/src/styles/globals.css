@@ -10,7 +10,36 @@ body,
   width: 100%;
   min-height: 100%;
   font-family: 'Poppins', var(--sans, sans-serif);
+  text-align: left;
 }
+
+h1, h2, h3, h4, h5, h6, p {
+  text-align: left;
+}
+
+.page-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  text-align: left;
+}
+
+.page-section-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #172033;
+  text-align: left;
+}
+
+.page-section-header p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  text-align: left;
+}
+
 
 body {
   background: var(--color-background, #f4f7fc);
@@ -2966,6 +2995,7 @@ button {
 
   border-bottom:
     1px solid #edf0f4;
+  text-align: left;
 }
 
 .settings-panel-header h3 {
@@ -2974,6 +3004,7 @@ button {
   font-size: 15px;
 
   color: #101a3d;
+  text-align: left;
 }
 
 .settings-panel-header p {
@@ -2982,6 +3013,7 @@ button {
   font-size: 12px;
 
   color: #718099;
+  text-align: left;
 }
 
 .settings-section-icon {
@@ -3734,6 +3766,7 @@ button {
   align-items: center;
 
   gap: 12px;
+  text-align: left;
 }
 
 .role-icon {
@@ -3760,6 +3793,7 @@ button {
   font-size: 14px;
 
   color: #101a3d;
+  text-align: left;
 }
 
 .role-card-header span {
@@ -3770,6 +3804,7 @@ button {
   font-size: 10px;
 
   color: #8994a7;
+  text-align: left;
 }
 
 .role-description {
@@ -3861,6 +3896,7 @@ button {
 
   border-bottom:
     1px solid #edf0f4;
+  text-align: left;
 }
 
 .user-modal-header h3 {
@@ -3869,6 +3905,7 @@ button {
   font-size: 16px;
 
   color: #101a3d;
+  text-align: left;
 }
 
 .user-modal-header p {
@@ -3877,6 +3914,7 @@ button {
   font-size: 11px;
 
   color: #718099;
+  text-align: left;
 }
 
 .user-modal-close {

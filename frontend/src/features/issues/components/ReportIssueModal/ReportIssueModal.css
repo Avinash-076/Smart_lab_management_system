@@ -35,6 +35,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  text-align: left;
 }
 
 .report-modal-title {
@@ -42,6 +43,7 @@
   font-size: 18px;
   font-weight: 700;
   color: #0F172A;
+  text-align: left;
 }
 
 .report-modal-close-btn {

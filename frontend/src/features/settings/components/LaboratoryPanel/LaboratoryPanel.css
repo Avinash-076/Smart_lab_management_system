@@ -1,0 +1,164 @@
+/* =====================================================
+   SETTINGS PANEL BASE & LABORATORY PANEL STYLES
+===================================================== */
+
+.settings-panel-card {
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-panel-card:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.settings-panel-header {
+  padding: 18px 22px;
+  border-bottom: 1px solid #edf0f4;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.settings-panel-icon-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-panel-icon-badge--blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.settings-panel-icon-badge--orange {
+  background-color: #fff7ed;
+  color: #ea580c;
+}
+
+.settings-panel-icon-badge--purple {
+  background-color: #f5f3ff;
+  color: #7c3aed;
+}
+
+.settings-panel-icon-badge--green {
+  background-color: #f0fdf4;
+  color: #16a34a;
+}
+
+.settings-panel-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+}
+
+.settings-panel-title {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 700;
+  color: #0f172a;
+  text-align: left;
+}
+
+.settings-panel-subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  color: #64748b;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.settings-panel-body {
+  padding: 22px;
+}
+
+.settings-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.settings-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+}
+
+.settings-field-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  text-align: left;
+}
+
+.settings-required {
+  color: #ef4444;
+}
+
+.settings-text-input,
+.settings-select-input {
+  height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background-color: #ffffff;
+  color: #0f172a;
+  font-size: 13.5px;
+  outline: none;
+  transition: all 0.15s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.settings-text-input:focus,
+.settings-select-input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.settings-text-input:disabled,
+.settings-select-input:disabled {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
+}
+
+.settings-field-group.has-error .settings-text-input,
+.settings-field-group.has-error .settings-select-input {
+  border-color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.settings-field-group.has-error .settings-text-input:focus,
+.settings-field-group.has-error .settings-select-input:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+.settings-field-hint {
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.35;
+  text-align: left;
+}
+
+.settings-field-error {
+  font-size: 12px;
+  font-weight: 600;
+  color: #dc2626;
+  line-height: 1.35;
+  text-align: left;
+}

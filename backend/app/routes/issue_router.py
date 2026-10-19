@@ -36,6 +36,7 @@ from app.schemas.issue_schema import (
     IssueUpdate,
 )
 from app.services import (
+    alert_service,
     audit_service,
     computer_service,
     issue_service,
@@ -184,6 +185,15 @@ async def create_issue(
             created_by=user.id,
         )
         try:
+            await alert_service.notify_issue(
+                db=db,
+                computer_id=created.computer_id,
+                title=created.title,
+                severity=created.severity.value if hasattr(created.severity, "value") else str(created.severity),
+            )
+        except Exception:
+            pass
+        try:
             await manager.broadcast_to_dashboards(
                 {
                     "type": "issue_created",
@@ -265,6 +275,15 @@ async def create_agent_issue(
             db=db,
             issue_data=create_data,
         )
+        try:
+            await alert_service.notify_issue(
+                db=db,
+                computer_id=created.computer_id,
+                title=created.title,
+                severity=created.severity.value if hasattr(created.severity, "value") else str(created.severity),
+            )
+        except Exception:
+            pass
         try:
             audit_service.log_action(
                 db=db,

@@ -24,3 +24,12 @@ class AuditLogListResponse(BaseModel):
     page: int
     limit: int
     total_pages: int
+
+
+class AuditStatsResponse(BaseModel):
+    total: int
+    success: int
+    failure: int
+    commands: int
+    last_24h: int
+

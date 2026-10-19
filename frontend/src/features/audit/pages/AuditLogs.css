@@ -1,0 +1,32 @@
+/* =====================================================
+   AUDIT LOGS PAGE WRAPPER (Matches Computers & Issues)
+===================================================== */
+
+.audit-logs-page-wrapper {
+  padding: 24px 32px 48px;
+  background-color: var(--color-background, #f4f7fc);
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  font-family: var(--sans, 'Poppins', sans-serif);
+  color: var(--color-text-primary, #0f172a);
+  display: flex;
+  flex-direction: column;
+  animation: auditPageFadeIn 0.2s ease-out;
+}
+
+@keyframes auditPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .audit-logs-page-wrapper {
+    padding: 16px 16px 36px;
+  }
+}

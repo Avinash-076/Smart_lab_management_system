@@ -15,12 +15,14 @@
   border-bottom: 1px solid #f1f5f9;
   flex-wrap: wrap;
   gap: 16px;
+  text-align: left;
 }
 
 .target-header-left {
   display: flex;
   align-items: center;
   gap: 12px;
+  text-align: left;
 }
 
 .target-header-icon {
@@ -40,12 +42,14 @@
   font-weight: 600;
   color: #0f172a;
   margin: 0;
+  text-align: left;
 }
 
 .target-header-sub {
   font-size: 0.8125rem;
   color: #64748b;
   margin: 2px 0 0 0;
+  text-align: left;
 }
 
 .target-filters-right {

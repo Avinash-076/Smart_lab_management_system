@@ -55,12 +55,14 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  text-align: left;
 }
 
 .maint-complete-header-left {
   display: flex;
   align-items: center;
   gap: 0.85rem;
+  text-align: left;
 }
 
 .maint-complete-header-icon {
@@ -80,12 +82,14 @@
   font-size: 1.15rem;
   font-weight: 700;
   color: #0f172a;
+  text-align: left;
 }
 
 .maint-complete-subtitle {
   margin: 0.2rem 0 0 0;
   font-size: 0.8125rem;
   color: #64748b;
+  text-align: left;
 }
 
 .maint-complete-close-btn {

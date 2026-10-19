@@ -1,10 +1,22 @@
-from datetime import datetime
-from sqlalchemy import func, or_, select
+import csv
+import io
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.models.audit_log import AuditLog, AuditResult
 from app.models.user import User
+
+
+def _sanitize_csv_cell(value: object) -> str:
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+        return f"'{s}"
+    return s
+
 
 
 def log_action(
@@ -131,3 +143,98 @@ def get_audit_log_by_id(
         .options(joinedload(AuditLog.user))
         .where(AuditLog.id == log_id)
     )
+
+
+def get_audit_stats(db: Session) -> dict:
+    """
+    Compute aggregated metric totals for the audit dashboard in a single fast query.
+    """
+    now = datetime.now(timezone.utc)
+    twenty_four_hours_ago = now - timedelta(hours=24)
+
+    total_query = select(
+        func.count(AuditLog.id).label("total"),
+        func.count(case((AuditLog.result == AuditResult.success, 1))).label("success"),
+        func.count(case((AuditLog.result == AuditResult.failure, 1))).label("failure"),
+        func.count(case((AuditLog.action.ilike("%COMMAND%"), 1))).label("commands"),
+        func.count(case((AuditLog.created_at >= twenty_four_hours_ago, 1))).label("last_24h"),
+    )
+
+    row = db.execute(total_query).first()
+    if row:
+        return {
+            "total": int(row.total or 0),
+            "success": int(row.success or 0),
+            "failure": int(row.failure or 0),
+            "commands": int(row.commands or 0),
+            "last_24h": int(row.last_24h or 0),
+        }
+    return {
+        "total": 0,
+        "success": 0,
+        "failure": 0,
+        "commands": 0,
+        "last_24h": 0,
+    }
+
+
+def export_audit_logs_csv(
+    db: Session,
+    action: str | None = None,
+    target_type: str | None = None,
+    target_id: int | None = None,
+    user_id: int | None = None,
+    result: AuditResult | None = None,
+    search: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    limit: int = 5000,
+) -> str:
+    """
+    Generate an audit trail CSV export sanitized against formula injection.
+    """
+    items, _ = get_audit_logs(
+        db=db,
+        page=1,
+        limit=limit,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        user_id=user_id,
+        result=result,
+        search=search,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    # Header
+    writer.writerow([
+        "Audit Log ID",
+        "Timestamp (UTC)",
+        "Actor Username",
+        "User ID",
+        "Action Code",
+        "Target Resource",
+        "Target ID",
+        "Outcome",
+        "Source IP Address",
+    ])
+
+    for entry in items:
+        username = entry.username or ("SYSTEM / AGENT" if not entry.user_id else f"User #{entry.user_id}")
+        writer.writerow([
+            entry.id,
+            entry.created_at.isoformat() if entry.created_at else "",
+            _sanitize_csv_cell(username),
+            entry.user_id or "",
+            _sanitize_csv_cell(entry.action),
+            _sanitize_csv_cell(entry.target_type or ""),
+            entry.target_id or "",
+            entry.result.value if hasattr(entry.result, "value") else str(entry.result),
+            _sanitize_csv_cell(entry.ip_address or ""),
+        ])
+
+    return output.getvalue()

@@ -27,6 +27,7 @@
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid #f1f5f9;
+  text-align: left;
 }
 
 .report-chart-title {
@@ -34,6 +35,7 @@
   font-size: 15px;
   font-weight: 600;
   color: #172033;
+  text-align: left;
 }
 
 .report-chart-tag {
