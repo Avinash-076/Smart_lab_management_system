@@ -26,12 +26,12 @@ class Notification(Base):
         primary_key=True,
     )
 
-    computer_id: Mapped[int] = mapped_column(
+    computer_id: Mapped[int | None] = mapped_column(
         ForeignKey(
             "computers.id",
             ondelete="CASCADE",
         ),
-        nullable=False,
+        nullable=True,
     )
 
     category: Mapped[str] = mapped_column(
@@ -64,7 +64,7 @@ class Notification(Base):
         nullable=False,
     )
 
-    computer: Mapped["Computer"] = relationship()
+    computer: Mapped["Computer | None"] = relationship()
 
     @property
     def computer_hostname(self) -> str | None:

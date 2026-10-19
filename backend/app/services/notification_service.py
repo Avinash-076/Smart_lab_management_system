@@ -58,7 +58,7 @@ def get_notifications(
         query = query.where(
             func.lower(Notification.message).like(search_pattern)
             | func.lower(Notification.category).like(search_pattern)
-            | func.lower(Computer.hostname).like(search_pattern)
+            | func.coalesce(func.lower(Computer.hostname), "").like(search_pattern)
         )
 
     query = query.offset(offset).limit(limit)

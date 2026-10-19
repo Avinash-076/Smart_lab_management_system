@@ -5,7 +5,7 @@ from app.models.notification import NotificationSeverity
 
 class NotificationResponse(BaseModel):
     id: int
-    computer_id: int
+    computer_id: int | None = None
     computer_hostname: str | None = None
     category: str
     severity: NotificationSeverity
@@ -27,7 +27,7 @@ class NotificationStatsResponse(BaseModel):
 
 
 class NotificationCreate(BaseModel):
-    computer_id: int
+    computer_id: int | None = None
     category: str
     severity: NotificationSeverity = NotificationSeverity.info
     message: str

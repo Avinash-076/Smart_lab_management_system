@@ -8,6 +8,7 @@ import {
   markAllNotificationsRead,
   clearReadNotifications,
 } from "../../services/notificationService";
+import { createDashboardWebSocket } from "../../services/websocketManager";
 import "./Header.css";
 
 function formatRelativeTime(dateStr) {
@@ -198,6 +199,41 @@ function Header({
     };
   }, []);
 
+  // Real-time notification updates via WebSocket
+  useEffect(() => {
+    let wsClient = null;
+    try {
+      wsClient = createDashboardWebSocket({
+        onMessage: (msg) => {
+          if (!msg) return;
+          if (msg.type === "notification" && msg.data) {
+            const newNotif = msg.data;
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === newNotif.id)) return prev;
+              return [newNotif, ...prev];
+            });
+            setStats((prev) => ({
+              ...prev,
+              total: prev.total + 1,
+              unread: prev.unread + (newNotif.is_read ? 0 : 1),
+              critical: prev.critical + (newNotif.severity === "critical" ? 1 : 0),
+              warning: prev.warning + (newNotif.severity === "warning" ? 1 : 0),
+              info: prev.info + (newNotif.severity === "info" ? 1 : 0),
+            }));
+          }
+        },
+      });
+    } catch (wsErr) {
+      console.warn("Header WebSocket initialization error:", wsErr);
+    }
+
+    return () => {
+      if (wsClient && typeof wsClient.close === "function") {
+        wsClient.close();
+      }
+    };
+  }, []);
+
   // Close dropdowns on click outside
   useEffect(() => {
     function handleClickOutside(event) {
@@ -260,7 +296,8 @@ function Header({
 
   const getDotClass = (severity) => {
     const s = (severity || "").toLowerCase();
-    if (s === "critical" || s === "warning") return "notification-dot orange";
+    if (s === "critical") return "notification-dot red";
+    if (s === "warning") return "notification-dot orange";
     return "notification-dot blue";
   };
 
@@ -428,7 +465,9 @@ function Header({
                   </div>
                 ) : filteredNotifications.length > 0 ? (
                   filteredNotifications.map((notif) => {
-                    const compName = notif.computer_hostname || `PC-${notif.computer_id}`;
+                    const compName = notif.computer_id
+                      ? (notif.computer_hostname || `PC-${notif.computer_id}`)
+                      : (notif.computer_hostname || "SYSTEM");
                     return (
                       <div
                         key={notif.id}

@@ -82,10 +82,17 @@ def replace_software_inventory(
     db: Session,
     computer_id: int,
     software_data: SoftwareUpload,
-) -> list[Software]:
+) -> tuple[list[Software], list[str]]:
     items = software_data.software[:MAX_SOFTWARE_ITEMS]
 
     try:
+        # Check existing software names for differential alerting
+        existing_names = set(
+            db.scalars(
+                select(Software.name).where(Software.computer_id == computer_id)
+            ).all()
+        )
+
         db.execute(
             delete(Software).where(
                 Software.computer_id == computer_id
@@ -134,7 +141,13 @@ def replace_software_inventory(
         for record in software_records:
             db.refresh(record)
 
-        return software_records
+        # Detect newly installed software only if there was a prior baseline inventory
+        new_names = []
+        if existing_names:
+            current_names = {r.name for r in software_records}
+            new_names = sorted(list(current_names - existing_names))
+
+        return software_records, new_names
 
     except IntegrityError:
         db.rollback()

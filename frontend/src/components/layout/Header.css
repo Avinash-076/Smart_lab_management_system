@@ -363,6 +363,10 @@
   margin-top: 5px;
 }
 
+.notification-dot.red {
+  background-color: var(--color-danger, #ef4444);
+}
+
 .notification-dot.orange {
   background-color: var(--color-warning, #d97706);
 }

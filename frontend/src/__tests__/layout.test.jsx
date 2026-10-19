@@ -124,4 +124,24 @@ describe("Shared Authenticated Layout Components", () => {
     expect(html).toContain("Computers");
     expect(html).toContain("View and manage all lab computers.");
   });
+
+  it("renders Header with notifications popup when bellOpen is true", () => {
+    const html = renderToString(
+      <Header
+        active="dashboard"
+        sidebarOpen={true}
+        setSidebarOpen={vi.fn()}
+        bellOpen={true}
+        setBellOpen={vi.fn()}
+        profileOpen={false}
+        setProfileOpen={vi.fn()}
+        navigate={vi.fn()}
+        logout={vi.fn()}
+      />
+    );
+
+    expect(html).toContain("header-dropdown header-notifications-menu");
+    expect(html).toContain("Notifications &amp; Alerts");
+    expect(html).toContain("All alerts caught up");
+  });
 });

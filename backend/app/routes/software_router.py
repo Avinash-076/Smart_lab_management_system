@@ -26,6 +26,7 @@ from app.schemas.software_schema import (
     SoftwareUpload,
 )
 from app.services import (
+    alert_service,
     computer_service,
     software_service,
 )
@@ -48,7 +49,7 @@ router = APIRouter(
     response_model=list[SoftwareResponse],
     status_code=status.HTTP_201_CREATED,
 )
-def upload_software_inventory(
+async def upload_software_inventory(
     software_data: SoftwareUpload,
     db: DbSession,
     agent_credential: AgentCredential = Depends(
@@ -78,11 +79,17 @@ def upload_software_inventory(
         )
 
     try:
-        return software_service.replace_software_inventory(
+        records, new_names = software_service.replace_software_inventory(
             db=db,
             computer_id=computer_id,
             software_data=software_data,
         )
+        if new_names:
+            try:
+                await alert_service.notify_software(db, computer_id, new_names)
+            except Exception:
+                pass
+        return records
 
     except IntegrityError:
         raise HTTPException(

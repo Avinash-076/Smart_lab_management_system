@@ -405,3 +405,99 @@ async def test_notify_offline_event(sample_computer, db_session):
         .count()
         == 1
     )
+
+
+@pytest.mark.anyio
+async def test_system_wide_notification_null_computer_id(test_admin_user, db_session):
+    """Verify system-wide notifications with computer_id=None are created and retrievable."""
+    notif = await alert_service.notify_system(
+        db=db_session,
+        category="system",
+        severity=NotificationSeverity.info,
+        message="Scheduled maintenance window tomorrow at 2:00 PM",
+    )
+    assert notif is not None
+    assert notif.computer_id is None
+    assert notif.computer_hostname is None
+
+    client = TestClient(app)
+    headers = {"Authorization": f"Bearer {test_admin_user['token']}"}
+
+    resp = client.get("/api/notifications?category=system", headers=headers)
+    assert resp.status_code == 200
+    items = resp.json()
+    assert any(item["message"] == "Scheduled maintenance window tomorrow at 2:00 PM" for item in items)
+
+
+@pytest.mark.anyio
+async def test_alert_cooldown_allows_escalation(sample_computer, db_session):
+    """Verify that when an alert condition escalates (warning -> critical), it bypasses cooldown."""
+    db_session.query(Notification).filter(Notification.computer_id == sample_computer.id).delete()
+    db_session.commit()
+
+    # 1. Warning alert (CPU 82%)
+    metric_warn = SystemMetric(
+        computer_id=sample_computer.id,
+        cpu_usage=82.0,
+        ram_usage=50.0,
+        disk_usage=40.0,
+    )
+    await alert_service.evaluate_metric(db_session, sample_computer.id, metric_warn)
+
+    notifs_warn = (
+        db_session.query(Notification)
+        .filter(Notification.computer_id == sample_computer.id, Notification.category == "cpu")
+        .all()
+    )
+    assert len(notifs_warn) == 1
+    assert notifs_warn[0].severity == NotificationSeverity.warning
+
+    # 2. Critical alert (CPU 96%) within cooldown period must NOT be suppressed
+    metric_crit = SystemMetric(
+        computer_id=sample_computer.id,
+        cpu_usage=96.0,
+        ram_usage=50.0,
+        disk_usage=40.0,
+    )
+    await alert_service.evaluate_metric(db_session, sample_computer.id, metric_crit)
+
+    notifs_all = (
+        db_session.query(Notification)
+        .filter(Notification.computer_id == sample_computer.id, Notification.category == "cpu")
+        .order_by(Notification.id.asc())
+        .all()
+    )
+    assert len(notifs_all) == 2
+    assert notifs_all[1].severity == NotificationSeverity.critical
+    assert "96.0%" in notifs_all[1].message
+
+
+@pytest.mark.anyio
+async def test_software_alert_integration(sample_computer, db_session):
+    """Verify that software_alerts setting creates in-app notifications on newly detected packages."""
+    from app.services import setting_service
+
+    # Enable software alerts
+    setting_service.update_settings(db_session, {"software_alerts": True})
+
+    db_session.query(Notification).filter(
+        Notification.computer_id == sample_computer.id,
+        Notification.category == "software",
+    ).delete()
+    db_session.commit()
+
+    # Baseline inventory upload has Wireshark and Python
+    await alert_service.notify_software(
+        db=db_session,
+        computer_id=sample_computer.id,
+        software_names=["Wireshark 4.0", "Python 3.12"],
+    )
+
+    notif = (
+        db_session.query(Notification)
+        .filter(Notification.computer_id == sample_computer.id, Notification.category == "software")
+        .first()
+    )
+    assert notif is not None
+    assert "Wireshark 4.0" in notif.message
+

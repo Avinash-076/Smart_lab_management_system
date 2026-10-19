@@ -239,7 +239,9 @@ function Dashboard() {
             {recentNotifications.length > 0 ? (
               <div style={{ padding: "0 20px 20px" }}>
                 {recentNotifications.map((notif) => {
-                  const compName = notif.computer_hostname || `PC-${notif.computer_id}`;
+                  const compName = notif.computer_id
+                    ? (notif.computer_hostname || `PC-${notif.computer_id}`)
+                    : (notif.computer_hostname || "SYSTEM");
                   const isCritical = notif.severity === "critical";
                   const isWarning = notif.severity === "warning";
                   const dotColor = isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "#3b82f6";
