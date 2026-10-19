@@ -521,6 +521,10 @@ const Icon = ({ type, size = 20 }) => {
         <line x1="10" y1="14" x2="21" y2="3" />
       </>
     ),
+
+    check: (
+      <polyline points="20 6 9 17 4 12" />
+    ),
   };
 
   return <svg {...p}>{i[type] || i.computer}</svg>;

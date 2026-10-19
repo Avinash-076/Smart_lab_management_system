@@ -21,13 +21,16 @@ from app.models.audit_log import AuditLog, AuditResult
 from app.models.client_status import ClientStatus
 from app.models.command_result import CommandResult
 from app.models.computer import Computer
+from app.models.computer_hardware import ComputerHardware
 from app.models.issue import Issue, IssueSeverity, IssueSource, IssueStatus
 from app.models.maintenance import MaintenanceRecord, MaintenanceStatus, MaintenanceType
+from app.models.process import Process
 from app.models.remote_command import CommandStatus, CommandType, RemoteCommand
 from app.models.role import Role
 from app.models.role_permission import RolePermission
 from app.models.software import Software
 from app.models.system_metric import SystemMetric
+from app.models.usage_session import UsageSession
 from app.models.user import User
 
 
@@ -336,6 +339,81 @@ def reports_fixture(db_session):
     )
     db_session.add_all([audit1, audit2])
 
+    # Computer Hardware specifications
+    hw1 = db_session.query(ComputerHardware).filter_by(computer_id=c1.id).first()
+    if not hw1:
+        hw1 = ComputerHardware(
+            computer_id=c1.id,
+            manufacturer="Dell Inc.",
+            model="OptiPlex 7090",
+            processor_name="11th Gen Intel(R) Core(TM) i7-11700 @ 2.50GHz",
+            processor_cores=8,
+            ram_total_gb=16.0,
+            storage_total_gb=512.0,
+            system_type="x64-based PC",
+            collected_at=now - timedelta(days=2),
+        )
+        db_session.add(hw1)
+
+    hw2 = db_session.query(ComputerHardware).filter_by(computer_id=c2.id).first()
+    if not hw2:
+        hw2 = ComputerHardware(
+            computer_id=c2.id,
+            manufacturer="HP",
+            model="EliteDesk 800 G6",
+            processor_name="Intel(R) Core(TM) i5-10500 @ 3.10GHz",
+            processor_cores=6,
+            ram_total_gb=32.0,
+            storage_total_gb=1024.0,
+            system_type="x64-based PC",
+            collected_at=now - timedelta(days=2),
+        )
+        db_session.add(hw2)
+
+    # Usage sessions
+    sess1 = UsageSession(
+        computer_id=c1.id,
+        application_name="Google Chrome",
+        process_name="chrome.exe",
+        user="student_lab01",
+        started_at=now - timedelta(hours=3),
+        ended_at=now - timedelta(hours=1),
+        duration_seconds=7200,
+        recorded_at=now - timedelta(hours=1),
+    )
+    sess2 = UsageSession(
+        computer_id=c2.id,
+        application_name="Visual Studio Code",
+        process_name="code.exe",
+        user="student_lab02",
+        started_at=now - timedelta(hours=4),
+        ended_at=now - timedelta(hours=2),
+        duration_seconds=5400,
+        recorded_at=now - timedelta(hours=2),
+    )
+    db_session.add_all([sess1, sess2])
+
+    # Process snapshots
+    proc1 = Process(
+        computer_id=c1.id,
+        pid=4520,
+        name="chrome.exe",
+        cpu_percent=14.5,
+        memory_mb=420.0,
+        user="student_lab01",
+        recorded_at=now - timedelta(minutes=10),
+    )
+    proc2 = Process(
+        computer_id=c2.id,
+        pid=8912,
+        name="code.exe",
+        cpu_percent=8.2,
+        memory_mb=280.0,
+        user="student_lab02",
+        recorded_at=now - timedelta(minutes=15),
+    )
+    db_session.add_all([proc1, proc2])
+
     db_session.commit()
 
     admin_token = create_access_token({"sub": str(admin_user.id)})
@@ -357,12 +435,14 @@ def reports_fixture(db_session):
 def test_reports_unauthorized_access(client):
     """Endpoints require authentication token."""
     assert client.get("/api/reports/summary").status_code == 401
+    assert client.get("/api/reports/inventory").status_code == 401
     assert client.get("/api/reports/utilization").status_code == 401
     assert client.get("/api/reports/software").status_code == 401
     assert client.get("/api/reports/issues").status_code == 401
     assert client.get("/api/reports/maintenance").status_code == 401
     assert client.get("/api/reports/commands").status_code == 401
     assert client.get("/api/reports/audit").status_code == 401
+    assert client.get("/api/reports/usage").status_code == 401
     assert client.get("/api/reports/export").status_code == 401
 
 
@@ -370,12 +450,14 @@ def test_reports_forbidden_access(client, reports_fixture):
     """Endpoints reject users without required RBAC permissions."""
     headers = reports_fixture["unprivileged_headers"]
     assert client.get("/api/reports/summary", headers=headers).status_code == 403
+    assert client.get("/api/reports/inventory", headers=headers).status_code == 403
     assert client.get("/api/reports/utilization", headers=headers).status_code == 403
     assert client.get("/api/reports/software", headers=headers).status_code == 403
     assert client.get("/api/reports/issues", headers=headers).status_code == 403
     assert client.get("/api/reports/maintenance", headers=headers).status_code == 403
     assert client.get("/api/reports/commands", headers=headers).status_code == 403
     assert client.get("/api/reports/audit", headers=headers).status_code == 403
+    assert client.get("/api/reports/usage", headers=headers).status_code == 403
     assert client.get("/api/reports/export", headers=headers).status_code == 403
 
 
@@ -618,3 +700,106 @@ def test_csv_export_and_formula_injection_defense(client, reports_fixture):
     )
     assert audit_resp.status_code == 200
     assert "CREATE_USER" in audit_resp.text
+
+
+# ============================================================
+# COMPUTER INVENTORY REPORT (CATEGORY A) TESTS
+# ============================================================
+
+def test_inventory_report(client, reports_fixture):
+    """GET /api/reports/inventory returns hardware aggregation and OS distribution."""
+    resp = client.get(
+        "/api/reports/inventory",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["total_computers"] >= 2
+    assert len(data["os_distribution"]) >= 1
+    assert data["hardware_summary"]["total_ram_gb"] >= 48.0
+    assert data["hardware_summary"]["total_storage_gb"] >= 1536.0
+    assert data["hardware_summary"]["avg_cores"] == 7.0
+    assert len(data["items"]) >= 2
+
+    # Check hardware fields
+    c1_item = next(c for c in data["items"] if c["hostname"] == "PC-REPORT-01")
+    assert c1_item["manufacturer"] == "Dell Inc."
+    assert c1_item["processor_cores"] == 8
+    assert c1_item["ram_total_gb"] == 16.0
+
+    # Search filter
+    search_resp = client.get(
+        "/api/reports/inventory?search=Dell",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert search_resp.status_code == 200
+    search_data = search_resp.json()
+    assert len(search_data["items"]) == 1
+    assert search_data["items"][0]["hostname"] == "PC-REPORT-01"
+
+
+# ============================================================
+# APPLICATION USAGE & PROCESS ACTIVITY (CATEGORY F) TESTS
+# ============================================================
+
+def test_usage_report(client, reports_fixture):
+    """GET /api/reports/usage returns session durations, top apps, and top processes."""
+    resp = client.get(
+        "/api/reports/usage",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["total_sessions"] >= 2
+    assert data["total_duration_hours"] > 0
+    assert data["unique_applications"] >= 2
+    assert len(data["top_applications"]) >= 2
+    assert len(data["top_processes"]) >= 2
+    assert len(data["items"]) >= 2
+
+    # Verify duration formatted helper string
+    c1_sess = next(s for s in data["items"] if s["application_name"] == "Google Chrome")
+    assert c1_sess["duration_seconds"] == 7200
+    assert c1_sess["duration_formatted"] == "2h"
+
+    # Search filter
+    search_resp = client.get(
+        "/api/reports/usage?search=Visual Studio",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert search_resp.status_code == 200
+    search_data = search_resp.json()
+    assert len(search_data["items"]) == 1
+    assert search_data["items"][0]["application_name"] == "Visual Studio Code"
+
+
+# ============================================================
+# INVENTORY & USAGE CSV EXPORT TESTS
+# ============================================================
+
+def test_inventory_and_usage_csv_export(client, reports_fixture):
+    """GET /api/reports/export exports inventory and usage CSVs with sanitized cells."""
+    # Test inventory export
+    inv_resp = client.get(
+        "/api/reports/export?report_type=inventory",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert inv_resp.status_code == 200
+    assert "text/csv" in inv_resp.headers["Content-Type"]
+    assert 'attachment; filename="SLMS-Computer-Inventory-Report-' in inv_resp.headers["Content-Disposition"]
+    assert "Dell Inc." in inv_resp.text
+    assert "OptiPlex 7090" in inv_resp.text
+
+    # Test usage export
+    usage_resp = client.get(
+        "/api/reports/export?report_type=usage",
+        headers=reports_fixture["admin_headers"],
+    )
+    assert usage_resp.status_code == 200
+    assert "text/csv" in usage_resp.headers["Content-Type"]
+    assert 'attachment; filename="SLMS-Application-Usage-Report-' in usage_resp.headers["Content-Disposition"]
+    assert "Google Chrome" in usage_resp.text
+    assert "student_lab01" in usage_resp.text
+

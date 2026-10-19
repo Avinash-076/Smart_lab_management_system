@@ -232,3 +232,104 @@ class AuditReportResponse(BaseModel):
     limit: int
     total_pages: int
     items: list[AuditReportItem]
+
+
+# ============================================================
+# COMPUTER INVENTORY REPORT (CATEGORY A)
+# ============================================================
+
+class HardwareSummary(BaseModel):
+    total_ram_gb: float = 0.0
+    total_storage_gb: float = 0.0
+    avg_cores: float = 0.0
+    total_processors: int = 0
+
+
+class OSDistributionItem(BaseModel):
+    os_name: str
+    count: int
+    percentage: float = 0.0
+
+
+class ComputerInventoryItem(BaseModel):
+    id: int
+    hostname: str
+    ip_address: str
+    mac_address: str
+    os_name: str
+    os_version: str
+    status: str
+    last_seen: datetime | None = None
+    registered_at: datetime
+    manufacturer: str | None = None
+    model: str | None = None
+    processor_name: str | None = None
+    processor_cores: int | None = None
+    ram_total_gb: float | None = None
+    storage_total_gb: float | None = None
+    system_type: str | None = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ComputerInventoryReportResponse(BaseModel):
+    total_computers: int
+    online_computers: int
+    offline_computers: int
+    os_distribution: list[OSDistributionItem]
+    hardware_summary: HardwareSummary
+    page: int
+    limit: int
+    total_pages: int
+    items: list[ComputerInventoryItem]
+
+
+# ============================================================
+# APPLICATION USAGE & PROCESS ACTIVITY REPORT (CATEGORY F)
+# ============================================================
+
+class TopApplicationItem(BaseModel):
+    application_name: str
+    total_duration_hours: float
+    session_count: int
+
+
+class UsageSessionReportItem(BaseModel):
+    id: int
+    computer_id: int
+    computer_hostname: str | None = None
+    application_name: str
+    process_name: str | None = None
+    user: str | None = None
+    started_at: datetime
+    ended_at: datetime | None = None
+    duration_seconds: int
+    duration_formatted: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProcessSnapshotItem(BaseModel):
+    pid: int
+    name: str
+    computer_id: int
+    computer_hostname: str | None = None
+    cpu_percent: float
+    memory_mb: float
+    user: str | None = None
+    recorded_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class UsageReportResponse(BaseModel):
+    total_sessions: int
+    total_duration_hours: float
+    unique_applications: int
+    top_applications: list[TopApplicationItem]
+    top_processes: list[ProcessSnapshotItem]
+    page: int
+    limit: int
+    total_pages: int
+    items: list[UsageSessionReportItem]
+

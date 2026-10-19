@@ -140,6 +140,11 @@ export function formatTypeText(typeVal) {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+// Aliases for convenience across components
+export const formatDate = formatDateOnly;
+export const getMaintenanceStatusConfig = getStatusBadgeConfig;
+export const getMaintenanceTypeConfig = getTypeBadgeConfig;
+
 export function getPaginationItems(current, total) {
   if (total <= 7) {
     return Array.from({ length: total }, (_, i) => i + 1);

@@ -148,9 +148,36 @@ export function useMaintenanceRecords() {
     };
   }, []);
 
+  const [editingRecord, setEditingRecord] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+
   /* =====================================================
      ACTIONS & LIFECYCLE
   ===================================================== */
+  const handleSaveSchedule = async (payload) => {
+    try {
+      setScheduleLoading(true);
+      setScheduleError("");
+
+      if (editingRecord) {
+        await updateMaintenanceRecord(editingRecord.id, payload);
+        showSuccess(`Maintenance record #${editingRecord.id} updated successfully.`);
+      } else {
+        await createMaintenanceRecord(payload);
+        showSuccess("Maintenance task scheduled successfully.");
+      }
+
+      setIsScheduleOpen(false);
+      setEditingRecord(null);
+      await loadData();
+    } catch (err) {
+      console.error("Failed to save maintenance record:", err);
+      setScheduleError(err.message || "Failed to save maintenance record.");
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
   const handleScheduleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!scheduleForm.computer_id) {
@@ -162,50 +189,36 @@ export function useMaintenanceRecords() {
       return;
     }
 
-    try {
-      setScheduleLoading(true);
-      setScheduleError("");
+    const payload = {
+      computer_id: Number(scheduleForm.computer_id),
+      maintenance_type: scheduleForm.maintenance_type,
+      title: scheduleForm.title.trim(),
+      description: scheduleForm.description.trim() || null,
+      scheduled_at: scheduleForm.scheduled_at
+        ? new Date(scheduleForm.scheduled_at).toISOString()
+        : new Date().toISOString(),
+      technician_name: scheduleForm.technician_name.trim() || null,
+      notes: scheduleForm.notes.trim() || null,
+    };
 
-      const payload = {
-        computer_id: Number(scheduleForm.computer_id),
-        maintenance_type: scheduleForm.maintenance_type,
-        title: scheduleForm.title.trim(),
-        description: scheduleForm.description.trim() || null,
-        scheduled_at: scheduleForm.scheduled_at
-          ? new Date(scheduleForm.scheduled_at).toISOString()
-          : new Date().toISOString(),
-        technician_name: scheduleForm.technician_name.trim() || null,
-        notes: scheduleForm.notes.trim() || null,
-      };
-
-      await createMaintenanceRecord(payload);
-
-      setIsScheduleOpen(false);
-      setScheduleForm({
-        computer_id: "",
-        maintenance_type: "preventive",
-        title: "",
-        description: "",
-        scheduled_at: "",
-        technician_name: "",
-        notes: "",
-      });
-
-      showSuccess("Maintenance task scheduled successfully.");
-      await loadData();
-    } catch (err) {
-      console.error("Failed to schedule maintenance:", err);
-      setScheduleError(err.message || "Failed to schedule maintenance.");
-    } finally {
-      setScheduleLoading(false);
-    }
+    await handleSaveSchedule(payload);
   };
 
-  const handleStatusChange = async (record, newStatus) => {
+  const handleStatusChange = async (recordOrId, newStatus) => {
+    const id = typeof recordOrId === "object" ? recordOrId.id : recordOrId;
+    // Map human readable or enum status
+    const statusMap = {
+      Scheduled: "scheduled",
+      "In Progress": "in_progress",
+      Completed: "completed",
+      Cancelled: "cancelled",
+    };
+    const finalStatus = statusMap[newStatus] || newStatus.toLowerCase();
+
     try {
-      setActionLoadingId(record.id);
-      await updateMaintenanceRecord(record.id, { status: newStatus });
-      showSuccess(`Maintenance status updated to ${newStatus.replace("_", " ")}.`);
+      setActionLoadingId(id);
+      await updateMaintenanceRecord(id, { status: finalStatus });
+      showSuccess(`Maintenance status updated to ${finalStatus.replace("_", " ")}.`);
       await loadData();
     } catch (err) {
       console.error("Failed to update maintenance status:", err);
@@ -248,15 +261,21 @@ export function useMaintenanceRecords() {
     }
   };
 
-  const handleDelete = async (record) => {
-    if (!window.confirm(`Are you sure you want to delete maintenance record "${record.title}"?`)) {
+  const handleDelete = async (recordOrId) => {
+    const id = typeof recordOrId === "object" ? recordOrId.id : recordOrId;
+    const title =
+      typeof recordOrId === "object" && recordOrId.title
+        ? `"${recordOrId.title}"`
+        : `#${id}`;
+
+    if (!window.confirm(`Are you sure you want to delete maintenance record ${title}?`)) {
       return;
     }
 
     try {
-      setActionLoadingId(record.id);
-      await deleteMaintenanceRecord(record.id);
-      showSuccess("Maintenance record deleted successfully.");
+      setActionLoadingId(id);
+      await deleteMaintenanceRecord(id);
+      showSuccess(`Maintenance record ${title} deleted successfully.`);
       await loadData();
     } catch (err) {
       console.error("Failed to delete maintenance record:", err);
@@ -333,6 +352,11 @@ export function useMaintenanceRecords() {
     loading,
     error,
     successMsg,
+    // Selection
+    selectedRecord,
+    setSelectedRecord,
+    editingRecord,
+    setEditingRecord,
     // Filters
     search,
     setSearch,
@@ -356,6 +380,7 @@ export function useMaintenanceRecords() {
     scheduleLoading,
     scheduleError,
     handleScheduleSubmit,
+    handleSaveSchedule,
     // Complete Modal
     completeModal,
     setCompleteModal,

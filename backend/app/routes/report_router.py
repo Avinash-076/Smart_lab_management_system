@@ -10,10 +10,12 @@ from app.models.user import User
 from app.schemas.report_schema import (
     AuditReportResponse,
     CommandReportResponse,
+    ComputerInventoryReportResponse,
     IssueReportResponse,
     MaintenanceReportResponse,
     ReportOverviewResponse,
     SoftwareReportResponse,
+    UsageReportResponse,
     UtilizationReportResponse,
 )
 from app.services import report_service
@@ -45,6 +47,32 @@ def get_report_overview(
 ):
     """Retrieve high-level overview metrics across all reporting domains."""
     return report_service.get_report_overview(db)
+
+
+@router.get(
+    "/inventory",
+    response_model=ComputerInventoryReportResponse,
+)
+def get_inventory_report(
+    db: DbSession,
+    _user: Annotated[User, Depends(require_permission("VIEW_COMPUTERS"))],
+    computer_id: int | None = Query(default=None, description="Filter by computer ID"),
+    os_name: str | None = Query(default=None, description="Filter by operating system"),
+    status_filter: str | None = Query(default=None, alias="status", description="Filter by status (online, offline)"),
+    search: str | None = Query(default=None, description="Search hostname, IP, OS, or hardware specs"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=500),
+):
+    """Retrieve comprehensive computer inventory report and hardware specifications (Category A)."""
+    return report_service.get_inventory_report(
+        db=db,
+        computer_id=computer_id,
+        os_name=os_name,
+        status=status_filter,
+        search=search,
+        page=page,
+        limit=limit,
+    )
 
 
 @router.get(
@@ -234,12 +262,44 @@ def get_audit_report(
 
 
 @router.get(
+    "/usage",
+    response_model=UsageReportResponse,
+)
+def get_usage_report(
+    db: DbSession,
+    _user: Annotated[User, Depends(require_permission("VIEW_COMPUTERS"))],
+    computer_id: int | None = Query(default=None, description="Filter by computer ID"),
+    search: str | None = Query(default=None, description="Search application or process name"),
+    from_date: str | None = Query(default=None, description="Start date (ISO format)"),
+    to_date: str | None = Query(default=None, description="End date (ISO format)"),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=500),
+):
+    """Retrieve application usage statistics and top process snapshots (Category F)."""
+    try:
+        return report_service.get_usage_report(
+            db=db,
+            computer_id=computer_id,
+            search=search,
+            from_date=from_date,
+            to_date=to_date,
+            page=page,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+
+@router.get(
     "/export",
 )
 def export_report_csv(
     db: DbSession,
     current_user: Annotated[User, Depends(get_current_user)],
-    report_type: str = Query(default="computer", description="Report domain: computer, software, issue, maintenance, command, audit"),
+    report_type: str = Query(default="computer", description="Report domain: inventory, computer, software, issue, maintenance, command, audit, usage"),
     period: str = Query(default="24h"),
     from_date: str | None = Query(default=None),
     to_date: str | None = Query(default=None),

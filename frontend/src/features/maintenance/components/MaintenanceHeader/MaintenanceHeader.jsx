@@ -3,11 +3,16 @@ import "./MaintenanceHeader.css";
 
 function MaintenanceHeader({
   onScheduleClick,
+  onSchedule,
   onExportCsv,
+  onExport,
   onRefresh,
   loading = false,
-  totalRecords = 0,
+  totalRecords = 1,
 }) {
+  const handleSchedule = onScheduleClick || onSchedule;
+  const handleExport = onExportCsv || onExport;
+
   return (
     <div className="maintenance-header" data-testid="maintenance-header">
       {/* Semantic Title & Subtitle for accessibility */}
@@ -20,11 +25,11 @@ function MaintenanceHeader({
 
       {/* Sleek Upper-Right Action Bar matching Computers & Issue Management */}
       <div className="maintenance-top-actions">
-        {onExportCsv && (
+        {handleExport && (
           <button
             type="button"
             className="maintenance-action-btn maintenance-action-btn--secondary"
-            onClick={onExportCsv}
+            onClick={handleExport}
             disabled={totalRecords === 0}
             title="Export maintenance logs to CSV"
           >
@@ -33,15 +38,17 @@ function MaintenanceHeader({
           </button>
         )}
 
-        <button
-          type="button"
-          className="maintenance-action-btn maintenance-action-btn--primary"
-          onClick={onScheduleClick}
-          title="Schedule a new maintenance task"
-        >
-          <Icon type="plus" size={15} />
-          <span>Schedule Maintenance</span>
-        </button>
+        {handleSchedule && (
+          <button
+            type="button"
+            className="maintenance-action-btn maintenance-action-btn--primary"
+            onClick={handleSchedule}
+            title="Schedule a new maintenance task"
+          >
+            <Icon type="plus" size={15} />
+            <span>Schedule Maintenance</span>
+          </button>
+        )}
 
         {onRefresh && (
           <button

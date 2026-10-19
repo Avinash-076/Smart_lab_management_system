@@ -1,0 +1,147 @@
+/* =====================================================
+   MAINTENANCE SUMMARY CARDS (Matches FleetOverview)
+===================================================== */
+
+.maint-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 1200px) {
+  .maint-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .maint-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.maint-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.maint-summary-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+}
+
+.maint-summary-card-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.maint-summary-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.maint-summary-icon-box.blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.maint-summary-icon-box.amber {
+  background-color: #fffbeb;
+  color: #d97706;
+}
+
+.maint-summary-icon-box.purple {
+  background-color: #faf5ff;
+  color: #9333ea;
+}
+
+.maint-summary-icon-box.green {
+  background-color: #ecfdf5;
+  color: #10b981;
+}
+
+.maint-summary-card-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.maint-summary-card-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+
+.maint-summary-count {
+  font-size: 1.625rem;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.2;
+  font-family: var(--heading, 'Poppins', sans-serif);
+}
+
+.maint-summary-footer {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Sparkline bar indicator */
+.maint-summary-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 38px;
+  width: 34px;
+  padding-bottom: 2px;
+  flex-shrink: 0;
+}
+
+.maint-summary-bar {
+  flex: 1;
+  border-radius: 2px;
+  opacity: 0.45;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.maint-summary-card:hover .maint-summary-bar {
+  opacity: 0.85;
+  transform: scaleY(1.05);
+}
+
+.maint-summary-bars.blue .maint-summary-bar {
+  background-color: #2563eb;
+}
+
+.maint-summary-bars.amber .maint-summary-bar {
+  background-color: #d97706;
+}
+
+.maint-summary-bars.purple .maint-summary-bar {
+  background-color: #9333ea;
+}
+
+.maint-summary-bars.green .maint-summary-bar {
+  background-color: #10b981;
+}

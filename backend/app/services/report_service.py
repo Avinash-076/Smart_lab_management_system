@@ -11,11 +11,14 @@ from app.models.audit_log import AuditLog, AuditResult
 from app.models.client_status import ClientStatus
 from app.models.command_result import CommandResult
 from app.models.computer import Computer
+from app.models.computer_hardware import ComputerHardware
 from app.models.issue import Issue, IssueSeverity, IssueStatus
 from app.models.maintenance import MaintenanceRecord, MaintenanceStatus, MaintenanceType
+from app.models.process import Process
 from app.models.remote_command import CommandStatus, CommandType, RemoteCommand
 from app.models.software import Software
 from app.models.system_metric import SystemMetric
+from app.models.usage_session import UsageSession
 from app.models.user import User
 
 
@@ -878,6 +881,349 @@ def get_audit_report(
 
 
 # ============================================================
+# HELPER: DURATION FORMATTER
+# ============================================================
+
+def format_seconds(seconds: int) -> str:
+    """Format duration in seconds to human readable string (e.g. 1h 24m or 45s)."""
+    if seconds <= 0:
+        return "0s"
+    hours = seconds // 3600
+    minutes = (seconds % 3600) // 60
+    rem_seconds = seconds % 60
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if not parts or (hours == 0 and rem_seconds > 0):
+        parts.append(f"{rem_seconds}s")
+    return " ".join(parts)
+
+
+# ============================================================
+# COMPUTER INVENTORY REPORT (CATEGORY A)
+# ============================================================
+
+def get_inventory_report(
+    db: Session,
+    computer_id: int | None = None,
+    os_name: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    page: int = 1,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Retrieve comprehensive computer inventory report and hardware specifications (Category A)."""
+    query = (
+        select(Computer)
+        .options(
+            joinedload(Computer.status_info),
+            joinedload(Computer.hardware),
+        )
+    )
+    count_query = select(func.count(Computer.id))
+
+    if computer_id is not None:
+        query = query.where(Computer.id == computer_id)
+        count_query = count_query.where(Computer.id == computer_id)
+
+    if os_name:
+        query = query.where(Computer.os_name.ilike(f"%{os_name.strip()}%"))
+        count_query = count_query.where(Computer.os_name.ilike(f"%{os_name.strip()}%"))
+
+    if search:
+        search_filter = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                Computer.hostname.ilike(search_filter),
+                Computer.ip_address.ilike(search_filter),
+                Computer.os_name.ilike(search_filter),
+                Computer.hardware.has(ComputerHardware.processor_name.ilike(search_filter)),
+                Computer.hardware.has(ComputerHardware.manufacturer.ilike(search_filter)),
+            )
+        )
+        count_query = count_query.where(
+            or_(
+                Computer.hostname.ilike(search_filter),
+                Computer.ip_address.ilike(search_filter),
+                Computer.os_name.ilike(search_filter),
+                Computer.hardware.has(ComputerHardware.processor_name.ilike(search_filter)),
+                Computer.hardware.has(ComputerHardware.manufacturer.ilike(search_filter)),
+            )
+        )
+
+    if status:
+        stat_clean = status.lower().strip()
+        if stat_clean == "online":
+            query = query.where(Computer.status_info.has(ClientStatus.status == "online"))
+            count_query = count_query.where(Computer.status_info.has(ClientStatus.status == "online"))
+        elif stat_clean == "offline":
+            query = query.where(
+                or_(
+                    ~Computer.status_info.has(),
+                    Computer.status_info.has(ClientStatus.status != "online"),
+                )
+            )
+            count_query = count_query.where(
+                or_(
+                    ~Computer.status_info.has(),
+                    Computer.status_info.has(ClientStatus.status != "online"),
+                )
+            )
+
+    total_computers = int(db.scalar(count_query) or 0)
+
+    # OS Distribution
+    os_query = (
+        select(Computer.os_name, func.count(Computer.id))
+        .group_by(Computer.os_name)
+    )
+    if computer_id is not None:
+        os_query = os_query.where(Computer.id == computer_id)
+    os_rows = db.execute(os_query).all()
+    all_comp_count = max(1, sum(int(r[1]) for r in os_rows))
+    os_distribution = [
+        {
+            "os_name": str(r[0] or "Unknown"),
+            "count": int(r[1]),
+            "percentage": round((int(r[1]) / all_comp_count) * 100.0, 1),
+        }
+        for r in os_rows
+    ]
+
+    # Hardware summary
+    hw_agg = db.execute(
+        select(
+            func.sum(ComputerHardware.ram_total_gb).label("total_ram"),
+            func.sum(ComputerHardware.storage_total_gb).label("total_storage"),
+            func.avg(ComputerHardware.processor_cores).label("avg_cores"),
+            func.count(ComputerHardware.id).label("total_hw"),
+        )
+    ).one()
+
+    hardware_summary = {
+        "total_ram_gb": round(float(hw_agg.total_ram or 0.0), 1),
+        "total_storage_gb": round(float(hw_agg.total_storage or 0.0), 1),
+        "avg_cores": round(float(hw_agg.avg_cores or 0.0), 1),
+        "total_processors": int(hw_agg.total_hw or 0),
+    }
+
+    limit = max(1, min(limit, 500))
+    total_pages = math.ceil(total_computers / limit) if total_computers > 0 else 1
+    page = max(1, min(page, max(1, total_pages)))
+    offset = (page - 1) * limit
+
+    records = list(
+        db.scalars(
+            query.order_by(Computer.id.asc())
+            .limit(limit)
+            .offset(offset)
+        ).all()
+    )
+
+    online_count = sum(1 for c in records if c.status == "online")
+    offline_count = len(records) - online_count
+
+    items = []
+    for c in records:
+        hw = c.hardware
+        items.append({
+            "id": c.id,
+            "hostname": c.hostname,
+            "ip_address": c.ip_address,
+            "mac_address": c.mac_address,
+            "os_name": c.os_name,
+            "os_version": c.os_version,
+            "status": c.status,
+            "last_seen": c.last_seen,
+            "registered_at": c.registered_at,
+            "manufacturer": hw.manufacturer if hw else None,
+            "model": hw.model if hw else None,
+            "processor_name": hw.processor_name if hw else None,
+            "processor_cores": hw.processor_cores if hw else None,
+            "ram_total_gb": hw.ram_total_gb if hw else None,
+            "storage_total_gb": hw.storage_total_gb if hw else None,
+            "system_type": hw.system_type if hw else None,
+        })
+
+    return {
+        "total_computers": total_computers,
+        "online_computers": online_count,
+        "offline_computers": offline_count,
+        "os_distribution": os_distribution,
+        "hardware_summary": hardware_summary,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "items": items,
+    }
+
+
+# ============================================================
+# APPLICATION USAGE & PROCESS REPORT (CATEGORY F)
+# ============================================================
+
+def get_usage_report(
+    db: Session,
+    computer_id: int | None = None,
+    search: str | None = None,
+    from_date: datetime | str | None = None,
+    to_date: datetime | str | None = None,
+    page: int = 1,
+    limit: int = 25,
+) -> dict[str, Any]:
+    """Retrieve application usage and process activity report (Category F)."""
+    query = select(UsageSession).options(joinedload(UsageSession.computer))
+    count_query = select(func.count(UsageSession.id))
+
+    start_dt, end_dt = None, None
+    if from_date or to_date:
+        start_dt, end_dt = parse_time_range("custom", from_date, to_date)
+        query = query.where(
+            UsageSession.started_at >= start_dt,
+            UsageSession.started_at <= end_dt,
+        )
+        count_query = count_query.where(
+            UsageSession.started_at >= start_dt,
+            UsageSession.started_at <= end_dt,
+        )
+
+    if computer_id is not None:
+        query = query.where(UsageSession.computer_id == computer_id)
+        count_query = count_query.where(UsageSession.computer_id == computer_id)
+
+    if search:
+        search_filter = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                UsageSession.application_name.ilike(search_filter),
+                UsageSession.process_name.ilike(search_filter),
+                UsageSession.user.ilike(search_filter),
+            )
+        )
+        count_query = count_query.where(
+            or_(
+                UsageSession.application_name.ilike(search_filter),
+                UsageSession.process_name.ilike(search_filter),
+                UsageSession.user.ilike(search_filter),
+            )
+        )
+
+    total_sessions = int(db.scalar(count_query) or 0)
+
+    # Aggregates: Total duration in hours & unique apps
+    dur_query = select(
+        func.sum(UsageSession.duration_seconds),
+        func.count(func.distinct(UsageSession.application_name)),
+    )
+    if computer_id is not None:
+        dur_query = dur_query.where(UsageSession.computer_id == computer_id)
+    if start_dt and end_dt:
+        dur_query = dur_query.where(
+            UsageSession.started_at >= start_dt,
+            UsageSession.started_at <= end_dt,
+        )
+    dur_row = db.execute(dur_query).one()
+    total_seconds = int(dur_row[0] or 0)
+    total_duration_hours = round(total_seconds / 3600.0, 2)
+    unique_applications = int(dur_row[1] or 0)
+
+    # Top applications by duration
+    top_apps_query = (
+        select(
+            UsageSession.application_name,
+            func.sum(UsageSession.duration_seconds).label("total_sec"),
+            func.count(UsageSession.id).label("session_count"),
+        )
+        .group_by(UsageSession.application_name)
+        .order_by(func.sum(UsageSession.duration_seconds).desc())
+        .limit(10)
+    )
+    if computer_id is not None:
+        top_apps_query = top_apps_query.where(UsageSession.computer_id == computer_id)
+    if start_dt and end_dt:
+        top_apps_query = top_apps_query.where(
+            UsageSession.started_at >= start_dt,
+            UsageSession.started_at <= end_dt,
+        )
+    top_apps_rows = db.execute(top_apps_query).all()
+    top_applications = [
+        {
+            "application_name": str(r[0]),
+            "total_duration_hours": round(float(r[1] or 0) / 3600.0, 2),
+            "session_count": int(r[2]),
+        }
+        for r in top_apps_rows
+    ]
+
+    # Top processes snapshot from Process table
+    proc_query = (
+        select(Process)
+        .options(joinedload(Process.computer))
+        .order_by(Process.cpu_percent.desc(), Process.memory_mb.desc())
+        .limit(10)
+    )
+    if computer_id is not None:
+        proc_query = proc_query.where(Process.computer_id == computer_id)
+    proc_rows = list(db.scalars(proc_query).all())
+    top_processes = [
+        {
+            "pid": p.pid,
+            "name": p.name,
+            "computer_id": p.computer_id,
+            "computer_hostname": p.computer.hostname if p.computer else None,
+            "cpu_percent": round(float(p.cpu_percent or 0.0), 1),
+            "memory_mb": round(float(p.memory_mb or 0.0), 1),
+            "user": p.user,
+            "recorded_at": p.recorded_at,
+        }
+        for p in proc_rows
+    ]
+
+    limit = max(1, min(limit, 500))
+    total_pages = math.ceil(total_sessions / limit) if total_sessions > 0 else 1
+    page = max(1, min(page, max(1, total_pages)))
+    offset = (page - 1) * limit
+
+    records = list(
+        db.scalars(
+            query.order_by(UsageSession.started_at.desc(), UsageSession.id.desc())
+            .limit(limit)
+            .offset(offset)
+        ).all()
+    )
+
+    items = [
+        {
+            "id": sess.id,
+            "computer_id": sess.computer_id,
+            "computer_hostname": sess.computer.hostname if sess.computer else None,
+            "application_name": sess.application_name,
+            "process_name": sess.process_name,
+            "user": sess.user,
+            "started_at": sess.started_at,
+            "ended_at": sess.ended_at,
+            "duration_seconds": sess.duration_seconds,
+            "duration_formatted": format_seconds(sess.duration_seconds),
+        }
+        for sess in records
+    ]
+
+    return {
+        "total_sessions": total_sessions,
+        "total_duration_hours": total_duration_hours,
+        "unique_applications": unique_applications,
+        "top_applications": top_applications,
+        "top_processes": top_processes,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages,
+        "items": items,
+    }
+
+
+# ============================================================
 # CSV EXPORT GENERATOR
 # ============================================================
 
@@ -1131,8 +1477,96 @@ def export_report_csv(
                 sanitize_csv_cell(a["username"] or "System"),
                 sanitize_csv_cell(a["target_type"] or "N/A"),
                 sanitize_csv_cell(a["target_id"] or "N/A"),
-                sanitize_csv_cell(a["ip_address"] or "Unknown"),
+                sanitize_csv_cell(a["ip_address"] or "N/A"),
             ])
+
+    elif clean_type in ("inventory", "computer_inventory", "hardware", "hardware_inventory"):
+        filename = f"SLMS-Computer-Inventory-Report-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}.csv"
+        headers = [
+            "Computer ID",
+            "Hostname",
+            "IP Address",
+            "MAC Address",
+            "Operating System",
+            "Status",
+            "Last Seen",
+            "Manufacturer",
+            "Model",
+            "Processor",
+            "Cores",
+            "RAM (GB)",
+            "Storage (GB)",
+            "System Type",
+            "Registered At",
+        ]
+        writer.writerow(headers)
+
+        report = get_inventory_report(
+            db,
+            computer_id=computer_id,
+            search=search,
+            status=status,
+            page=1,
+            limit=5000,
+        )
+        for c in report["items"]:
+            writer.writerow([
+                sanitize_csv_cell(c["id"]),
+                sanitize_csv_cell(c["hostname"]),
+                sanitize_csv_cell(c["ip_address"]),
+                sanitize_csv_cell(c["mac_address"]),
+                sanitize_csv_cell(f"{c['os_name']} {c['os_version']}"),
+                sanitize_csv_cell(c["status"]),
+                sanitize_csv_cell(c["last_seen"].isoformat() if c["last_seen"] else "Never"),
+                sanitize_csv_cell(c["manufacturer"] or "Unknown"),
+                sanitize_csv_cell(c["model"] or "Unknown"),
+                sanitize_csv_cell(c["processor_name"] or "Unknown"),
+                sanitize_csv_cell(c["processor_cores"] or ""),
+                sanitize_csv_cell(c["ram_total_gb"] or ""),
+                sanitize_csv_cell(c["storage_total_gb"] or ""),
+                sanitize_csv_cell(c["system_type"] or "Unknown"),
+                sanitize_csv_cell(c["registered_at"].isoformat() if c["registered_at"] else ""),
+            ])
+
+    elif clean_type in ("usage", "app_usage", "application_usage", "process_usage"):
+        filename = f"SLMS-Application-Usage-Report-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}.csv"
+        headers = [
+            "Session ID",
+            "Computer ID",
+            "Computer Hostname",
+            "Application Name",
+            "Process Name",
+            "User",
+            "Started At",
+            "Ended At",
+            "Duration (Seconds)",
+            "Duration (Formatted)",
+        ]
+        writer.writerow(headers)
+
+        report = get_usage_report(
+            db,
+            computer_id=computer_id,
+            search=search,
+            from_date=from_date,
+            to_date=to_date,
+            page=1,
+            limit=5000,
+        )
+        for u in report["items"]:
+            writer.writerow([
+                sanitize_csv_cell(u["id"]),
+                sanitize_csv_cell(u["computer_id"]),
+                sanitize_csv_cell(u["computer_hostname"] or "Unknown"),
+                sanitize_csv_cell(u["application_name"]),
+                sanitize_csv_cell(u["process_name"] or ""),
+                sanitize_csv_cell(u["user"] or "N/A"),
+                sanitize_csv_cell(u["started_at"].isoformat() if u["started_at"] else ""),
+                sanitize_csv_cell(u["ended_at"].isoformat() if u["ended_at"] else "Active"),
+                sanitize_csv_cell(u["duration_seconds"]),
+                sanitize_csv_cell(u["duration_formatted"]),
+            ])
+
     else:
         raise ValueError(f"Unknown report export type: {report_type}")
 
