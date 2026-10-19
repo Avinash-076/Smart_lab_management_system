@@ -1,0 +1,226 @@
+/* ReportCharts.css */
+
+.report-charts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.report-chart-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.full-width-card {
+  grid-column: 1 / -1;
+}
+
+.report-chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.report-chart-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #172033;
+}
+
+.report-chart-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 3px 8px;
+  border-radius: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.report-chart-empty {
+  font-size: 13.5px;
+  color: #94a3b8;
+  padding: 24px 0;
+  text-align: center;
+  font-style: italic;
+}
+
+/* Distribution list */
+.report-dist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.report-dist-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-dist-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.report-dist-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.report-dist-sub {
+  color: #64748b;
+  margin-left: 4px;
+  font-weight: 400;
+}
+
+.report-dist-stat {
+  color: #64748b;
+  font-weight: 600;
+}
+
+/* Progress track */
+.report-progress-track {
+  width: 100%;
+  height: 7px;
+  background-color: #f1f5f9;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.report-progress-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.report-fill-blue {
+  background-color: #3157d5;
+}
+
+.report-fill-purple {
+  background-color: #7c3aed;
+}
+
+.report-fill-indigo {
+  background-color: #4f46e5;
+}
+
+.report-fill-green {
+  background-color: #10b981;
+}
+
+.report-fill-orange {
+  background-color: #f97316;
+}
+
+.report-fill-red {
+  background-color: #ef4444;
+}
+
+/* Hardware metrics list */
+.report-hw-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-hw-metric-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.report-hw-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: #475569;
+  font-weight: 500;
+}
+
+.report-hw-metric-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.report-val-orange {
+  color: #ea580c;
+}
+
+.report-val-blue {
+  color: #3157d5;
+}
+
+.report-val-green {
+  color: #059669;
+}
+
+/* Timeline SVG */
+.report-timeline-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-timeline-svg {
+  width: 100%;
+  height: 120px;
+  overflow: visible;
+}
+
+.report-timeline-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dot-blue {
+  background-color: #3157d5;
+}
+
+.dot-purple {
+  background-color: #7c3aed;
+}
+
+@media (max-width: 768px) {
+  .report-charts-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,134 @@
+/* ReportFilters.css */
+
+.report-filters-card {
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.report-filters-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.report-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+}
+
+.report-search-item {
+  flex: 1;
+  min-width: 240px;
+}
+
+.report-filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.report-input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.report-input-icon {
+  position: absolute;
+  left: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.report-filter-input,
+.report-filter-select {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  color: #1e293b;
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  transition: all 0.15s ease-in-out;
+  outline: none;
+}
+
+.report-input-with-icon .report-filter-input {
+  padding-left: 36px;
+  padding-right: 32px;
+}
+
+.report-input-clear-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: #94a3b8;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.report-input-clear-btn:hover {
+  color: #475569;
+}
+
+.report-filter-input:focus,
+.report-filter-select:focus {
+  border-color: #3157d5;
+  box-shadow: 0 0 0 3px rgba(49, 87, 213, 0.15);
+}
+
+.report-filter-actions {
+  display: flex;
+  align-items: center;
+  margin-top: auto;
+}
+
+.report-reset-filters-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  white-space: nowrap;
+}
+
+.report-reset-filters-btn:hover {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+}
+
+@media (max-width: 768px) {
+  .report-filters-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .report-filter-item {
+    width: 100%;
+  }
+  .report-reset-filters-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

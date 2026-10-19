@@ -20,6 +20,22 @@ export async function getReportOverview() {
   return fetchWithAuth("/reports/overview");
 }
 
+export async function getInventoryReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.os_name) params.set("os_name", options.os_name);
+    if (options.status) params.set("status", options.status);
+    if (options.search) params.set("search", options.search.trim());
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/inventory${query}`);
+}
+
 export async function getUtilizationReport(options = {}) {
   let query = "";
   if (options && typeof options === "object") {
@@ -114,6 +130,22 @@ export async function getAuditReport(options = {}) {
     if (qs) query = `?${qs}`;
   }
   return fetchWithAuth(`/reports/audit${query}`);
+}
+
+export async function getUsageReport(options = {}) {
+  let query = "";
+  if (options && typeof options === "object") {
+    const params = new URLSearchParams();
+    if (options.computer_id) params.set("computer_id", options.computer_id);
+    if (options.search) params.set("search", options.search.trim());
+    if (options.from_date) params.set("from_date", options.from_date);
+    if (options.to_date) params.set("to_date", options.to_date);
+    if (options.page !== undefined) params.set("page", options.page);
+    if (options.limit !== undefined) params.set("limit", options.limit);
+    const qs = params.toString();
+    if (qs) query = `?${qs}`;
+  }
+  return fetchWithAuth(`/reports/usage${query}`);
 }
 
 export async function downloadReportCSV(reportType, options = {}) {

@@ -1176,7 +1176,7 @@ def get_usage_report(
             "cpu_percent": round(float(p.cpu_percent or 0.0), 1),
             "memory_mb": round(float(p.memory_mb or 0.0), 1),
             "user": p.user,
-            "recorded_at": p.recorded_at,
+            "recorded_at": p.collected_at,
         }
         for p in proc_rows
     ]

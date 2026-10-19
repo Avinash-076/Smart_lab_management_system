@@ -1,0 +1,25 @@
+/* Reports.css */
+
+.reports-page-wrapper {
+  padding: 24px 28px 40px;
+  max-width: 1600px;
+  margin: 0 auto;
+  animation: reportsPageFadeIn 0.25s ease-out;
+}
+
+@keyframes reportsPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
+  .reports-page-wrapper {
+    padding: 16px;
+  }
+}
