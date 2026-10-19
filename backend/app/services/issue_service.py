@@ -316,3 +316,76 @@ def delete_issue(
     except SQLAlchemyError:
         db.rollback()
         raise
+
+
+def recover_agent_issue(
+    db: Session,
+    computer_id: int,
+    idempotency_key: str | None = None,
+    title: str | None = None,
+    recovery_notes: str | None = None,
+) -> Issue | None:
+    """
+    Process an automated recovery event from a client agent.
+    Safely transitions active issue to resolved when confirmed recovered (e.g. device disconnected).
+    Enforces idempotency and guarantees agent can only recover issues for its own computer.
+    """
+    issue: Issue | None = None
+
+    if idempotency_key:
+        issue_create_key = (
+            idempotency_key.replace("recovery_", "issue_")
+            if idempotency_key.startswith("recovery_")
+            else idempotency_key
+        )
+        issue = db.scalars(
+            select(Issue).where(
+                Issue.computer_id == computer_id,
+                or_(
+                    Issue.idempotency_key == idempotency_key,
+                    Issue.idempotency_key == issue_create_key,
+                ),
+            )
+        ).first()
+
+    if issue is None and title:
+        title_clean = title.strip()
+        issue = db.scalars(
+            select(Issue).where(
+                Issue.computer_id == computer_id,
+                Issue.title == title_clean,
+                Issue.status.in_([IssueStatus.open, IssueStatus.in_progress]),
+            )
+        ).first()
+
+        if issue is None:
+            issue = db.scalars(
+                select(Issue).where(
+                    Issue.computer_id == computer_id,
+                    Issue.title == title_clean,
+                    Issue.status == IssueStatus.resolved,
+                ).order_by(Issue.updated_at.desc())
+            ).first()
+
+    if issue is None:
+        return None
+
+    if issue.status == IssueStatus.resolved:
+        return issue
+
+    issue.status = IssueStatus.resolved
+    issue.resolved_at = datetime.now(timezone.utc)
+    issue.updated_at = datetime.now(timezone.utc)
+    issue.resolution_notes = (
+        recovery_notes.strip()
+        if recovery_notes
+        else "[Automated Recovery] Condition confirmed resolved by client agent"
+    )
+
+    try:
+        db.commit()
+        db.refresh(issue)
+        return issue
+    except SQLAlchemyError:
+        db.rollback()
+        raise

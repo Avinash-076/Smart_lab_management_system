@@ -59,6 +59,8 @@ SOFTWARE_STATE_FILE = os.path.join(DATA_FOLDER, "software_state.json")
 HARDWARE_STATE_FILE = os.path.join(DATA_FOLDER, "hardware_state.json")
 USAGE_STATE_FILE = os.path.join(DATA_FOLDER, "usage_state.json")
 ISSUE_STATE_FILE = os.path.join(DATA_FOLDER, "issue_state.json")
+DEVICE_WHITELIST_FILE = os.path.join(DATA_FOLDER, "device_whitelist.json")
+DEVICE_STATE_FILE = os.path.join(DATA_FOLDER, "device_state.json")
 DIAGNOSTIC_FOLDER = os.path.join(DATA_FOLDER, "diagnostic")
 DIAGNOSTIC_FILE = os.path.join(DIAGNOSTIC_FOLDER, "client_data.json")
 
@@ -93,6 +95,8 @@ def get_path_layout(data_dir: str | None = None) -> dict[str, str]:
         "hardware_state": os.path.join(data, "hardware_state.json"),
         "usage_state": os.path.join(data, "usage_state.json"),
         "issue_state": os.path.join(data, "issue_state.json"),
+        "device_whitelist": os.path.join(data, "device_whitelist.json"),
+        "device_state": os.path.join(data, "device_state.json"),
     }
 
 

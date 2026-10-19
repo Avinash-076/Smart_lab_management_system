@@ -130,6 +130,7 @@ def get_hardware_info() -> dict[str, Any]:
 
     return {
         "cpu_usage": float(cpu_usage),
+        "cpu_percent": float(cpu_usage),
         "cpu_count": psutil.cpu_count(logical=True),
         "ram_total_gb": round(memory.total / (1024**3), 2),
         "ram_used_gb": round(memory.used / (1024**3), 2),

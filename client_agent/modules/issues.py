@@ -111,13 +111,34 @@ class IssueRuleDefinition:
 
 def _extract_ram_percent(data: dict) -> float | None:
     """Extract RAM usage percent safely from collected data."""
-    hardware = data.get("hardware")
-    if hasattr(hardware, "is_failed") and hardware.is_failed:
+    val = data.get("ram_percent") if "ram_percent" in data else data.get("ram_usage")
+    if val is None:
+        hardware = data.get("hardware")
+        if hasattr(hardware, "is_failed") and hardware.is_failed:
+            return None
+        hw_dict = hardware.data if hasattr(hardware, "data") else hardware
+        if isinstance(hw_dict, dict):
+            val = hw_dict.get("ram_percent")
+            if val is None:
+                val = hw_dict.get("ram_usage")
+    try:
+        return float(val) if val is not None else None
+    except (TypeError, ValueError):
         return None
-    hw_dict = hardware.data if hasattr(hardware, "data") else hardware
-    if not isinstance(hw_dict, dict):
-        return None
-    val = hw_dict.get("ram_percent")
+
+
+def _extract_cpu_percent(data: dict) -> float | None:
+    """Extract CPU usage percent safely from collected data."""
+    val = data.get("cpu_usage") if "cpu_usage" in data else data.get("cpu_percent")
+    if val is None:
+        hardware = data.get("hardware")
+        if hasattr(hardware, "is_failed") and hardware.is_failed:
+            return None
+        hw_dict = hardware.data if hasattr(hardware, "data") else hardware
+        if isinstance(hw_dict, dict):
+            val = hw_dict.get("cpu_usage")
+            if val is None:
+                val = hw_dict.get("cpu_percent")
     try:
         return float(val) if val is not None else None
     except (TypeError, ValueError):
@@ -126,17 +147,46 @@ def _extract_ram_percent(data: dict) -> float | None:
 
 def _extract_disk_percent(data: dict) -> float | None:
     """Extract Disk usage percent safely from collected data."""
-    hardware = data.get("hardware")
-    if hasattr(hardware, "is_failed") and hardware.is_failed:
-        return None
-    hw_dict = hardware.data if hasattr(hardware, "data") else hardware
-    if not isinstance(hw_dict, dict):
-        return None
-    val = hw_dict.get("disk_percent")
+    val = data.get("disk_percent") if "disk_percent" in data else data.get("disk_usage")
+    if val is None:
+        hardware = data.get("hardware")
+        if hasattr(hardware, "is_failed") and hardware.is_failed:
+            return None
+        hw_dict = hardware.data if hasattr(hardware, "data") else hardware
+        if isinstance(hw_dict, dict):
+            val = hw_dict.get("disk_percent")
+            if val is None:
+                val = hw_dict.get("disk_usage")
     try:
         return float(val) if val is not None else None
     except (TypeError, ValueError):
         return None
+
+
+def _extract_network_down(data: dict) -> float | None:
+    """
+    Extract network link connectivity status:
+    Returns 1.0 if network is down/disconnected (link loss / no active IPv4 interface).
+    Returns 0.0 if network is operational (active interface with valid IP).
+    Returns None if network data is missing or collector failed.
+    """
+    network = data.get("network")
+    if network is None:
+        return None
+    if hasattr(network, "is_failed") and network.is_failed:
+        return None
+    net_dict = network.data if hasattr(network, "data") else network
+    if not isinstance(net_dict, dict):
+        return None
+
+    status = net_dict.get("network_status")
+    ip = net_dict.get("ip_address")
+    iface = net_dict.get("interface")
+
+    # If status is failed or no active interface/IP found, network link is lost
+    if status == "failed" or not iface or not ip:
+        return 1.0
+    return 0.0
 
 
 def get_issue_rules() -> list[IssueRuleDefinition]:
@@ -146,6 +196,8 @@ def get_issue_rules() -> list[IssueRuleDefinition]:
     """
     ram_trigger = float(getattr(config, "RAM_HIGH_THRESHOLD", 85.0))
     ram_recovery = float(getattr(config, "RAM_RECOVERY_THRESHOLD", 80.0))
+    cpu_trigger = float(getattr(config, "CPU_HIGH_THRESHOLD", 90.0))
+    cpu_recovery = float(getattr(config, "CPU_RECOVERY_THRESHOLD", 80.0))
     disk_trigger = float(getattr(config, "DISK_CRITICAL_THRESHOLD", 90.0))
     disk_recovery = float(getattr(config, "DISK_RECOVERY_THRESHOLD", 85.0))
 
@@ -163,6 +215,18 @@ def get_issue_rules() -> list[IssueRuleDefinition]:
             metric_extractor=_extract_ram_percent,
         ),
         IssueRuleDefinition(
+            issue_key="high_cpu",
+            title="High CPU Usage",
+            severity="high",
+            trigger_threshold=cpu_trigger,
+            recovery_threshold=cpu_recovery,
+            description_template=(
+                "CPU usage is above the {trigger_threshold}% threshold. "
+                "Current CPU usage: {current_value:.1f}%."
+            ),
+            metric_extractor=_extract_cpu_percent,
+        ),
+        IssueRuleDefinition(
             issue_key="low_disk",
             title="Low Disk Space",
             severity="critical",
@@ -173,6 +237,18 @@ def get_issue_rules() -> list[IssueRuleDefinition]:
                 "Current disk usage: {current_value:.1f}%."
             ),
             metric_extractor=_extract_disk_percent,
+        ),
+        IssueRuleDefinition(
+            issue_key="network_down",
+            title="Network Disconnected",
+            severity="critical",
+            trigger_threshold=0.5,
+            recovery_threshold=0.5,
+            description_template=(
+                "Physical network connection has been lost or adapter link is disconnected. "
+                "The computer cannot communicate on the local network."
+            ),
+            metric_extractor=_extract_network_down,
         ),
     ]
 
@@ -289,10 +365,10 @@ def _build_issue(
 # Detection, Debounce & Hysteresis (F-01, F-04)
 # ==========================================
 
-def detect_issues(
+def detect_issues_with_recoveries(
     data: dict,
     state_file: str | None = None,
-) -> list[dict]:
+) -> tuple[list[dict], list[dict]]:
     """
     Detect system problems from collected client data using centralized rules,
     consecutive-cycle debounce, hysteresis recovery, and persistent state.
@@ -303,7 +379,10 @@ def detect_issues(
     3. Once debounce is met, transitions to QUEUED and emits payload.
     4. While active, subsequent cycles do not re-emit duplicate records.
     5. Hysteresis prevents clearing until metric drops <= recovery threshold.
-    6. Upon recovery, transitions to RECOVERED and resets state.
+    6. Upon recovery, transitions to RECOVERED, emits recovery event, and resets state.
+
+    Returns:
+        (emitted_issues, recovery_events)
     """
     rules = get_issue_rules()
     state = load_issue_state(state_file)
@@ -316,6 +395,7 @@ def detect_issues(
     now_utc = _utc_now()
 
     emitted_issues: list[dict] = []
+    recovery_events: list[dict] = []
     state_modified = False
 
     for rule in rules:
@@ -454,6 +534,15 @@ def detect_issues(
                 }
                 active_incidents.pop(key, None)
                 state_modified = True
+
+                recovery_payload = {
+                    "issue_key": key,
+                    "incident_id": incident_id,
+                    "title": rule.title,
+                    "reason": f"Metric returned to safe levels: {val:.1f}% <= {rule.recovery_threshold:.1f}%",
+                    "recovered_at": now_utc,
+                }
+                recovery_events.append(recovery_payload)
                 logger.info(
                     f"Issue {key} recovered (metric={val:.1f} <= recovery={rule.recovery_threshold:.1f}). "
                     f"Incident {incident_id} marked RECOVERED."
@@ -476,7 +565,18 @@ def detect_issues(
         state["recent_recoveries"] = recent_recoveries
         save_issue_state(state, state_file)
 
-    return emitted_issues
+    return emitted_issues, recovery_events
+
+
+def detect_issues(
+    data: dict,
+    state_file: str | None = None,
+) -> list[dict]:
+    """
+    Backward-compatible issue detection returning only emitted issues.
+    """
+    emitted, _ = detect_issues_with_recoveries(data, state_file=state_file)
+    return emitted
 
 
 # ==========================================

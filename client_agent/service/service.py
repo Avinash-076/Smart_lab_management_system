@@ -13,6 +13,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from typing import Any, Optional
 
 from core.logger import logger
@@ -629,15 +630,35 @@ def uninstall_service(service_name: str = SERVICE_NAME) -> bool:
 
 
 def start_service(service_name: str = SERVICE_NAME) -> bool:
-    """Start the service via Windows SCM."""
+    """Start the service via Windows SCM with transition awareness and retries."""
     try:
-        res = subprocess.run(["sc.exe", "start", service_name], capture_output=True, text=True, check=False, timeout=15)
-        if res.returncode == 0:
-            print(f"Service '{service_name}' start initiated.")
+        # Check if already running or start pending
+        status = get_service_status(service_name)
+        if status in ("RUNNING", "START_PENDING"):
+            print(f"Service '{service_name}' is already {status}.")
             return True
-        else:
-            print(f"Failed to start service: {res.stderr.strip() or res.stdout.strip()}")
-            return False
+
+        for attempt in range(1, 4):
+            res = subprocess.run(["sc.exe", "start", service_name], capture_output=True, text=True, check=False, timeout=15)
+            err_msg = (res.stderr.strip() or res.stdout.strip())
+            if res.returncode == 0:
+                print(f"Service '{service_name}' start initiated.")
+                return True
+            if "1056" in err_msg or "ALREADY RUNNING" in err_msg.upper():
+                print(f"Service '{service_name}' is already running.")
+                return True
+
+            current_status = get_service_status(service_name)
+            if current_status in ("RUNNING", "START_PENDING"):
+                print(f"Service '{service_name}' reached {current_status}.")
+                return True
+
+            logger.warning(f"sc.exe start attempt {attempt}/3 returned: {err_msg} (status: {current_status})")
+            if attempt < 3:
+                time.sleep(1.5)
+
+        print(f"Failed to start service: {err_msg}")
+        return False
     except Exception as e:
         print(f"Service start error: {e}")
         return False

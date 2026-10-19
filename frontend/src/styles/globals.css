@@ -24,6 +24,13 @@ textarea {
   font: inherit;
 }
 
+input,
+select,
+textarea {
+  background-color: #ffffff;
+  color: var(--color-text-primary, #0f172a);
+}
+
 button {
   cursor: pointer;
 }

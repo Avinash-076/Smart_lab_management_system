@@ -109,6 +109,21 @@ class IssueResolve(BaseModel):
     )
 
 
+class IssueAgentRecover(BaseModel):
+    idempotency_key: str | None = Field(
+        default=None,
+        max_length=128,
+    )
+    title: str | None = Field(
+        default=None,
+        max_length=255,
+    )
+    recovery_notes: str | None = Field(
+        default=None,
+        max_length=5000,
+    )
+
+
 class IssueStatsResponse(BaseModel):
     total: int = 0
     open: int = 0

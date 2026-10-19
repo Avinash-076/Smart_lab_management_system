@@ -1,0 +1,155 @@
+.issue-related-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+.issue-related-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #172033;
+  margin: 0 0 8px;
+}
+
+/* HARDWARE DEVICE CARD */
+.issue-related-device-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.issue-related-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.issue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.issue-chip.vid-pid {
+  background: #EFF6FF;
+  color: #2563EB;
+  border-color: #DBEAFE;
+}
+
+.issue-chip.class {
+  background: #FEF3C7;
+  color: #D97706;
+  border-color: #FDE68A;
+}
+
+.issue-chip.risk {
+  background: #FEE2E2;
+  color: #DC2626;
+  border-color: #FECACA;
+}
+
+.issue-pnp-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.issue-pnp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748B;
+  text-transform: uppercase;
+}
+
+.issue-pnp-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  word-break: break-all;
+  color: #1E293B;
+}
+
+.issue-copy-btn {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.issue-copy-btn:hover {
+  background: #F1F5F9;
+  color: #1E293B;
+}
+
+.issue-copy-btn.copied {
+  background: #DCFCE7;
+  border-color: #86EFAC;
+  color: #16A34A;
+}
+
+/* METRIC PROGRESS BAR */
+.issue-metric-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.issue-metric-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.issue-metric-track {
+  width: 100%;
+  height: 8px;
+  background: #E2E8F0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.issue-metric-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.issue-metric-fill.high {
+  background: linear-gradient(90deg, #F59E0B, #EF4444);
+}
+
+.issue-security-tip {
+  font-size: 12px;
+  color: #64748B;
+  background: #F0FDF4;
+  border: 1px solid #DCFCE7;
+  border-radius: 6px;
+  padding: 10px;
+  line-height: 1.4;
+}

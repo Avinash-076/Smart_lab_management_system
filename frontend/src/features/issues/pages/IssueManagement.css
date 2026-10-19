@@ -1,0 +1,127 @@
+/* =====================================================
+   ISSUE MANAGEMENT PAGE STYLES (Matches Computers & Global Remote)
+===================================================== */
+
+.issue-management-container {
+  padding: 24px 32px 48px;
+  background-color: var(--color-background, #f4f7fc);
+  min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  font-family: var(--sans, 'Poppins', sans-serif);
+  color: var(--color-text-primary, #0f172a);
+}
+
+/* REAL-TIME ALERT BANNER */
+.issue-live-alert {
+  margin-bottom: 20px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.08);
+  animation: alertSlideDown 0.3s ease;
+}
+
+@keyframes alertSlideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.issue-live-alert.created {
+  background: linear-gradient(90deg, #FEF2F2, #FFF5F5);
+  border: 1px solid #FECACA;
+  color: #DC2626;
+}
+
+.issue-live-alert.resolved {
+  background: linear-gradient(90deg, #F0FDF4, #F7FEE7);
+  border: 1px solid #BBF7D0;
+  color: #16A34A;
+}
+
+.issue-live-alert-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.issue-live-alert-badge {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.issue-live-alert-close {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.issue-live-alert-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+/* FEEDBACK BANNERS */
+.issue-banner-success {
+  background: #F0FDF4;
+  border: 1px solid #BBF7D0;
+  color: #16A34A;
+  padding: 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.issue-banner-error {
+  background: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  padding: 12px 18px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 13.5px;
+  font-weight: 500;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.issue-banner-retry-btn {
+  background: #FFFFFF;
+  border: 1px solid #FECACA;
+  color: #DC2626;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* MAIN TABLE CONTAINER */
+.issue-main-layout {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .issue-management-container {
+    padding: 16px;
+  }
+}

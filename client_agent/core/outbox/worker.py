@@ -24,6 +24,7 @@ from server.sender import (
     send_command_result,
     send_hardware_specs,
     send_issue,
+    send_issue_recovery,
     send_metrics,
     send_process_inventory,
     send_software_inventory,
@@ -222,6 +223,12 @@ class OutboxDeliveryWorker:
             if "idempotency_key" not in issue_payload and item.idempotency_key:
                 issue_payload["idempotency_key"] = item.idempotency_key
             send_issue(issue_payload, token)
+
+        elif event_type == "issue_recovery":
+            rec_payload = dict(payload)
+            if "idempotency_key" not in rec_payload and item.idempotency_key:
+                rec_payload["idempotency_key"] = item.idempotency_key
+            send_issue_recovery(rec_payload, token)
 
         elif event_type == "command_result":
             cmd_id = payload.get("command_id")

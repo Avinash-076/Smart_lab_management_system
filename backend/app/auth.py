@@ -322,6 +322,47 @@ def require_permission(
     return dependency
 
 
+def require_any_permission(
+    *action_codes: str,
+):
+    def dependency(
+        current_user: Annotated[
+            User,
+            Depends(get_current_user),
+        ],
+        db: DbSession,
+    ) -> User:
+        permission = db.scalar(
+            select(RolePermission).where(
+                RolePermission.role_id == current_user.role_id,
+                RolePermission.action_code.in_(action_codes),
+                RolePermission.allowed.is_(True),
+            )
+        )
+
+        if permission is None:
+            from app.services import audit_service
+
+            audit_service.log_action(
+                db=db,
+                action=",".join(action_codes),
+                result=AuditResult.failure,
+                user_id=current_user.id,
+            )
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Your role does not have any of permissions: "
+                    f"{', '.join(action_codes)}"
+                ),
+            )
+
+        return current_user
+
+    return dependency
+
+
 # ============================================================
 # CURRENT AGENT
 # ============================================================

@@ -223,6 +223,8 @@ def collect_all_data(
     software_cache: SoftwareCache | None = None,
     process_cache: ProcessCache | None = None,
     issue_state_file: str | None = None,
+    device_state_file: str | None = None,
+    device_whitelist_file: str | None = None,
 ) -> dict:
     """
     Collect all enabled client-agent data with cadence gating (E-01, E-05).
@@ -294,9 +296,56 @@ def collect_all_data(
     # Issue Detection (20s thresholds)
     # ------------------------------------------
     if ENABLE_ISSUE_REPORTING:
-        data["issues"] = safe_run(
-            "Problem Detection",
-            lambda: detect_issues(data, state_file=issue_state_file),
+        from modules.issues import detect_issues as default_detect_issues
+        if detect_issues is not default_detect_issues:
+            detected_res = safe_run(
+                "Problem Detection",
+                lambda: detect_issues(data, state_file=issue_state_file),
+            )
+            detected_val = detected_res.data if hasattr(detected_res, "data") else detected_res
+            data["issues"] = detected_val if isinstance(detected_val, list) else []
+        else:
+            from modules.issues import detect_issues_with_recoveries
+            detected_res = safe_run(
+                "Problem Detection",
+                lambda: detect_issues_with_recoveries(data, state_file=issue_state_file),
+            )
+            detected_val = detected_res.data if hasattr(detected_res, "data") else detected_res
+            if isinstance(detected_val, tuple) and len(detected_val) == 2:
+                data["issues"] = detected_val[0] if isinstance(detected_val[0], list) else []
+                if detected_val[1]:
+                    data.setdefault("recoveries", []).extend(detected_val[1])
+            elif isinstance(detected_val, list):
+                data["issues"] = detected_val
+            else:
+                data["issues"] = []
+
+    # ------------------------------------------
+    # Device Monitoring & Unauthorized Detection
+    # ------------------------------------------
+    try:
+        from config import ENABLE_DEVICE_MONITOR
+    except Exception:
+        ENABLE_DEVICE_MONITOR = True
+
+    if ENABLE_DEVICE_MONITOR:
+        from modules.device_monitor import scan_and_evaluate_devices
+        res = safe_run(
+            "Device Monitoring",
+            lambda: scan_and_evaluate_devices(
+                state_file=device_state_file,
+                whitelist_file=device_whitelist_file,
+            ),
         )
+        dev_tuple = res.data if hasattr(res, "data") else res
+        if isinstance(dev_tuple, tuple) and len(dev_tuple) == 2:
+            dev_issues, dev_recoveries = dev_tuple
+            if dev_issues:
+                if "issues" not in data or not isinstance(data["issues"], list):
+                    data["issues"] = []
+                data["issues"].extend(dev_issues)
+            if dev_recoveries:
+                data.setdefault("recoveries", []).extend(dev_recoveries)
+                data["device_recoveries"] = dev_recoveries
 
     return data

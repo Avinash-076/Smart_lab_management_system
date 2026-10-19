@@ -64,6 +64,9 @@ hidden_imports = list(set([
     "win32process",
     "win32api",
     "win32con",
+    "pythoncom",
+    "win32com",
+    "win32com.client",
     # SLMS Core subsystems
     "core.logger",
     "core.runtime",
@@ -77,6 +80,7 @@ hidden_imports = list(set([
     "core.outbox.storage",
     "core.outbox.worker",
     # SLMS Telemetry and collector modules
+    "modules.device_monitor",
     "modules.hardware",
     "modules.issues",
     "modules.network",

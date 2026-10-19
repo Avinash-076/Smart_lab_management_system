@@ -1,0 +1,115 @@
+.resolve-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  animation: modalFadeIn 0.2s ease;
+}
+
+.resolve-modal-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  width: 480px;
+  max-width: 100%;
+  border: 1px solid #E2E8F0;
+  display: flex;
+  flex-direction: column;
+}
+
+.resolve-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.resolve-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0F172A;
+}
+
+.resolve-modal-form {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.resolve-modal-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #0F172A;
+  background-color: #FFFFFF;
+  outline: none;
+  font-family: inherit;
+  min-height: 90px;
+  resize: vertical;
+}
+
+.resolve-modal-textarea::placeholder {
+  color: #94A3B8;
+}
+
+.resolve-modal-textarea:focus {
+  border-color: #16A34A;
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+}
+
+.resolve-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.resolve-modal-cancel-btn {
+  background: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.resolve-modal-cancel-btn:hover {
+  background: #F8FAFC;
+  border-color: #94A3B8;
+  color: #0F172A;
+}
+
+.resolve-modal-submit-btn {
+  background: #16A34A;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #FFFFFF;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.resolve-modal-submit-btn:hover:not(:disabled) {
+  background: #15803D;
+}
+
+.resolve-modal-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

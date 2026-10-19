@@ -16,9 +16,11 @@ from sqlalchemy.orm import Session
 from app.auth import (
     get_current_agent,
     require_permission,
+    require_any_permission,
 )
 from app.database import get_db
 from app.models.agent_credential import AgentCredential
+from app.models.audit_log import AuditResult
 from app.models.issue import (
     IssueSeverity,
     IssueStatus,
@@ -26,6 +28,7 @@ from app.models.issue import (
 )
 from app.schemas.issue_schema import (
     IssueAgentCreate,
+    IssueAgentRecover,
     IssueCreate,
     IssueResolve,
     IssueResponse,
@@ -33,9 +36,11 @@ from app.schemas.issue_schema import (
     IssueUpdate,
 )
 from app.services import (
+    audit_service,
     computer_service,
     issue_service,
 )
+from app.websocket.connection_manager import manager
 
 
 DbSession = Annotated[
@@ -153,11 +158,11 @@ def get_issue(
     response_model=IssueResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_issue(
+async def create_issue(
     issue_data: IssueCreate,
     db: DbSession,
     user=Depends(
-        require_permission("UPDATE_COMPUTER")
+        require_any_permission("MANAGE_ISSUES", "UPDATE_COMPUTER")
     ),
 ):
 
@@ -173,11 +178,33 @@ def create_issue(
         )
 
     try:
-        return issue_service.create_issue(
+        created = issue_service.create_issue(
             db=db,
             issue_data=issue_data,
             created_by=user.id,
         )
+        try:
+            await manager.broadcast_to_dashboards(
+                {
+                    "type": "issue_created",
+                    "computer_id": created.computer_id,
+                    "computer_hostname": computer.hostname,
+                    "issue": {
+                        "id": created.id,
+                        "computer_id": created.computer_id,
+                        "computer_hostname": computer.hostname,
+                        "title": created.title,
+                        "description": created.description,
+                        "severity": created.severity.value if hasattr(created.severity, "value") else str(created.severity),
+                        "status": created.status.value if hasattr(created.status, "value") else str(created.status),
+                        "source": created.source.value if hasattr(created.source, "value") else str(created.source),
+                        "created_at": created.created_at.isoformat() if created.created_at else None,
+                    },
+                }
+            )
+        except Exception:
+            pass
+        return created
 
     except IntegrityError:
         raise HTTPException(
@@ -197,7 +224,7 @@ def create_issue(
     response_model=IssueResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_agent_issue(
+async def create_agent_issue(
     issue_data: IssueAgentCreate,
     db: DbSession,
     agent_credential: AgentCredential = Depends(
@@ -234,10 +261,42 @@ def create_agent_issue(
     )
 
     try:
-        return issue_service.create_issue(
+        created = issue_service.create_issue(
             db=db,
             issue_data=create_data,
         )
+        try:
+            audit_service.log_action(
+                db=db,
+                result=AuditResult.success,
+                action="AGENT_ISSUE_CREATED",
+                target_type="Issue",
+                target_id=created.id,
+            )
+        except Exception:
+            pass
+        try:
+            await manager.broadcast_to_dashboards(
+                {
+                    "type": "issue_created",
+                    "computer_id": created.computer_id,
+                    "computer_hostname": computer.hostname,
+                    "issue": {
+                        "id": created.id,
+                        "computer_id": created.computer_id,
+                        "computer_hostname": computer.hostname,
+                        "title": created.title,
+                        "description": created.description,
+                        "severity": created.severity.value if hasattr(created.severity, "value") else str(created.severity),
+                        "status": created.status.value if hasattr(created.status, "value") else str(created.status),
+                        "source": created.source.value if hasattr(created.source, "value") else str(created.source),
+                        "created_at": created.created_at.isoformat() if created.created_at else None,
+                    },
+                }
+            )
+        except Exception:
+            pass
+        return created
 
     except IntegrityError:
         raise HTTPException(
@@ -252,16 +311,82 @@ def create_agent_issue(
         )
 
 
+@router.post(
+    "/agent/recover",
+    response_model=IssueResponse,
+    status_code=status.HTTP_200_OK,
+)
+async def recover_agent_issue(
+    recovery_data: IssueAgentRecover,
+    db: DbSession,
+    agent_credential: AgentCredential = Depends(
+        get_current_agent
+    ),
+):
+    """
+    Agent endpoint to record automated recovery (e.g. device disconnected).
+    Guarantees agent can only modify issues for its own authenticated computer.
+    """
+    computer_id = agent_credential.computer_id
+    if computer_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Agent is not associated with a computer",
+        )
+
+    issue = issue_service.recover_agent_issue(
+        db=db,
+        computer_id=computer_id,
+        idempotency_key=recovery_data.idempotency_key,
+        title=recovery_data.title,
+        recovery_notes=recovery_data.recovery_notes,
+    )
+
+    if issue is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Active issue not found for recovery",
+        )
+
+    try:
+        audit_service.log_action(
+            db=db,
+            result=AuditResult.success,
+            action="AGENT_ISSUE_RECOVERED",
+            target_type="Issue",
+            target_id=issue.id,
+        )
+    except Exception:
+        pass
+
+    try:
+        await manager.broadcast_to_dashboards(
+            {
+                "type": "issue_resolved",
+                "computer_id": issue.computer_id,
+                "issue_id": issue.id,
+                "title": issue.title,
+                "status": "resolved",
+                "resolution_notes": issue.resolution_notes,
+                "resolved_at": issue.resolved_at.isoformat() if issue.resolved_at else None,
+            }
+        )
+    except Exception:
+        pass
+
+    return issue
+
+
 @router.patch(
     "/{issue_id}",
     response_model=IssueResponse,
 )
-def update_issue(
+async def update_issue(
     issue_id: int,
     issue_data: IssueUpdate,
     db: DbSession,
     user=Depends(
-        require_permission("UPDATE_COMPUTER")
+        require_any_permission("MANAGE_ISSUES", "UPDATE_COMPUTER")
     ),
 ):
 
@@ -277,12 +402,26 @@ def update_issue(
         )
 
     try:
-        return issue_service.update_issue(
+        updated = issue_service.update_issue(
             db=db,
             issue=issue,
             issue_data=issue_data,
             user_id=user.id,
         )
+        try:
+            await manager.broadcast_to_dashboards(
+                {
+                    "type": "issue_updated",
+                    "computer_id": updated.computer_id,
+                    "issue_id": updated.id,
+                    "title": updated.title,
+                    "status": updated.status.value if hasattr(updated.status, "value") else str(updated.status),
+                    "severity": updated.severity.value if hasattr(updated.severity, "value") else str(updated.severity),
+                }
+            )
+        except Exception:
+            pass
+        return updated
 
     except SQLAlchemyError:
         raise HTTPException(
@@ -295,13 +434,13 @@ def update_issue(
     "/{issue_id}/resolve",
     response_model=IssueResponse,
 )
-def resolve_issue(
+async def resolve_issue(
     issue_id: int,
     db: DbSession,
     resolve_data: IssueResolve | None = None,
     resolution_notes: str | None = None,
     user=Depends(
-        require_permission("UPDATE_COMPUTER")
+        require_any_permission("MANAGE_ISSUES", "UPDATE_COMPUTER")
     ),
 ):
 
@@ -323,12 +462,27 @@ def resolve_issue(
         notes = resolution_notes
 
     try:
-        return issue_service.resolve_issue(
+        resolved = issue_service.resolve_issue(
             db=db,
             issue=issue,
             resolution_notes=notes,
             user_id=user.id,
         )
+        try:
+            await manager.broadcast_to_dashboards(
+                {
+                    "type": "issue_resolved",
+                    "computer_id": resolved.computer_id,
+                    "issue_id": resolved.id,
+                    "title": resolved.title,
+                    "status": "resolved",
+                    "resolution_notes": resolved.resolution_notes,
+                    "resolved_at": resolved.resolved_at.isoformat() if resolved.resolved_at else None,
+                }
+            )
+        except Exception:
+            pass
+        return resolved
 
     except SQLAlchemyError:
         raise HTTPException(
@@ -345,7 +499,7 @@ def delete_issue(
     issue_id: int,
     db: DbSession,
     _user=Depends(
-        require_permission("DELETE_COMPUTER")
+        require_any_permission("MANAGE_ISSUES", "DELETE_COMPUTER")
     ),
 ):
 

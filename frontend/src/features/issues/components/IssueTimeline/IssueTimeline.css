@@ -1,0 +1,85 @@
+.issue-timeline-container {
+  padding: 8px 0;
+}
+
+.issue-timeline-list {
+  position: relative;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.issue-timeline-list::before {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 9px;
+  width: 2px;
+  background: #E2E8F0;
+  z-index: 1;
+}
+
+.issue-timeline-item {
+  position: relative;
+  padding-left: 28px;
+  padding-bottom: 20px;
+}
+
+.issue-timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+.issue-timeline-dot {
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  border: 3px solid #3157D5;
+  z-index: 2;
+  box-sizing: border-box;
+}
+
+.issue-timeline-dot.orange {
+  border-color: #EA580C;
+}
+
+.issue-timeline-dot.blue {
+  border-color: #3157D5;
+}
+
+.issue-timeline-dot.green {
+  border-color: #16A34A;
+}
+
+.issue-timeline-dot.purple {
+  border-color: #9333EA;
+}
+
+.issue-timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.issue-timeline-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #172033;
+}
+
+.issue-timeline-time {
+  font-size: 11px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+.issue-timeline-note {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 2px;
+  line-height: 1.4;
+}

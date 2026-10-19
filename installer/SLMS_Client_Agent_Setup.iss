@@ -833,12 +833,6 @@ begin
       if FileExists(TempOutFile) then
         DeleteFile(TempOutFile);
 
-      if ResultCode <> 0 then
-      begin
-        RollbackFreshInstallAndAbort('Failed to initiate start of SLMS Windows Service.');
-        Exit;
-      end;
-
       // Health Check Polling (Up to 30s)
       WizardForm.StatusLabel.Caption := 'Verifying service health status...';
       ServiceRunning := False;
@@ -937,12 +931,6 @@ begin
       Exec('cmd.exe', StartCmd, '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
       if FileExists(TempOutFile) then
         DeleteFile(TempOutFile);
-
-      if ResultCode <> 0 then
-      begin
-        RollbackUpgradeAndAbort('Failed to restart SLMS Windows Service during upgrade.');
-        Exit;
-      end;
 
       // 3. Health Verification Polling Loop (Up to 30s)
       WizardForm.StatusLabel.Caption := 'Verifying service health status...';

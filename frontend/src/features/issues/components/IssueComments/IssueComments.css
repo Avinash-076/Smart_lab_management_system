@@ -1,0 +1,112 @@
+.issue-comments-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 6px 0;
+}
+
+.issue-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.issue-comment-item {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issue-comment-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.issue-comment-author {
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.issue-comment-time {
+  color: #94A3B8;
+}
+
+.issue-comment-body {
+  margin: 0;
+  font-size: 12px;
+  color: #334155;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+
+.issue-comment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.issue-comment-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #CBD5E1;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #0F172A;
+  background-color: #FFFFFF;
+  resize: vertical;
+  min-height: 56px;
+  outline: none;
+  font-family: inherit;
+}
+
+.issue-comment-textarea::placeholder {
+  color: #94A3B8;
+}
+
+.issue-comment-textarea:focus {
+  border-color: #2563EB;
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.issue-comment-submit-btn {
+  align-self: flex-end;
+  background: #2563EB;
+  color: #FFFFFF;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.issue-comment-submit-btn:hover {
+  background: #1D4ED8;
+}
+
+.issue-comment-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.issue-comments-empty {
+  font-size: 12px;
+  color: #64748B;
+  text-align: center;
+  padding: 16px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px dashed #CBD5E1;
+}

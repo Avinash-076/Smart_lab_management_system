@@ -256,7 +256,7 @@ function App() {
         return <SoftwareInventory />;
 
       case "issues":
-        return <IssueManagement />;
+        return <IssueManagement onViewComputer={openComputerDetails} />;
 
       case "maintenance":
         return <MaintenanceRecords />;

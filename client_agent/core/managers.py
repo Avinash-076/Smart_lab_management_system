@@ -134,6 +134,19 @@ def _resolve_send_issue(issue: dict[str, Any], token: str) -> dict[str, Any]:
     return send_issue(issue, token)
 
 
+def _resolve_send_issue_recovery(recovery: dict[str, Any], token: str) -> dict[str, Any]:
+    fn = None
+    try:
+        import core.runtime as rt
+        fn = getattr(rt, "send_issue_recovery", None)
+    except Exception:
+        pass
+    if fn is not None:
+        return fn(recovery, token)
+    from server.sender import send_issue_recovery
+    return send_issue_recovery(recovery, token)
+
+
 def _resolve_send_software_inventory(software: list[dict[str, Any]], token: str) -> Any:
     fn = None
     try:
@@ -575,10 +588,29 @@ class CollectorManager:
 
         # Issue detection strictly AFTER hardware collection has populated metrics
         if ENABLE_ISSUE_REPORTING:
-            data["issues"] = safe_run(
-                "Problem Detection",
-                lambda: detect_issues(data, state_file=issue_state_file),
-            )
+            from modules.issues import detect_issues as default_detect_issues
+            if detect_issues is not default_detect_issues:
+                detected_res = safe_run(
+                    "Problem Detection",
+                    lambda: detect_issues(data, state_file=issue_state_file),
+                )
+                detected_val = detected_res.data if hasattr(detected_res, "data") else detected_res
+                data["issues"] = detected_val if isinstance(detected_val, list) else []
+            else:
+                from modules.issues import detect_issues_with_recoveries
+                detected_res = safe_run(
+                    "Problem Detection",
+                    lambda: detect_issues_with_recoveries(data, state_file=issue_state_file),
+                )
+                detected_val = detected_res.data if hasattr(detected_res, "data") else detected_res
+                if isinstance(detected_val, tuple) and len(detected_val) == 2:
+                    data["issues"] = detected_val[0] if isinstance(detected_val[0], list) else []
+                    if detected_val[1]:
+                        data.setdefault("recoveries", []).extend(detected_val[1])
+                elif isinstance(detected_val, list):
+                    data["issues"] = detected_val
+                else:
+                    data["issues"] = []
 
         return data
 
@@ -960,6 +992,62 @@ class UploadManager:
                 all_sent = False
         return all_sent
 
+    def upload_device_recoveries(
+        self,
+        recoveries: list[dict[str, Any]] | Any,
+        token_manager: TokenManager,
+        outbox_manager: OutboxManager,
+    ) -> bool:
+        """Assemble and enqueue or deliver device removal recovery events."""
+        if not recoveries or not isinstance(recoveries, list):
+            return False
+
+        if outbox_manager.enabled and outbox_manager.outbox is not None:
+            all_enqueued = True
+            for rec in recoveries:
+                try:
+                    comp_id = _resolve_computer_id()
+                    identifier = rec.get("device_hash") or rec.get("issue_key", "rec")
+                    inc_id = rec.get("incident_id", "rec")
+                    key = f"recovery_{comp_id}_{identifier}_{inc_id}"
+                    rec["idempotency_key"] = key
+
+                    existing_record = outbox_manager.outbox.get_record_by_idempotency_key(key)
+                    if existing_record is not None:
+                        if existing_record.status == OutboxStatus.DEAD_LETTER:
+                            outbox_manager.outbox.requeue_dead_letter(existing_record.id)
+                            continue
+                        elif existing_record.status in (OutboxStatus.PENDING, OutboxStatus.PROCESSING, "DELIVERED"):
+                            continue
+
+                    outbox_manager.outbox.enqueue(
+                        event_type="issue_recovery",
+                        payload=rec,
+                        idempotency_key=key,
+                        priority=OutboxPriority.ISSUE,
+                    )
+                    logger.info(f"Recovery enqueued to durable outbox (key={key}).")
+                except Exception as e:
+                    logger.exception(f"Failed to enqueue recovery to outbox: {e}")
+                    all_enqueued = False
+            return all_enqueued
+
+        # Direct HTTP fallback
+        all_sent = True
+        for rec in recoveries:
+            try:
+                comp_id = _resolve_computer_id()
+                identifier = rec.get("device_hash") or rec.get("issue_key", "rec")
+                inc_id = rec.get("incident_id", "rec")
+                key = f"recovery_{comp_id}_{identifier}_{inc_id}"
+                rec["idempotency_key"] = key
+                _resolve_send_issue_recovery(rec, token_manager.token)
+                logger.info(f"Recovery sent successfully (key={key}).")
+            except Exception as e:
+                logger.exception(f"Recovery upload failed: {e}")
+                all_sent = False
+        return all_sent
+
     def dispatch_telemetry(
         self,
         data: dict[str, Any],
@@ -967,7 +1055,7 @@ class UploadManager:
         outbox_manager: OutboxManager,
         issue_state_file: str | None = None,
     ) -> None:
-        """Dispatch fast telemetry package (metrics, usage, issues) to outbox."""
+        """Dispatch fast telemetry package (metrics, usage, issues, recoveries) to outbox."""
         self.upload_metrics(data, token_manager, outbox_manager)
 
         usage = data.get("usage")
@@ -977,6 +1065,10 @@ class UploadManager:
         issues = data.get("issues")
         if issues:
             self.upload_issues(issues, token_manager, outbox_manager, state_file=issue_state_file)
+
+        recoveries = data.get("recoveries") or data.get("device_recoveries")
+        if recoveries:
+            self.upload_device_recoveries(recoveries, token_manager, outbox_manager)
 
     def upload_hardware_specs(
         self,

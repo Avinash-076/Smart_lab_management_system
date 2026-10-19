@@ -194,6 +194,10 @@ ENABLE_ISSUE_REPORTING = True
 RAM_HIGH_THRESHOLD: float = float(os.getenv("SLMS_RAM_HIGH_THRESHOLD", "85.0"))
 RAM_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_RAM_RECOVERY_THRESHOLD", "80.0"))
 
+# CPU thresholds (trigger > threshold, recovery <= threshold)
+CPU_HIGH_THRESHOLD: float = float(os.getenv("SLMS_CPU_HIGH_THRESHOLD", "90.0"))
+CPU_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_CPU_RECOVERY_THRESHOLD", "80.0"))
+
 # Disk thresholds (trigger > threshold, recovery <= threshold)
 DISK_CRITICAL_THRESHOLD: float = float(os.getenv("SLMS_DISK_CRITICAL_THRESHOLD", "90.0"))
 DISK_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_DISK_RECOVERY_THRESHOLD", "85.0"))
@@ -201,6 +205,18 @@ DISK_RECOVERY_THRESHOLD: float = float(os.getenv("SLMS_DISK_RECOVERY_THRESHOLD",
 # Debounce & Cooldown
 ISSUE_DEBOUNCE_CYCLES: int = int(os.getenv("SLMS_ISSUE_DEBOUNCE_CYCLES", "2"))
 ISSUE_COOLDOWN_SECONDS: int = int(os.getenv("SLMS_ISSUE_COOLDOWN_SECONDS", "0"))
+
+
+# ==========================================
+# Device Monitoring & Unauthorized Device Detection
+# ==========================================
+
+ENABLE_DEVICE_MONITOR: bool = os.getenv("SLMS_ENABLE_DEVICE_MONITOR", "1").lower() in ("1", "true", "yes")
+ALERT_ON_USB_STORAGE: bool = os.getenv("SLMS_ALERT_ON_USB_STORAGE", "1").lower() in ("1", "true", "yes")
+ALERT_ON_USB_NETWORK: bool = os.getenv("SLMS_ALERT_ON_USB_NETWORK", "1").lower() in ("1", "true", "yes")
+ALERT_ON_UNKNOWN_PERIPHERAL: bool = os.getenv("SLMS_ALERT_ON_UNKNOWN_PERIPHERAL", "0").lower() in ("1", "true", "yes")
+DEVICE_SCAN_INTERVAL_SECONDS: int = int(os.getenv("SLMS_DEVICE_SCAN_INTERVAL", "10"))
+DEVICE_DEBOUNCE_CYCLES: int = max(1, int(os.getenv("SLMS_DEVICE_DEBOUNCE_CYCLES", "2")))
 
 
 # ==========================================

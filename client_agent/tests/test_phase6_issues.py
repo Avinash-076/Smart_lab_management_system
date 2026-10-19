@@ -598,3 +598,122 @@ def test_empty_or_missing_metrics_do_not_create_false_issues(tmp_path):
 
     state = load_issue_state(state_file)
     assert len(state["active_incidents"]) == 0
+
+
+def test_metric_auto_recovery_event_emission(monkeypatch, tmp_path):
+    """Metric auto-recovery must emit recovery payload when dropping below hysteresis threshold."""
+    from modules.issues import detect_issues_with_recoveries
+
+    state_file = str(tmp_path / "issue_state.json")
+    monkeypatch.setattr(config, "ISSUE_DEBOUNCE_CYCLES", 1)
+    monkeypatch.setattr(config, "RAM_HIGH_THRESHOLD", 85.0)
+    monkeypatch.setattr(config, "RAM_RECOVERY_THRESHOLD", 80.0)
+
+    # Cycle 1: RAM breach at 92% -> issue emitted
+    issues_1, recs_1 = detect_issues_with_recoveries(
+        {"hardware": {"ram_percent": 92.0}}, state_file=state_file
+    )
+    assert len(issues_1) == 1
+    assert issues_1[0]["issue_key"] == "high_ram"
+    incident_id = issues_1[0]["incident_id"]
+    assert len(recs_1) == 0
+
+    # Cycle 2: RAM at 83% (above recovery threshold 80%) -> still active, no recovery
+    issues_2, recs_2 = detect_issues_with_recoveries(
+        {"hardware": {"ram_percent": 83.0}}, state_file=state_file
+    )
+    assert len(issues_2) == 0
+    assert len(recs_2) == 0
+    state = load_issue_state(state_file)
+    assert "high_ram" in state["active_incidents"]
+
+    # Cycle 3: RAM drops to 75% (<= 80%) -> recovery emitted
+    issues_3, recs_3 = detect_issues_with_recoveries(
+        {"hardware": {"ram_percent": 75.0}}, state_file=state_file
+    )
+    assert len(issues_3) == 0
+    assert len(recs_3) == 1
+    recovery = recs_3[0]
+    assert recovery["issue_key"] == "high_ram"
+    assert recovery["incident_id"] == incident_id
+    assert recovery["title"] == "High Memory Usage"
+    assert "75.0%" in recovery["reason"]
+
+    # Active incidents in state must be cleared
+    state_after = load_issue_state(state_file)
+    assert "high_ram" not in state_after["active_incidents"]
+    assert "high_ram" in state_after["recent_recoveries"]
+
+
+def test_cpu_spike_detection_and_recovery(monkeypatch, tmp_path):
+    """Sustained high CPU breaches trigger issue and auto-recover below threshold."""
+    from modules.issues import detect_issues_with_recoveries
+
+    state_file = str(tmp_path / "issue_state.json")
+    monkeypatch.setattr(config, "ISSUE_DEBOUNCE_CYCLES", 1)
+    monkeypatch.setattr(config, "CPU_HIGH_THRESHOLD", 90.0)
+    monkeypatch.setattr(config, "CPU_RECOVERY_THRESHOLD", 80.0)
+
+    # CPU breach at 95% -> issue emitted
+    issues_1, recs_1 = detect_issues_with_recoveries(
+        {"hardware": {"cpu_percent": 95.0}}, state_file=state_file
+    )
+    assert len(issues_1) == 1
+    assert issues_1[0]["issue_key"] == "high_cpu"
+    assert issues_1[0]["title"] == "High CPU Usage"
+    assert len(recs_1) == 0
+
+    # CPU cools down to 60% -> recovery emitted
+    issues_2, recs_2 = detect_issues_with_recoveries(
+        {"hardware": {"cpu_percent": 60.0}}, state_file=state_file
+    )
+    assert len(issues_2) == 0
+    assert len(recs_2) == 1
+    assert recs_2[0]["issue_key"] == "high_cpu"
+    assert recs_2[0]["title"] == "High CPU Usage"
+
+
+def test_network_disconnection_and_recovery(monkeypatch, tmp_path):
+    """Network disconnection breaches trigger critical issue and auto-recover upon link restoration."""
+    from modules.issues import detect_issues_with_recoveries
+
+    state_file = str(tmp_path / "issue_state.json")
+    monkeypatch.setattr(config, "ISSUE_DEBOUNCE_CYCLES", 1)
+
+    # 1. Connected state -> No issue
+    data_connected = {
+        "network": {
+            "network_status": "success",
+            "interface": "Ethernet",
+            "ip_address": "192.168.1.50",
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+        }
+    }
+    issues_0, recs_0 = detect_issues_with_recoveries(data_connected, state_file=state_file)
+    assert len(issues_0) == 0
+    assert len(recs_0) == 0
+
+    # 2. Network disconnects (cable unplugged / status failed) -> Emits network_down issue
+    data_disconnected = {
+        "network": {
+            "network_status": "failed",
+            "interface": None,
+            "ip_address": None,
+            "mac_address": None,
+        }
+    }
+    issues_1, recs_1 = detect_issues_with_recoveries(data_disconnected, state_file=state_file)
+    assert len(issues_1) == 1
+    assert issues_1[0]["issue_key"] == "network_down"
+    assert issues_1[0]["title"] == "Network Disconnected"
+    assert issues_1[0]["severity"] == "critical"
+    assert len(recs_1) == 0
+
+    # 3. Cable plugged back in (connection restored) -> Emits recovery event
+    issues_2, recs_2 = detect_issues_with_recoveries(data_connected, state_file=state_file)
+    assert len(issues_2) == 0
+    assert len(recs_2) == 1
+    assert recs_2[0]["issue_key"] == "network_down"
+    assert recs_2[0]["title"] == "Network Disconnected"
+
+

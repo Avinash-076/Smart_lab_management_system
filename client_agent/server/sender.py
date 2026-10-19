@@ -264,6 +264,33 @@ def send_issues(issues: list[dict], access_token: str) -> list[dict]:
     return results
 
 
+def send_issue_recovery(recovery: dict, access_token: str) -> dict:
+    """
+    Send an issue recovery event (e.g. device confirmed disconnected) to the backend.
+    """
+    payload: dict = {}
+    if "idempotency_key" in recovery and recovery["idempotency_key"]:
+        payload["idempotency_key"] = recovery["idempotency_key"]
+    if "title" in recovery and recovery["title"]:
+        payload["title"] = recovery["title"]
+    if "reason" in recovery or "recovered_at" in recovery:
+        reason = recovery.get("reason", "Condition confirmed resolved")
+        rec_time = recovery.get("recovered_at", "")
+        payload["recovery_notes"] = f"[Automated Recovery] {reason} at {rec_time}".strip()
+
+    api_url = get_api_base_url()
+    session = create_secure_session()
+
+    response = session.post(
+        f"{api_url}/api/issues/agent/recover",
+        json=payload,
+        headers=_build_headers(access_token),
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
 # ==========================================
 # Command Results
 # ==========================================

@@ -23,9 +23,8 @@ from config import (
     PROCESS_COLLECTION_INTERVAL,
     SHOW_CONSOLE,
     SOFTWARE_SCAN_INTERVAL,
-    HARDWARE_SCAN_INTERVAL,
-)
-from paths import HARDWARE_STATE_FILE
+    HARDWARE_SCAN_INTERVAL,)
+from paths import DEVICE_STATE_FILE, DEVICE_WHITELIST_FILE, HARDWARE_STATE_FILE
 from core.collector import collect_all_data
 from core.credentials import get_credential_store
 from core.exporter import export_to_json
@@ -119,6 +118,8 @@ class RuntimeManager:
         software_state_file: str | None = None,
         issue_state_file: str | None = None,
         hardware_state_file: str | None = None,
+        device_state_file: str | None = None,
+        device_whitelist_file: str | None = None,
         single_instance: SingleInstanceMutex | None = None,
         enable_single_instance: bool = True,
         notification_server: Any | None = None,
@@ -133,6 +134,8 @@ class RuntimeManager:
         self.software_state_file = software_state_file
         self.issue_state_file = issue_state_file
         self.hardware_state_file = hardware_state_file or HARDWARE_STATE_FILE
+        self.device_state_file = device_state_file or DEVICE_STATE_FILE
+        self.device_whitelist_file = device_whitelist_file or DEVICE_WHITELIST_FILE
         self.enable_single_instance = enable_single_instance
         self.single_instance = single_instance or SingleInstanceMutex()
         self.enable_notification_server = enable_notification_server
@@ -252,6 +255,14 @@ class RuntimeManager:
                     state_file=self.issue_state_file,
                 )
 
+            recoveries = data.get("recoveries") or data.get("device_recoveries")
+            if recoveries:
+                self.upload_manager.upload_device_recoveries(
+                    recoveries,
+                    self.token_manager,
+                    self.outbox_manager,
+                )
+
             if EXPORT_JSON:
                 try:
                     filepath = export_to_json(data)
@@ -309,8 +320,43 @@ class RuntimeManager:
                 state_file=self.hardware_state_file,
             )
 
+        # 6. Device Discovery & Unauthorized Device Monitoring (Cadence: DEVICE_SCAN_INTERVAL_SECONDS)
+        try:
+            from config import DEVICE_SCAN_INTERVAL_SECONDS, ENABLE_DEVICE_MONITOR
+        except Exception:
+            DEVICE_SCAN_INTERVAL_SECONDS = 10
+            ENABLE_DEVICE_MONITOR = True
+
+        def _device_task():
+            if self.stop_event.is_set():
+                return
+            if not ENABLE_DEVICE_MONITOR:
+                return
+            try:
+                from modules.device_monitor import scan_and_evaluate_devices
+                dev_issues, dev_recoveries = scan_and_evaluate_devices(
+                    state_file=self.device_state_file,
+                    whitelist_file=self.device_whitelist_file,
+                )
+                if dev_issues:
+                    self.upload_manager.upload_issues(
+                        {"issues": dev_issues},
+                        self.token_manager,
+                        self.outbox_manager,
+                        state_file=self.issue_state_file,
+                    )
+                if dev_recoveries:
+                    self.upload_manager.upload_device_recoveries(
+                        dev_recoveries,
+                        self.token_manager,
+                        self.outbox_manager,
+                    )
+            except Exception as dev_err:
+                logger.error(f"Device monitoring scan failed: {dev_err}")
+
         # Register jobs on drift-free scheduler (H-04)
         self.scheduler.add_job("telemetry", MONITOR_INTERVAL, _telemetry_task, initial_delay=0.0)
+        self.scheduler.add_job("device_monitor", DEVICE_SCAN_INTERVAL_SECONDS, _device_task, initial_delay=0.0)
         self.scheduler.add_job("processes", self.process_interval, _process_task, initial_delay=0.0)
         self.scheduler.add_job("software", self.software_interval, _software_task, initial_delay=0.0)
         self.scheduler.add_job("hardware", self.hardware_interval, _hardware_task, initial_delay=0.0)
