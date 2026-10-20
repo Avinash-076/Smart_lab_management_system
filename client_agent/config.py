@@ -94,6 +94,19 @@ def get_api_base_url() -> str:
                 return normalized_env
         return normalized_persisted
 
+    # In Windows Service mode, prevent silent fallback to 127.0.0.1 which refers to the client PC
+    is_service_mode = os.getenv("SLMS_SERVICE_MODE", "0").lower() in ("1", "true", "yes")
+    if is_service_mode and not env_url:
+        from core.logger import logger
+        logger.error(
+            "SLMS Windows Service is running without an enrolled server URL. "
+            "Cannot silently fall back to 127.0.0.1 in service mode."
+        )
+        raise RuntimeError(
+            "SLMS Windows Service is running without an enrolled server URL. "
+            "Cannot silently fall back to 127.0.0.1 in service mode."
+        )
+
     configured_url = env_url or (DEFAULT_DEV_API_URL if allow_insecure else DEFAULT_PROD_API_URL)
     return validate_and_normalize_server_url(configured_url, allow_insecure=allow_insecure)
 

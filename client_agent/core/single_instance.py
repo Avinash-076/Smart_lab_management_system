@@ -21,6 +21,10 @@ from typing import Any
 from core.logger import logger
 
 MUTEX_NAME = r"Global\SLMS_Client_Agent_Mutex"
+ERROR_FILE_NOT_FOUND = 2
+ERROR_ACCESS_DENIED = 5
+ERROR_ALREADY_EXISTS = 183
+SYNCHRONIZE = 0x00100000
 
 
 class SingleInstanceMutex:
@@ -57,35 +61,101 @@ class SingleInstanceMutex:
 
             ERROR_ALREADY_EXISTS = 183
             ERROR_ACCESS_DENIED = 5
+            ERROR_FILE_NOT_FOUND = 2
+            SYNCHRONIZE = 0x00100000
 
             kernel32 = ctypes.windll.kernel32
-            kernel32.CreateMutexW.argtypes = [wintypes.LPVOID, wintypes.BOOL, wintypes.LPCWSTR]
+            advapi32 = ctypes.windll.advapi32
+
+            class SECURITY_ATTRIBUTES(ctypes.Structure):
+                _fields_ = [
+                    ("nLength", wintypes.DWORD),
+                    ("lpSecurityDescriptor", wintypes.LPVOID),
+                    ("bInheritHandle", wintypes.BOOL),
+                ]
+
+            kernel32.CreateMutexW.argtypes = [ctypes.POINTER(SECURITY_ATTRIBUTES), wintypes.BOOL, wintypes.LPCWSTR]
             kernel32.CreateMutexW.restype = wintypes.HANDLE
+            kernel32.OpenMutexW.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR]
+            kernel32.OpenMutexW.restype = wintypes.HANDLE
             kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
             kernel32.CloseHandle.restype = wintypes.BOOL
             kernel32.GetLastError.restype = wintypes.DWORD
 
-            handle = kernel32.CreateMutexW(None, False, self.name)
-            last_error = kernel32.GetLastError()
+            # Build permissive security descriptor allowing cross-session access (Everyone / World)
+            sa = None
+            pSD = wintypes.LPVOID()
+            sddl = "D:(A;;GA;;;WD)"  # Allow Generic All to World
+            if hasattr(advapi32, "ConvertStringSecurityDescriptorToSecurityDescriptorW"):
+                advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+                    wintypes.LPCWSTR,
+                    wintypes.DWORD,
+                    ctypes.POINTER(wintypes.LPVOID),
+                    ctypes.POINTER(wintypes.ULONG),
+                ]
+                advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.restype = wintypes.BOOL
+                if advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, ctypes.byref(pSD), None):
+                    sa = SECURITY_ATTRIBUTES()
+                    sa.nLength = ctypes.sizeof(SECURITY_ATTRIBUTES)
+                    sa.lpSecurityDescriptor = pSD.value
+                    sa.bInheritHandle = False
 
-            if not handle:
-                if last_error == ERROR_ACCESS_DENIED:
-                    logger.info(
-                        f"Access denied to mutex '{self.name}' (error={last_error}); another instance is running."
-                    )
-                    return False
-                logger.warning(f"Failed to create mutex '{self.name}': error code {last_error}")
-                return False
+            sa_ptr = ctypes.byref(sa) if sa is not None else None
+            try:
+                handle = kernel32.CreateMutexW(sa_ptr, False, self.name)
+                last_error = kernel32.GetLastError()
+            finally:
+                if pSD and pSD.value:
+                    kernel32.LocalFree(pSD)
 
-            if last_error == ERROR_ALREADY_EXISTS:
+            if handle and last_error != ERROR_ALREADY_EXISTS:
+                self._handle = handle
+                self._acquired = True
+                logger.debug(f"Acquired single-instance mutex '{self.name}'.")
+                return True
+
+            if handle and last_error == ERROR_ALREADY_EXISTS:
                 kernel32.CloseHandle(handle)
                 logger.info(f"Named mutex '{self.name}' already exists; another instance is running.")
                 return False
 
-            self._handle = handle
-            self._acquired = True
-            logger.debug(f"Acquired single-instance mutex '{self.name}'.")
-            return True
+            if not handle:
+                if last_error == ERROR_ACCESS_DENIED:
+                    # Check if mutex actually exists in kernel
+                    test_open = kernel32.OpenMutexW(SYNCHRONIZE, False, self.name)
+                    open_err = kernel32.GetLastError()
+                    if test_open:
+                        kernel32.CloseHandle(test_open)
+                        logger.info(
+                            f"Mutex '{self.name}' exists and is held by another instance across sessions."
+                        )
+                        return False
+                    elif open_err == ERROR_ACCESS_DENIED:
+                        logger.info(
+                            f"Access denied opening existing mutex '{self.name}'; another instance is running."
+                        )
+                        return False
+                    elif open_err == ERROR_FILE_NOT_FOUND:
+                        # Mutex does NOT exist: failure was solely Global\ namespace creation permission
+                        logger.warning(
+                            f"Cannot create Global mutex '{self.name}' due to namespace permissions. "
+                            "Falling back to session-local single-instance mutex."
+                        )
+                        fallback_name = self.name.replace(r"Global\\", r"Local\\")
+                        fb_handle = kernel32.CreateMutexW(None, False, fallback_name)
+                        fb_err = kernel32.GetLastError()
+                        if fb_handle and fb_err != ERROR_ALREADY_EXISTS:
+                            self._handle = fb_handle
+                            self._acquired = True
+                            logger.info(f"Acquired session-local fallback single-instance mutex '{fallback_name}'.")
+                            return True
+                        if fb_handle:
+                            kernel32.CloseHandle(fb_handle)
+                        logger.info(f"Fallback mutex '{fallback_name}' already exists; another instance is running.")
+                        return False
+
+                logger.warning(f"Failed to create mutex '{self.name}': error code {last_error}")
+                return False
 
         except Exception as e:
             logger.warning(f"Exception during single-instance mutex acquisition: {e}")

@@ -13,6 +13,7 @@ dependencies = [
     "psutil>=7.2.2",
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.5.0",
+    "pywin32>=310",
     "requests>=2.34.2",
     "sqlalchemy>=2.0.51",
 ]
@@ -20,6 +21,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "coverage>=7.16.2",
+    "pyinstaller>=6.11.0",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
     "ruff>=0.16.9",

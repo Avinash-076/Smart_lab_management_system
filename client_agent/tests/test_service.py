@@ -542,7 +542,7 @@ class TestVirtualServiceAccountPrivileges:
         """Verify sc privs command declares SeShutdownPrivilege."""
         privs_cmd = get_privileges_command_args("SLMSService")
         assert privs_cmd == [
-            "sc.exe", "privs", "SLMSService", "SeShutdownPrivilege/SeChangeNotifyPrivilege"
+            "sc.exe", "privs", "SLMSService", "SeShutdownPrivilege/SeChangeNotifyPrivilege/SeCreateGlobalPrivilege"
         ]
 
 
@@ -1397,3 +1397,82 @@ class TestMandatoryServiceAclAndDevModeArchitecture:
                 assert payload == {}
                 assert any("Permission denied reading service credential file" in record.message for record in caplog.records)
                 assert any("Ensure NT SERVICE" in record.message for record in caplog.records)
+
+    def test_svc_run_reports_start_pending_before_svcdorun(self):
+        """9. Verify SLMSService.SvcRun reports SERVICE_START_PENDING before SvcDoRun."""
+        svc = SLMSService()
+        reports = []
+
+        def mock_report(status, waitHint=0):
+            reports.append((status, waitHint))
+
+        svc.ReportServiceStatus = mock_report
+        svc.SvcDoRun = MagicMock()
+
+        svc.SvcRun()
+
+        # Must report START_PENDING first (status=2, waitHint=30000)
+        assert len(reports) >= 2
+        assert reports[0] == (2, 30000)
+        # SvcDoRun was called
+        svc.SvcDoRun.assert_called_once()
+        # Must report STOP_PENDING in finally (status=3, waitHint=10000)
+        assert reports[-1] == (3, 10000)
+
+    def test_service_mode_rejects_silent_localhost_fallback(self, monkeypatch):
+        """10. Verify get_api_base_url in service mode refuses silent fallback to 127.0.0.1."""
+        from config import get_api_base_url
+        from core.credentials import set_credential_store
+
+        monkeypatch.setenv("SLMS_SERVICE_MODE", "1")
+        monkeypatch.delenv("SLMS_API_BASE_URL", raising=False)
+
+        mock_store = MagicMock()
+        mock_store.get_server_url.return_value = None
+        set_credential_store(mock_store)
+
+        with pytest.raises(RuntimeError, match="SLMS Windows Service is running without an enrolled server URL"):
+            get_api_base_url()
+
+    def test_service_startup_backend_offline_remains_running_and_buffers(self, tmp_path):
+        """11. Verify service starts and remains running when backend is offline, buffering telemetry."""
+        import requests
+        from core.outbox import DurableOutbox
+
+        db_path = str(tmp_path / "offline_service.db")
+        test_outbox = DurableOutbox(db_path=db_path)
+        stop_event = threading.Event()
+
+        runtime = AgentRuntime(
+            stop_event=stop_event,
+            is_service=True,
+            outbox=test_outbox,
+            enable_outbox=True,
+            enable_single_instance=False,
+        )
+
+        with patch("core.runtime.is_enrolled", return_value=True), \
+             patch("core.runtime.get_computer_id", return_value=101), \
+             patch("core.runtime.authenticate_agent", side_effect=requests.ConnectionError("Connection refused")), \
+             patch("core.runtime.AgentWebSocketClient"), \
+             patch("core.runtime.collect_all_data", return_value={"cpu": 10.0}):
+
+            def stop_soon():
+                # Allow runtime to initialize and reach running state
+                for _ in range(50):
+                    if runtime.is_running:
+                        break
+                    time.sleep(0.01)
+                runtime.stop()
+
+            stopper = threading.Thread(target=stop_soon, daemon=True)
+            stopper.start()
+
+            runtime.start()
+            stopper.join(timeout=2.0)
+
+            # Service reached RUNNING state despite initial backend outage
+            assert runtime.started_count == 1
+            assert runtime.stopped_count == 1
+            assert runtime.is_running is False
+

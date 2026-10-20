@@ -37,6 +37,8 @@ logger = logging.getLogger("slms")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
+        from app.database import Base, engine
+        Base.metadata.create_all(bind=engine)
         with SessionLocal() as db:
             seed_default_roles_and_permissions(db)
             seed_default_settings(db)
@@ -69,7 +71,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+        "http://localhost",
+        "http://127.0.0.1",
     ],
+    allow_origin_regex=r"^(http://localhost(:\d+)?|http://127\.0\.0\.1(:\d+)?|https?://tauri\.localhost|tauri://localhost)$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

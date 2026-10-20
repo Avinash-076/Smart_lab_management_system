@@ -151,3 +151,78 @@ class TestSingleInstanceMutex:
         assert mutex.is_acquired is True
         mutex.release()
         assert mutex.is_acquired is False
+
+    @pytest.mark.windows_only
+    def test_access_denied_with_nonexistent_mutex_falls_back_to_local(self):
+        """
+        Verify that if Global\\ mutex creation fails with ERROR_ACCESS_DENIED
+        and the mutex does not exist (ERROR_FILE_NOT_FOUND), the implementation
+        gracefully falls back to a session-local mutex and succeeds.
+        """
+        import ctypes
+        from core.single_instance import ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND
+
+        mutex = SingleInstanceMutex(name=r"Global\SLMS_Test_AccessDenied_Fallback")
+
+        call_count = {"create": 0}
+        dummy_handle = ctypes.c_void_p(12345)
+
+        def mock_create_mutex(sa, initial_owner, name):
+            call_count["create"] += 1
+            if call_count["create"] == 1:
+                # First call is for Global\: simulate access denied
+                return None
+            else:
+                # Second call is for Local\ fallback: simulate success
+                return dummy_handle
+
+        def mock_get_last_error():
+            if call_count["create"] == 1:
+                return ERROR_ACCESS_DENIED
+            return 0
+
+        def mock_open_mutex(access, inherit, name):
+            # Mutex does not exist in kernel
+            return None
+
+        with patch("ctypes.windll.kernel32.CreateMutexW", side_effect=mock_create_mutex), \
+             patch("ctypes.windll.kernel32.GetLastError", side_effect=mock_get_last_error), \
+             patch("ctypes.windll.kernel32.OpenMutexW", side_effect=mock_open_mutex), \
+             patch("ctypes.windll.kernel32.CloseHandle", return_value=True):
+
+            # In mock_open_mutex, GetLastError needs to return ERROR_FILE_NOT_FOUND
+            def mock_get_last_error_with_open():
+                if call_count["create"] == 1:
+                    # After OpenMutexW fails
+                    return ERROR_FILE_NOT_FOUND
+                return 0
+
+            with patch("ctypes.windll.kernel32.GetLastError", side_effect=[ERROR_ACCESS_DENIED, ERROR_FILE_NOT_FOUND, 0]):
+                acquired = mutex.acquire()
+                assert acquired is True
+                assert mutex.is_acquired is True
+                assert mutex._handle == dummy_handle
+
+    @pytest.mark.windows_only
+    def test_access_denied_with_existing_mutex_rejects(self):
+        """
+        Verify that if Global\\ mutex creation fails with ERROR_ACCESS_DENIED
+        and OpenMutexW succeeds (the mutex is indeed held by another instance),
+        acquire() returns False without creating a duplicate.
+        """
+        import ctypes
+        from core.single_instance import ERROR_ACCESS_DENIED
+
+        mutex = SingleInstanceMutex(name=r"Global\SLMS_Test_AccessDenied_Held")
+        dummy_open_handle = ctypes.c_void_p(99999)
+
+        with patch("ctypes.windll.kernel32.CreateMutexW", return_value=None), \
+             patch("ctypes.windll.kernel32.GetLastError", return_value=ERROR_ACCESS_DENIED), \
+             patch("ctypes.windll.kernel32.OpenMutexW", return_value=dummy_open_handle), \
+             patch("ctypes.windll.kernel32.CloseHandle", return_value=True) as mock_close:
+
+            acquired = mutex.acquire()
+            assert acquired is False
+            assert mutex.is_acquired is False
+            mock_close.assert_called_once_with(dummy_open_handle)
+

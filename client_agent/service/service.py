@@ -86,6 +86,25 @@ class SLMSService(_BaseClass):
         logger.info("Windows Service SCM signal: SERVICE_CONTROL_SHUTDOWN received.")
         self.SvcStop()
 
+    def SvcRun(self) -> None:
+        """
+        Service entry point invoked by the pywin32 C service host thread.
+        Immediately reports SERVICE_START_PENDING to Windows SCM to prevent 30s timeouts,
+        then calls SvcDoRun() to execute service workload.
+        """
+        logger.info("SCM SvcRun: Reporting SERVICE_START_PENDING...")
+        self.ReportServiceStatus(
+            win32service.SERVICE_START_PENDING if HAVE_PYWIN32 else 0x00000002,
+            waitHint=30000,
+        )
+        try:
+            self.SvcDoRun()
+        finally:
+            self.ReportServiceStatus(
+                win32service.SERVICE_STOP_PENDING if HAVE_PYWIN32 else 0x00000003,
+                waitHint=10000,
+            )
+
     def SvcDoRun(self) -> None:
         """Main service entry point invoked by Windows SCM when service starts."""
         os.environ["SLMS_SERVICE_MODE"] = "1"
@@ -204,7 +223,7 @@ def get_privileges_command_args(service_name: str = SERVICE_NAME) -> list[str]:
         "sc.exe",
         "privs",
         service_name,
-        "SeShutdownPrivilege/SeChangeNotifyPrivilege",
+        "SeShutdownPrivilege/SeChangeNotifyPrivilege/SeCreateGlobalPrivilege",
     ]
 
 
