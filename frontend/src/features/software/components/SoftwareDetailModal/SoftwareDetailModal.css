@@ -1,0 +1,359 @@
+.software-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.software-modal-container {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  width: 100%;
+  max-width: 780px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================================================
+   Header
+========================================================= */
+.software-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.software-modal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.software-modal-app-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.software-modal-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.software-modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.software-modal-version-tag {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.software-modal-publisher {
+  font-size: 13px;
+  color: #64748b;
+  display: block;
+  margin-top: 2px;
+}
+
+.software-modal-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.software-modal-close-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* =========================================================
+   Metrics Bar
+========================================================= */
+.software-modal-metrics-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  padding: 16px 24px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.software-modal-metric-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.software-modal-metric-label {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.software-modal-metric-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.software-modal-metric-val.blue {
+  color: #2563eb;
+}
+
+.software-modal-os-val {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* =========================================================
+   Location Box
+========================================================= */
+.software-modal-location-box {
+  padding: 12px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.software-modal-location-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.software-modal-location-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  color: #334155;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+/* =========================================================
+   Computers Section
+========================================================= */
+.software-modal-section {
+  padding: 18px 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.software-modal-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.software-modal-section-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.software-modal-section-hint {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.software-modal-empty-computers {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
+.software-modal-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.software-modal-computers-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.software-modal-computers-table thead th {
+  background: #f8fafc;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.software-modal-computers-table tbody td {
+  padding: 10px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.software-modal-comp-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #1e293b;
+}
+
+.software-modal-comp-name svg {
+  color: #2563eb;
+}
+
+.software-modal-ip {
+  color: #64748b;
+  font-family: ui-monospace, monospace;
+}
+
+.software-modal-comp-os {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #475569;
+}
+
+.software-modal-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.software-modal-status-badge.online {
+  background: #ecfdf5;
+  color: #16a34a;
+}
+
+.software-modal-status-badge.offline {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.software-modal-date {
+  color: #64748b;
+}
+
+.software-modal-view-comp-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.software-modal-view-comp-btn:hover {
+  background: #dbeafe;
+}
+
+/* =========================================================
+   Footer
+========================================================= */
+.software-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.software-modal-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.software-modal-export-btn:hover {
+  background: #dbeafe;
+}
+
+.software-modal-close-action-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.software-modal-close-action-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}

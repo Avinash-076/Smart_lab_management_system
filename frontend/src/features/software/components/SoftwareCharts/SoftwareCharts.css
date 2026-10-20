@@ -1,0 +1,278 @@
+.software-analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.software-analytics-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+}
+
+.software-analytics-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.software-analytics-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.software-analytics-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* =========================================================
+   CARD 1: Top Software List with Bars
+========================================================= */
+.software-top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  justify-content: space-around;
+}
+
+.software-top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.software-top-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.software-top-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.software-top-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.software-top-bar-wrap {
+  flex: 1;
+}
+
+.software-top-bar-track {
+  width: 100%;
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.software-top-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.software-top-count {
+  width: 24px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+/* =========================================================
+   CARD 2: Software by OS (Donut Chart)
+========================================================= */
+.software-os-donut-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex: 1;
+  padding: 10px 0;
+}
+
+.software-donut-svg-wrap {
+  position: relative;
+  width: 110px;
+  height: 110px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.software-donut-center {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.software-donut-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+}
+
+.software-donut-subtext {
+  font-size: 9px;
+  color: #64748b;
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.software-os-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.software-os-legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.software-os-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.software-os-legend-name {
+  color: #334155;
+  font-weight: 500;
+  flex: 1;
+}
+
+.software-os-legend-val {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* =========================================================
+   CARD 3: Top Publishers (Vertical Bar Chart)
+========================================================= */
+.software-publishers-chart-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 140px;
+  margin-top: 6px;
+}
+
+.software-pub-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #94a3b8;
+  padding-bottom: 22px;
+  text-align: right;
+  width: 18px;
+}
+
+.software-pub-bars-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  border-left: 1px solid #f1f5f9;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 22px;
+}
+
+.software-pub-grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #f1f5f9;
+  border-top: 1px dashed #f1f5f9;
+  pointer-events: none;
+}
+
+.software-pub-bars-row {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  z-index: 1;
+}
+
+.software-pub-column {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  width: 28px;
+}
+
+.software-pub-val {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 3px;
+}
+
+.software-pub-bar {
+  width: 22px;
+  border-radius: 3px 3px 0 0;
+  transition: height 0.5s ease;
+  cursor: pointer;
+}
+
+.software-pub-bar:hover {
+  filter: brightness(1.1);
+}
+
+.software-pub-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 10px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .software-analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}

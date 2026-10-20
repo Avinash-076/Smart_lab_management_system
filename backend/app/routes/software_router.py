@@ -21,6 +21,8 @@ from app.auth import (
 from app.database import get_db
 from app.models.agent_credential import AgentCredential
 from app.schemas.software_schema import (
+    SoftwareFleetItem,
+    SoftwareFleetSummaryResponse,
     SoftwareResponse,
     SoftwareSummaryResponse,
     SoftwareUpload,
@@ -102,6 +104,53 @@ async def upload_software_inventory(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to save software inventory",
         )
+
+
+@router.get(
+    "/fleet/summary",
+    response_model=SoftwareFleetSummaryResponse,
+)
+def get_fleet_software_summary(
+    db: DbSession,
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+):
+    return software_service.get_fleet_software_summary(db=db)
+
+
+@router.get(
+    "/fleet",
+    response_model=list[SoftwareFleetItem],
+)
+def get_fleet_software_inventory(
+    response: Response,
+    db: DbSession,
+    search: str | None = Query(default=None),
+    publisher: str | None = Query(default=None),
+    computer_id: int | None = Query(default=None),
+    os_name: str | None = Query(default=None),
+    sort_by: str = Query(default="name"),
+    sort_order: str = Query(default="asc"),
+    limit: int = Query(default=10, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _user=Depends(
+        require_permission("VIEW_COMPUTERS")
+    ),
+):
+    items, total_count = software_service.get_fleet_software_items(
+        db=db,
+        search=search,
+        publisher=publisher,
+        computer_id=computer_id,
+        os_name=os_name,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
+    )
+    response.headers["X-Total-Count"] = str(total_count)
+    return items
 
 
 @router.get(

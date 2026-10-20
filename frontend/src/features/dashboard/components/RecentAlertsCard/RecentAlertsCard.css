@@ -1,0 +1,154 @@
+.recent-alerts-card {
+  background-color: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e2e8f0);
+  border-radius: var(--radius-card, 12px);
+  padding: 20px 22px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.recent-alerts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recent-alerts-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recent-alerts-badge-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: #eff6ff;
+  color: var(--color-primary, #2563eb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.recent-alerts-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary, #172033);
+}
+
+.recent-alerts-view-all {
+  background: none;
+  border: none;
+  color: var(--color-primary, #2563eb);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.recent-alerts-view-all:hover {
+  background-color: #eff6ff;
+}
+
+.recent-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+}
+
+.recent-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+
+.recent-alert-item:last-child {
+  border-bottom: none;
+}
+
+.recent-alert-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.badge-red {
+  background-color: #fef2f2;
+  color: #ef4444;
+}
+
+.badge-orange {
+  background-color: #fff7ed;
+  color: #f97316;
+}
+
+.badge-blue {
+  background-color: #eff6ff;
+  color: #2563eb;
+}
+
+.recent-alert-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.recent-alert-name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-primary, #172033);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-alert-desc {
+  font-size: 11.5px;
+  color: var(--color-text-secondary, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recent-alert-time {
+  font-size: 11px;
+  font-weight: 500;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.recent-alerts-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 30px 10px;
+  text-align: center;
+  color: var(--color-text-secondary, #64748b);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recent-alerts-empty small {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #94a3b8;
+}

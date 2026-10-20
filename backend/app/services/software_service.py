@@ -7,6 +7,10 @@ from sqlalchemy.orm import Session
 from app.models.software import Software
 from app.schemas.software_schema import (
     SoftwareCategoryItem,
+    SoftwareComputerInfo,
+    SoftwareFleetItem,
+    SoftwareFleetSummaryResponse,
+    SoftwareOSDistribution,
     SoftwareSummaryResponse,
     SoftwareUpload,
     TopPublisherItem,
@@ -396,3 +400,261 @@ def delete_software_for_computer(
     except SQLAlchemyError:
         db.rollback()
         raise
+
+
+def get_fleet_software_summary(
+    db: Session,
+) -> SoftwareFleetSummaryResponse:
+    from app.models.computer import Computer
+
+    total_software = int(db.scalar(select(func.count(Software.id))) or 0)
+    unique_software = int(db.scalar(select(func.count(func.distinct(Software.name)))) or 0)
+    total_computers = int(db.scalar(select(func.count(Computer.id))) or 0)
+    computers_with_software = int(db.scalar(select(func.count(func.distinct(Software.computer_id)))) or 0)
+
+    different_publishers = int(
+        db.scalar(
+            select(func.count(func.distinct(Software.publisher))).where(
+                Software.publisher.is_not(None), Software.publisher != ""
+            )
+        )
+        or 0
+    )
+
+    # Most common software
+    top_row = db.execute(
+        select(Software.name, Software.publisher, func.count(Software.id).label("cnt"))
+        .group_by(Software.name, Software.publisher)
+        .order_by(func.count(Software.id).desc())
+        .limit(1)
+    ).first()
+
+    most_common_software = None
+    if top_row:
+        most_common_software = {
+            "name": top_row.name,
+            "publisher": top_row.publisher or "Unknown",
+            "count": int(top_row.cnt),
+        }
+
+    # Top 5 software
+    top_rows = db.execute(
+        select(Software.name, Software.publisher, func.count(Software.id).label("cnt"))
+        .group_by(Software.name, Software.publisher)
+        .order_by(func.count(Software.id).desc())
+        .limit(5)
+    ).all()
+
+    top_software = [
+        {
+            "name": r.name,
+            "publisher": r.publisher or "Unknown",
+            "count": int(r.cnt),
+            "percentage": round(int(r.cnt) / total_computers * 100, 1) if total_computers > 0 else 0,
+        }
+        for r in top_rows
+    ]
+
+    # Software by Operating System
+    os_query = (
+        select(Computer.os_name, Computer.os_version, func.count(Software.id).label("cnt"))
+        .join(Software, Software.computer_id == Computer.id)
+        .group_by(Computer.os_name, Computer.os_version)
+    )
+    os_rows = db.execute(os_query).all()
+
+    win10_cnt = 0
+    win11_cnt = 0
+    other_cnt = 0
+    for r in os_rows:
+        os_str = f"{r.os_name or ''} {r.os_version or ''}".lower()
+        if "10" in os_str:
+            win10_cnt += int(r.cnt)
+        elif "11" in os_str:
+            win11_cnt += int(r.cnt)
+        else:
+            other_cnt += int(r.cnt)
+
+    by_os: list[SoftwareOSDistribution] = []
+    if total_software > 0:
+        by_os = [
+            SoftwareOSDistribution(
+                os_name="Windows 10",
+                count=win10_cnt,
+                percentage=round(win10_cnt / total_software * 100, 1),
+            ),
+            SoftwareOSDistribution(
+                os_name="Windows 11",
+                count=win11_cnt,
+                percentage=round(win11_cnt / total_software * 100, 1),
+            ),
+            SoftwareOSDistribution(
+                os_name="Other",
+                count=other_cnt,
+                percentage=round(other_cnt / total_software * 100, 1),
+            ),
+        ]
+
+    # Top publishers
+    pub_query = (
+        select(Software.publisher, func.count(Software.id).label("cnt"))
+        .where(Software.publisher.is_not(None), Software.publisher != "")
+        .group_by(Software.publisher)
+        .order_by(func.count(Software.id).desc())
+    )
+    pub_rows = db.execute(pub_query).all()
+    top_4_pubs = pub_rows[:4]
+    remaining_pubs = pub_rows[4:]
+    others_pub_count = sum(int(r.cnt) for r in remaining_pubs)
+
+    top_publishers: list[TopPublisherItem] = []
+    for r in top_4_pubs:
+        cnt = int(r.cnt)
+        pct = round(cnt / total_software * 100) if total_software > 0 else 0
+        top_publishers.append(TopPublisherItem(publisher=r.publisher, count=cnt, percentage=pct))
+    if others_pub_count > 0:
+        pct = round(others_pub_count / total_software * 100) if total_software > 0 else 0
+        top_publishers.append(TopPublisherItem(publisher="Others", count=others_pub_count, percentage=pct))
+
+    available_publishers = sorted(
+        list(
+            db.scalars(
+                select(func.distinct(Software.publisher)).where(
+                    Software.publisher.is_not(None), Software.publisher != ""
+                )
+            ).all()
+        )
+    )
+
+    available_os = sorted(
+        list(
+            db.scalars(
+                select(func.distinct(Computer.os_name)).where(
+                    Computer.os_name.is_not(None), Computer.os_name != ""
+                )
+            ).all()
+        )
+    )
+
+    return SoftwareFleetSummaryResponse(
+        total_software=total_software,
+        unique_software=unique_software,
+        total_computers=total_computers,
+        computers_with_software=computers_with_software,
+        different_publishers=different_publishers,
+        most_common_software=most_common_software,
+        top_software=top_software,
+        by_os=by_os,
+        top_publishers=top_publishers,
+        available_publishers=available_publishers,
+        available_os=available_os,
+        available_architectures=["64-bit", "32-bit"],
+    )
+
+
+def get_fleet_software_items(
+    db: Session,
+    search: str | None = None,
+    publisher: str | None = None,
+    computer_id: int | None = None,
+    os_name: str | None = None,
+    sort_by: str = "name",
+    sort_order: str = "asc",
+    limit: int = 10,
+    offset: int = 0,
+) -> tuple[list[SoftwareFleetItem], int]:
+    from app.models.computer import Computer
+
+    total_computers = int(db.scalar(select(func.count(Computer.id))) or 0)
+
+    query = select(Software).join(Computer, Software.computer_id == Computer.id)
+
+    if computer_id is not None:
+        query = query.where(Software.computer_id == computer_id)
+
+    if search and search.strip():
+        term = f"%{search.strip().lower()}%"
+        query = query.where(
+            func.lower(Software.name).like(term)
+            | func.lower(Software.publisher).like(term)
+            | func.lower(Software.version).like(term)
+        )
+
+    if publisher and publisher.strip() and publisher.lower() != "all publishers":
+        query = query.where(func.lower(Software.publisher) == publisher.strip().lower())
+
+    if os_name and os_name.strip() and os_name.lower() != "all os":
+        query = query.where(func.lower(Computer.os_name).like(f"%{os_name.strip().lower()}%"))
+
+    records = list(db.scalars(query.order_by(Software.name.asc(), Software.id.asc())).all())
+
+    # Group by (name.lower(), (publisher or '').lower())
+    groups: dict[tuple[str, str], list[Software]] = {}
+    for s in records:
+        key = (s.name.strip().lower(), (s.publisher or "").strip().lower())
+        if key not in groups:
+            groups[key] = []
+        groups[key].append(s)
+
+    fleet_items: list[SoftwareFleetItem] = []
+    for key, items in groups.items():
+        primary = items[0]
+        versions = [it.version for it in items if it.version]
+        primary_version = versions[0] if versions else primary.version
+
+        computers_list: list[SoftwareComputerInfo] = []
+        os_set = set()
+        for it in items:
+            comp = it.computer
+            if comp:
+                os_str = f"{comp.os_name or ''} {comp.os_version or ''}".strip()
+                if os_str:
+                    os_set.add(os_str)
+                status_str = "offline"
+                if hasattr(comp, "status_info") and comp.status_info:
+                    status_str = comp.status_info.status or "offline"
+                computers_list.append(
+                    SoftwareComputerInfo(
+                        id=comp.id,
+                        hostname=comp.hostname,
+                        ip_address=comp.ip_address,
+                        os=os_str,
+                        status=status_str,
+                        install_date=it.install_date,
+                    )
+                )
+
+        os_display = " / ".join(sorted(os_set)) if os_set else "Windows 10/11"
+        if not os_display:
+            os_display = "Windows 10/11"
+
+        fleet_items.append(
+            SoftwareFleetItem(
+                id=primary.id,
+                name=primary.name,
+                version=primary_version,
+                publisher=primary.publisher,
+                install_date=primary.install_date,
+                install_location=primary.install_location,
+                architecture=primary.architecture,
+                collected_at=primary.collected_at,
+                installed_count=len(computers_list),
+                total_computers=total_computers,
+                os_display=os_display,
+                computers=computers_list,
+            )
+        )
+
+    reverse = sort_order.lower() == "desc"
+    if sort_by == "publisher":
+        fleet_items.sort(key=lambda x: (x.publisher or "").lower(), reverse=reverse)
+    elif sort_by == "version":
+        fleet_items.sort(key=lambda x: (x.version or "").lower(), reverse=reverse)
+    elif sort_by == "installed_count":
+        fleet_items.sort(key=lambda x: x.installed_count, reverse=reverse)
+    else:
+        fleet_items.sort(key=lambda x: x.name.lower(), reverse=reverse)
+
+    total_count = len(fleet_items)
+    paged_items = fleet_items[offset : offset + limit] if limit else fleet_items
+    return paged_items, total_count

@@ -122,6 +122,7 @@ function App() {
   const [profileOpen, setProfileOpen] = useState(false);
 
   const [filterOpen, setFilterOpen] = useState(false);
+  const [dashboardSearch, setDashboardSearch] = useState("");
 
   /* =====================================================
      URL SYNCHRONIZATION & BROWSER HISTORY
@@ -228,7 +229,14 @@ function App() {
   const renderPage = () => {
     switch (active) {
       case "dashboard":
-        return <Dashboard />;
+        return (
+          <Dashboard
+            searchQuery={dashboardSearch}
+            onSearchChange={setDashboardSearch}
+            onViewComputer={openComputerDetails}
+            onNavigate={navigate}
+          />
+        );
 
       case "computers":
         return (
@@ -253,7 +261,7 @@ function App() {
         );
 
       case "software":
-        return <SoftwareInventory />;
+        return <SoftwareInventory onViewComputer={openComputerDetails} />;
 
       case "issues":
         return <IssueManagement onViewComputer={openComputerDetails} />;

@@ -1,0 +1,118 @@
+.software-export-modal-container {
+  background: #ffffff;
+  border-radius: 14px;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
+  width: 100%;
+  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.software-export-icon-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #2563eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.software-export-modal-body {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.software-export-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.software-export-field-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.software-export-format-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.software-export-format-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.software-export-format-card input[type="radio"] {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
+.software-export-format-card.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.software-export-format-card .format-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 2px;
+}
+
+.software-export-format-card .format-desc {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.software-export-scope-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.software-export-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}
+
+.software-export-radio-label.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.software-export-checkbox-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.software-export-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+  cursor: pointer;
+}

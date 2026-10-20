@@ -1,0 +1,140 @@
+.software-summary-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.software-summary-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.software-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+.software-summary-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.software-summary-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.software-summary-icon.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.software-summary-icon.green {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.software-summary-icon.amber {
+  background: #fffbeb;
+  color: #f59e0b;
+}
+
+.software-summary-icon.teal {
+  background: #f0fdfa;
+  color: #0d9488;
+}
+
+.software-summary-mini-chart {
+  display: flex;
+  align-items: flex-end;
+}
+
+.software-summary-progress-ring {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.software-summary-progress-ring .ring-bg {
+  fill: none;
+  stroke: #e2e8f0;
+}
+
+.software-summary-progress-ring .ring-fill.green {
+  fill: none;
+  stroke: #10b981;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.software-summary-progress-ring .ring-text {
+  fill: #0f172a;
+  font-family: inherit;
+}
+
+.software-summary-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.software-summary-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.software-summary-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.software-summary-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.software-summary-value.text-name {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+.software-summary-subtext {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+@media (max-width: 1200px) {
+  .software-summary-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .software-summary-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

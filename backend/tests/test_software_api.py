@@ -390,3 +390,36 @@ def test_software_summary_and_filtering(client, db_session, test_software_user, 
     assert page_res.headers.get("x-total-count") == "3"
     assert len(page_res.json()) == 2
 
+
+def test_fleet_software_summary_and_items(client, test_software_user, sample_computers_with_software, db_session):
+    user_token = test_software_user["token"]
+    comp_a, comp_b = sample_computers_with_software
+
+    # 1. Test fleet summary
+    summary_res = client.get(
+        "/api/software/fleet/summary",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert summary_res.status_code == 200
+    summary = summary_res.json()
+    assert summary["total_software"] >= 3
+    assert summary["unique_software"] >= 2
+    assert summary["computers_with_software"] >= 2
+    assert "by_os" in summary
+    assert "top_publishers" in summary
+
+    # 2. Test fleet items
+    items_res = client.get(
+        "/api/software/fleet?limit=10&offset=0",
+        headers={"Authorization": f"Bearer {user_token}"},
+    )
+    assert items_res.status_code == 200
+    items = items_res.json()
+    assert len(items) >= 2
+    assert int(items_res.headers.get("x-total-count", 0)) >= 2
+    chrome_item = next((it for it in items if it["name"] == "Google Chrome"), None)
+    assert chrome_item is not None
+    assert chrome_item["installed_count"] >= 1
+    assert len(chrome_item["computers"]) >= 1
+
+

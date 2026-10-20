@@ -1,327 +1,193 @@
-import { useState, useEffect, useCallback } from "react";
-import { getComputers } from "../../services/computerService";
-import { getNotifications } from "../../services/notificationService";
-import StatCard from "../../components/ui/StatCard";
-import Icon from "../../components/ui/Icon";
+import { useDashboardData } from "./hooks/useDashboardData";
+import DashboardClock from "./components/DashboardClock/DashboardClock";
+import DashboardSummaryCards from "./components/DashboardSummaryCards/DashboardSummaryCards";
+import SystemOverviewCard from "./components/SystemOverviewCard/SystemOverviewCard";
+import ResourceUsageCard from "./components/ResourceUsageCard/ResourceUsageCard";
+import RecentAlertsCard from "./components/RecentAlertsCard/RecentAlertsCard";
+import LiveSystemTable from "./components/LiveSystemTable/LiveSystemTable";
+import QuickActionsCard from "./components/QuickActionsCard/QuickActionsCard";
+import ReportsAnalyticsCard from "./components/ReportsAnalyticsCard/ReportsAnalyticsCard";
+import DashboardCommandModals from "./components/DashboardModals/DashboardCommandModals";
+import "./Dashboard.css";
 
-function formatRelativeTime(dateStr) {
-  if (!dateStr) return "Just now";
-  try {
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffSec = Math.floor((now - date) / 1000);
-    if (diffSec < 60) return "Just now";
-    const diffMin = Math.floor(diffSec / 60);
-    if (diffMin < 60) return `${diffMin}m ago`;
-    const diffHours = Math.floor(diffMin / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
-  } catch {
-    return dateStr;
-  }
-}
+export default function Dashboard({
+  searchQuery = "",
+  onSearchChange,
+  onViewComputer,
+  onNavigate,
+}) {
+  const {
+    computers,
+    metricsSummary,
+    timeline,
+    notifications,
+    loading,
+    refreshing,
+    error,
+    toast,
+    // Metrics
+    totalComputers,
+    onlineComputers,
+    offlineComputers,
+    highRamCount,
+    lowDiskCount,
+    activeAlertsCount,
+    // Selection
+    selectedIds,
+    selectedComputersList,
+    selectedSystemId,
+    setSelectedSystemId,
+    handleToggleSelect,
+    handleToggleSelectAll,
+    // Modals
+    modalState,
+    setModalState,
+    handleQuickActionClick,
+    handleConfirmCommand,
+    loadDashboardData,
+  } = useDashboardData();
 
-function Dashboard() {
-  const [computers, setComputers] = useState([]);
-  const [recentNotifications, setRecentNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const loadDashboardData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
-      const [compData, notifData] = await Promise.all([
-        getComputers(),
-        getNotifications({ limit: 6 }).catch(() => []),
-      ]);
-      setComputers(Array.isArray(compData) ? compData : []);
-      setRecentNotifications(Array.isArray(notifData) ? notifData : []);
-    } catch (err) {
-      console.error("Failed to load dashboard data:", err);
-      setError(err.message || "Failed to load dashboard statistics.");
-    } finally {
-      setLoading(false);
+  const handleInspectComputer = (comp) => {
+    if (onViewComputer) {
+      onViewComputer(comp);
+    } else if (onNavigate) {
+      onNavigate("details", comp);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    let ignore = false;
-    async function init() {
-      try {
-        setLoading(true);
-        setError("");
-        const [compData, notifData] = await Promise.all([
-          getComputers(),
-          getNotifications({ limit: 6 }).catch(() => []),
-        ]);
-        if (ignore) return;
-        setComputers(Array.isArray(compData) ? compData : []);
-        setRecentNotifications(Array.isArray(notifData) ? notifData : []);
-      } catch (err) {
-        if (!ignore) {
-          console.error("Failed to load dashboard data:", err);
-          setError(err.message || "Failed to load dashboard statistics.");
-        }
-      } finally {
-        if (!ignore) {
-          setLoading(false);
-        }
-      }
+  const handleRemoteCommand = (comp) => {
+    if (onNavigate) {
+      onNavigate("remote-control", comp);
     }
-    init();
-    return () => {
-      ignore = true;
-    };
-  }, []);
+  };
 
-  const totalComputers = computers.length;
-  const onlineComputers = computers.filter(
-    (c) => c.status && c.status.toLowerCase() === "online"
-  ).length;
-  const offlineComputers = computers.filter(
-    (c) => !c.status || c.status.toLowerCase() === "offline"
-  ).length;
-  const windowsComputers = computers.filter(
-    (c) => c.os_name && c.os_name.toLowerCase().includes("windows")
-  ).length;
+  const handlePowerCommand = (comp) => {
+    // Select this computer and open restart confirmation
+    handleToggleSelect(comp.id);
+    handleQuickActionClick("restart");
+  };
 
   return (
-    <div className="content">
-      {/* PAGE ACTIONS */}
-      <div className="page-top" style={{ justifyContent: "flex-end", marginBottom: "20px" }}>
-        <div className="top-actions">
+    <div className="dashboard-page" data-testid="dashboard-page">
+      {/* Toast Alert Feedback */}
+      {toast && (
+        <div className={`dashboard-toast toast-${toast.type}`}>
+          <span className="toast-icon">
+            {toast.type === "success" ? "✓" : "⚠️"}
+          </span>
+          <span className="toast-message">{toast.message}</span>
+        </div>
+      )}
+
+      {/* Error Retry Banner */}
+      {error && (
+        <div className="dashboard-error-banner" role="alert">
+          <span>⚠️ {error}</span>
           <button
-            className="refresh"
-            onClick={loadDashboardData}
-            disabled={loading}
-            title="Refresh dashboard statistics"
+            type="button"
+            className="dashboard-retry-btn"
+            onClick={() => loadDashboardData(true)}
           >
-            <Icon type="refresh" size={18} />
-            Refresh
+            Retry
           </button>
+        </div>
+      )}
+
+      {/* Top Section: Date & Time Ticker Card */}
+      <div className="dashboard-top-bar">
+        {loading && computers.length === 0 ? (
+          <span className="dashboard-loading-text">Loading telemetry...</span>
+        ) : (
+          <div className="dashboard-top-bar-spacer" />
+        )}
+        <DashboardClock />
+      </div>
+
+      {/* Row 1: 6 Summary Metric Cards */}
+      <section className="dashboard-section" aria-label="Summary Metrics">
+        <DashboardSummaryCards
+          totalComputers={totalComputers}
+          onlineComputers={onlineComputers}
+          offlineComputers={offlineComputers}
+          highRamCount={highRamCount}
+          lowDiskCount={lowDiskCount}
+          activeAlertsCount={activeAlertsCount}
+        />
+      </section>
+
+      {/* Main 2-Column Dashboard Layout: Left (Overview + Live Table), Right (Alerts + Actions + Reports) */}
+      <div className="dashboard-main-layout" aria-label="Monitoring and Actions">
+        {/* Left Column: Combined width of System Overview + Resource Usage Summary, with Live System Table below */}
+        <div className="dashboard-left-column">
+          {/* Top Row: System Overview & Resource Usage Summary side-by-side */}
+          <section className="dashboard-overview-row" aria-label="System Analytics">
+            {/* Card 1: System Overview (Donut chart & breakdown) */}
+            <SystemOverviewCard
+              totalComputers={totalComputers}
+              onlineComputers={onlineComputers}
+              offlineComputers={offlineComputers}
+              highRamCount={highRamCount}
+              lowDiskCount={lowDiskCount}
+              onViewAll={() => onNavigate?.("computers")}
+            />
+
+            {/* Card 2: Resource Usage Summary (Circular Gauges + Trendline) */}
+            <ResourceUsageCard
+              avgCpu={metricsSummary.avg_cpu_percent}
+              avgRam={metricsSummary.avg_ram_percent}
+              avgDisk={metricsSummary.avg_disk_percent}
+              timeline={timeline}
+              computers={computers}
+              selectedSystemId={selectedSystemId}
+              onSelectSystem={setSelectedSystemId}
+            />
+          </section>
+
+          {/* Bottom Row: Live System Status Table (spanning full width of overview + resource usage) */}
+          <div className="dashboard-table-wrap">
+            <LiveSystemTable
+              computers={computers}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onToggleSelectAll={handleToggleSelectAll}
+              searchQuery={searchQuery}
+              onSearchChange={onSearchChange}
+              onInspect={handleInspectComputer}
+              onRemoteCommand={handleRemoteCommand}
+              onPowerCommand={handlePowerCommand}
+            />
+          </div>
+        </div>
+
+        {/* Right Column: Recent Alerts, Quick Actions, Reports & Analytics with aligned widths */}
+        <div className="dashboard-right-column">
+          {/* Recent Alerts */}
+          <RecentAlertsCard
+            alerts={notifications}
+            onViewAll={() => onNavigate?.("issues")}
+          />
+
+          {/* Quick Actions Card */}
+          <QuickActionsCard
+            selectedCount={selectedIds.size}
+            onActionClick={handleQuickActionClick}
+            onRefreshAll={() => loadDashboardData(true)}
+            refreshing={refreshing}
+          />
+
+          {/* Reports & Analytics Card */}
+          <ReportsAnalyticsCard onNavigate={onNavigate} />
         </div>
       </div>
 
-      {/* LOADING STATE */}
-      {loading && computers.length === 0 ? (
-        <div className="table-card" style={{ padding: "40px 20px", textAlign: "center" }}>
-          <div className="empty-state">
-            <Icon type="refresh" size={32} />
-            <h3>Loading dashboard data...</h3>
-            <p>Fetching real computer statistics from backend.</p>
-          </div>
-        </div>
-      ) : error && computers.length === 0 ? (
-        /* ERROR STATE */
-        <div className="table-card" style={{ padding: "40px 20px", textAlign: "center" }}>
-          <div className="empty-state">
-            <Icon type="details" size={32} />
-            <h3 style={{ color: "#dc2626" }}>Failed to load dashboard</h3>
-            <p>{error}</p>
-            <button
-              className="refresh"
-              onClick={loadDashboardData}
-              style={{ marginTop: "15px", display: "inline-flex" }}
-            >
-              <Icon type="refresh" size={18} />
-              Try Again
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* STAT CARDS */}
-          <div className="cards">
-            <StatCard
-              icon="computer"
-              title="Total Computers"
-              number={totalComputers}
-              footer="All registered computers"
-              type="blue"
-            />
-
-            <StatCard
-              icon="computer"
-              title="Online"
-              number={onlineComputers}
-              footer="Currently online"
-              type="green"
-            />
-
-            <StatCard
-              icon="computer"
-              title="Offline"
-              number={offlineComputers}
-              footer="Currently offline"
-              type="orange"
-            />
-
-            <StatCard
-              icon="windows"
-              title="Windows Systems"
-              number={windowsComputers}
-              footer="Windows computers"
-              type="purple"
-            />
-          </div>
-
-          {/* DASHBOARD SECTIONS */}
-          <div className="table-card">
-            <div className="page-section-header">
-              <div>
-                <h3>System Overview</h3>
-                <p>
-                  Current status of the laboratory computers.
-                </p>
-              </div>
-            </div>
-
-            <div className="dashboard-grid">
-              <div className="dashboard-panel">
-                <div className="dashboard-panel-icon">
-                  <Icon type="computer" size={24} />
-                </div>
-
-                <div>
-                  <h3>{onlineComputers}</h3>
-                  <p>Online Computers</p>
-                </div>
-              </div>
-
-              <div className="dashboard-panel">
-                <div className="dashboard-panel-icon">
-                  <Icon type="computer" size={24} />
-                </div>
-
-                <div>
-                  <h3>{offlineComputers}</h3>
-                  <p>Offline Computers</p>
-                </div>
-              </div>
-
-              <div className="dashboard-panel">
-                <div className="dashboard-panel-icon">
-                  <Icon type="windows" size={24} />
-                </div>
-
-                <div>
-                  <h3>{windowsComputers}</h3>
-                  <p>Windows Systems</p>
-                </div>
-              </div>
-
-              <div className="dashboard-panel">
-                <div className="dashboard-panel-icon">
-                  <Icon type="home" size={24} />
-                </div>
-
-                <div>
-                  <h3>{totalComputers}</h3>
-                  <p>Total Managed</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* RECENT ACTIVITY & SYSTEM ALERTS */}
-          <div className="table-card">
-            <div className="page-section-header">
-              <div>
-                <h3>Recent Activity & Alerts</h3>
-                <p>
-                  Latest real-time events and system alerts from laboratory computers.
-                </p>
-              </div>
-            </div>
-
-            {recentNotifications.length > 0 ? (
-              <div style={{ padding: "0 20px 20px" }}>
-                {recentNotifications.map((notif) => {
-                  const compName = notif.computer_id
-                    ? (notif.computer_hostname || `PC-${notif.computer_id}`)
-                    : (notif.computer_hostname || "SYSTEM");
-                  const isCritical = notif.severity === "critical";
-                  const isWarning = notif.severity === "warning";
-                  const dotColor = isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "#3b82f6";
-                  const badgeBg = isCritical
-                    ? "rgba(239, 68, 68, 0.12)"
-                    : isWarning
-                    ? "rgba(245, 158, 11, 0.12)"
-                    : "rgba(59, 130, 246, 0.12)";
-                  const badgeColor = isCritical ? "#ef4444" : isWarning ? "#f59e0b" : "#3b82f6";
-
-                  return (
-                    <div
-                      key={notif.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        padding: "12px 14px",
-                        marginBottom: "8px",
-                        borderRadius: "8px",
-                        background: notif.is_read ? "rgba(255, 255, 255, 0.02)" : "rgba(59, 130, 246, 0.04)",
-                        border: "1px solid rgba(255, 255, 255, 0.06)",
-                        gap: "12px",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-                        <span
-                          style={{
-                            width: "8px",
-                            height: "8px",
-                            borderRadius: "50%",
-                            background: dotColor,
-                            flexShrink: 0,
-                          }}
-                        />
-                        <div>
-                          <strong style={{ fontSize: "13px", color: "#f0f6fc", marginRight: "8px" }}>
-                            {compName}
-                          </strong>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "2px 6px",
-                              borderRadius: "10px",
-                              fontSize: "11px",
-                              fontWeight: "600",
-                              background: badgeBg,
-                              color: badgeColor,
-                              marginRight: "8px",
-                            }}
-                          >
-                            {notif.category?.toUpperCase()}
-                          </span>
-                          <span style={{ fontSize: "13px", color: "#8b949e" }}>
-                            {notif.message}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div style={{ fontSize: "12px", color: "#718096", whiteSpace: "nowrap" }}>
-                        {formatRelativeTime(notif.created_at)}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-state">
-                <Icon type="details" size={32} />
-                <h3>No recent activity</h3>
-                <p>
-                  Recent computer activity and system alerts will appear here.
-                </p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      {/* Interactive Command & Message Modals */}
+      <DashboardCommandModals
+        modalType={modalState.type}
+        actionType={modalState.action}
+        selectedComputers={selectedComputersList}
+        onConfirm={handleConfirmCommand}
+        onClose={() => setModalState({ type: null, action: null })}
+      />
     </div>
   );
 }
-
-export default Dashboard;

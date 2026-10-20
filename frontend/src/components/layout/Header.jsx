@@ -328,8 +328,9 @@ function Header({
         </div>
       </div>
 
-      {/* Right Area: Notification Bell & User Profile */}
+      {/* Right Area: Search, Notification Bell & User Profile */}
       <div className="header-right">
+
         {/* Notification Bell */}
         <div className="header-popup-wrapper" ref={bellWrapperRef}>
           <button

@@ -1,0 +1,10 @@
+export { default as SoftwareInventory } from "./pages/SoftwareInventory";
+export { default as SoftwareHeader } from "./components/SoftwareHeader/SoftwareHeader";
+export { default as SoftwareSummaryCards } from "./components/SoftwareSummaryCards/SoftwareSummaryCards";
+export { default as SoftwareFilters } from "./components/SoftwareFilters/SoftwareFilters";
+export { default as SoftwareCharts } from "./components/SoftwareCharts/SoftwareCharts";
+export { default as SoftwareTable } from "./components/SoftwareTable/SoftwareTable";
+export { default as SoftwareDetailModal } from "./components/SoftwareDetailModal/SoftwareDetailModal";
+export { default as ExportReportModal } from "./components/ExportReportModal/ExportReportModal";
+export { useSoftwareInventory } from "./hooks/useSoftwareInventory";
+export * from "./utils/softwareUtils";
