@@ -15,6 +15,7 @@ from app.auth import (
     create_refresh_token,
     decode_token,
     get_current_user,
+    hash_password,
     verify_password,
 )
 from app.database import get_db
@@ -23,6 +24,7 @@ from app.models.role_permission import RolePermission
 from app.models.user import User
 from app.schemas.auth_schema import (
     AccessTokenResponse,
+    ChangePasswordRequest,
     LoginRequest,
     RefreshRequest,
     TokenResponse,
@@ -247,3 +249,37 @@ def get_current_user_profile(
         is_active=current_user.is_active,
         permissions=list(allowed_perms),
     )
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_200_OK,
+)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: Annotated[
+        User,
+        Depends(get_current_user),
+    ],
+    db: DbSession,
+):
+    """Change the password of the currently authenticated user."""
+    if not verify_password(payload.current_password, current_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.password_hash = hash_password(payload.new_password)
+    db.commit()
+
+    audit_service.log_action(
+        db=db,
+        action="CHANGE_PASSWORD",
+        target_type="user",
+        target_id=current_user.id,
+        result=AuditResult.success,
+        user_id=current_user.id,
+    )
+
+    return {"message": "Password changed successfully"}

@@ -5,7 +5,7 @@
  * with validation, normalization, and safe URL resolution.
  */
 
-const DEFAULT_DEV_API_BASE_URL = "http://127.0.0.1:8000/api";
+const DEFAULT_DEV_API_BASE_URL = "http://127.0.0.1:18080/api";
 const DEFAULT_DEV_WS_PATH = "/ws/dashboard";
 
 /**

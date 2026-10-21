@@ -224,3 +224,37 @@ def test_protected_endpoint_with_expired_token_rejected(client, auth_user):
     response = client.get("/api/clients", headers=headers)
     assert response.status_code == 401
     assert "Invalid or expired token" in response.json()["detail"]
+
+
+def test_change_password_success(client, auth_user):
+    """Test user can successfully change password with valid current password."""
+    token = create_access_token({"sub": str(auth_user["user_id"])})
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post(
+        "/api/auth/change-password",
+        json={"current_password": auth_user["password"], "new_password": "newsecretpassword"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["message"] == "Password changed successfully"
+
+    # Verify user can log in with new password
+    login_resp = client.post(
+        "/api/auth/login",
+        json={"username": auth_user["username"], "password": "newsecretpassword"},
+    )
+    assert login_resp.status_code == 200
+
+
+def test_change_password_invalid_current(client, auth_user):
+    """Test changing password with wrong current password is rejected."""
+    token = create_access_token({"sub": str(auth_user["user_id"])})
+    headers = {"Authorization": f"Bearer {token}"}
+    response = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "wrongpassword", "new_password": "newsecretpassword"},
+        headers=headers,
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Current password is incorrect"
+

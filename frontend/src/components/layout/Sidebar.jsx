@@ -61,7 +61,6 @@ function Sidebar({ active, navigate, logout, sidebarOpen = true }) {
     ["reports", "Reports", "reports"],
     ["audit", "Audit Logs", "audit"],
     ["settings", "Settings", "settings"],
-    ["users", "User & Role Management", "users"],
   ];
 
   return (

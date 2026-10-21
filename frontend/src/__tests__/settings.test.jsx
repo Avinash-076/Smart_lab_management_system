@@ -34,13 +34,14 @@ function createFakeJwt(payload) {
 
 describe("Settings Module - Catalog & Validation Utilities", () => {
   it("exports valid setting categories and complete defaults", () => {
-    expect(SETTING_CATEGORIES.length).toBe(5);
+    expect(SETTING_CATEGORIES.length).toBe(6);
     expect(SETTING_CATEGORIES.map((c) => c.id)).toEqual([
       "all",
       "general",
       "monitoring",
       "notifications",
       "agent",
+      "security",
     ]);
 
     expect(DEFAULT_SETTINGS.lab_name).toBe("Computer Laboratory");

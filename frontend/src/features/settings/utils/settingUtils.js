@@ -144,7 +144,9 @@ export const SETTING_CATEGORIES = [
   { id: "monitoring", label: "Monitoring & Telemetry", icon: "issue" },
   { id: "notifications", label: "Notifications & Alerts", icon: "notification" },
   { id: "agent", label: "Client Agent", icon: "refresh" },
+  { id: "security", label: "Account & Password", icon: "shield" },
 ];
+
 
 export const DEFAULT_SETTINGS = Object.fromEntries(
   Object.entries(SETTINGS_CATALOG).map(([key, meta]) => [key, meta.default])

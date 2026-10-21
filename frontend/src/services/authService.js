@@ -48,3 +48,17 @@ export function logout() {
 export async function getCurrentUserProfile() {
   return fetchWithAuth("/auth/me");
 }
+
+export async function changePassword(currentPassword, newPassword) {
+  return fetchWithAuth("/auth/change-password", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
+}
+

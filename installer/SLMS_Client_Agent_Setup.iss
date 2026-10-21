@@ -383,14 +383,14 @@ begin
 
   ServerUrlLabel := TLabel.Create(WizardForm);
   ServerUrlLabel.Parent := ServerUrlPage.Surface;
-  ServerUrlLabel.Caption := 'Server URL:';
+  ServerUrlLabel.Caption := 'Server IP or Hostname:';
   ServerUrlLabel.Left := 0;
   ServerUrlLabel.Top := ScaleY(10);
   ServerUrlLabel.Width := ServerUrlPage.SurfaceWidth;
 
   ServerUrlEdit := TNewEdit.Create(WizardForm);
   ServerUrlEdit.Parent := ServerUrlPage.Surface;
-  ServerUrlEdit.Text := 'https://';
+  ServerUrlEdit.Text := '';
   ServerUrlEdit.Left := 0;
   ServerUrlEdit.Top := ServerUrlLabel.Top + ServerUrlLabel.Height + ScaleY(6);
   ServerUrlEdit.Width := ServerUrlPage.SurfaceWidth;
@@ -398,8 +398,8 @@ begin
   ServerUrlHintLabel := TLabel.Create(WizardForm);
   ServerUrlHintLabel.Parent := ServerUrlPage.Surface;
   ServerUrlHintLabel.Caption :=
-    'The server URL must use HTTPS in production (e.g. https://slms.lab.example.edu:8000).' + #13#10 +
-    'Plaintext HTTP is prohibited unless development mode is enabled.';
+    'Enter the SLMS Host computer IP address or hostname (e.g. 192.168.1.100 or slms.lab.local).' + #13#10 +
+    'Port 18080 will be connected to automatically unless another port is specified.';
   ServerUrlHintLabel.Left := 0;
   ServerUrlHintLabel.Top := ServerUrlEdit.Top + ServerUrlEdit.Height + ScaleY(12);
   ServerUrlHintLabel.Width := ServerUrlPage.SurfaceWidth;
@@ -466,6 +466,9 @@ var
   Url: string;
   Key: string;
   LowerUrl: string;
+  HostPart: string;
+  SlashPos: Integer;
+  ColonPos: Integer;
 begin
   Result := True;
 
@@ -488,17 +491,48 @@ begin
     Url := Trim(ServerUrlEdit.Text);
     if (Url = '') or (Url = 'https://') or (Url = 'http://') then
     begin
-      MsgBox('Please enter the SLMS Server URL.', mbError, MB_OK);
+      MsgBox('Please enter the SLMS Server network address (IP or hostname).', mbError, MB_OK);
       Result := False;
       Exit;
     end;
 
+    // Remove any trailing slashes
+    while (Length(Url) > 0) and (Url[Length(Url)] = '/') do
+      Delete(Url, Length(Url), 1);
+
     LowerUrl := Lowercase(Url);
+
+    // If scheme is missing, default to http://
     if (Pos('http://', LowerUrl) <> 1) and (Pos('https://', LowerUrl) <> 1) then
     begin
-      MsgBox('Invalid Server URL scheme. The URL must start with https:// (or http:// for local development).', mbError, MB_OK);
-      Result := False;
-      Exit;
+      Url := 'http://' + Url;
+      LowerUrl := Lowercase(Url);
+    end;
+
+    // Extract host:port portion (after scheme, before any path)
+    if Pos('https://', LowerUrl) = 1 then
+      HostPart := Copy(Url, 9, Length(Url))
+    else
+      HostPart := Copy(Url, 8, Length(Url));
+
+    SlashPos := Pos('/', HostPart);
+    if SlashPos > 0 then
+      HostPart := Copy(HostPart, 1, SlashPos - 1);
+
+    // If no port specified in host (no colon), automatically append :18080
+    ColonPos := Pos(':', HostPart);
+    if ColonPos = 0 then
+    begin
+      if SlashPos > 0 then
+      begin
+        if Pos('https://', LowerUrl) = 1 then
+          Url := 'https://' + HostPart + ':18080' + Copy(Url, 8 + SlashPos, Length(Url))
+        else
+          Url := 'http://' + HostPart + ':18080' + Copy(Url, 7 + SlashPos, Length(Url));
+      end
+      else
+        Url := Url + ':18080';
+      LowerUrl := Lowercase(Url);
     end;
 
     // Check production HTTP rejection
@@ -508,7 +542,7 @@ begin
        (GetEnv('SLMS_ALLOW_INSECURE_HTTP') <> '1') then
     begin
       MsgBox('Insecure HTTP is prohibited in production.' + #13#10#13#10 +
-             'Please specify a secure HTTPS URL (e.g. https://slms.lab.example.edu:8000).',
+             'Please specify a secure HTTPS URL (e.g. https://slms.lab.example.edu:18080).',
              mbError, MB_OK);
       Result := False;
       Exit;

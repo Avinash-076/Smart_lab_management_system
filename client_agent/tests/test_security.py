@@ -50,6 +50,14 @@ class TestUrlValidation:
         normalized = validate_and_normalize_server_url("http://localhost:8000")
         assert normalized == "http://localhost:8000"
 
+    def test_auto_defaults_port_18080_when_missing(self, monkeypatch):
+        monkeypatch.setenv("SLMS_DEV_MODE", "true")
+        normalized = validate_and_normalize_server_url("http://192.168.1.50")
+        assert normalized == "http://192.168.1.50:18080"
+
+        normalized_https = validate_and_normalize_server_url("https://slms.lab.edu")
+        assert normalized_https == "https://slms.lab.edu:18080"
+
     def test_empty_or_invalid_urls_rejected(self):
         from core.security import InvalidServerUrlError, TransportSecurityError
 

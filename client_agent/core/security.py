@@ -86,8 +86,12 @@ def validate_and_normalize_server_url(
             f"Invalid server URL '{url}': Must contain a valid hostname or IP address."
         )
 
+    netloc = parsed.netloc
+    if parsed.port is None:
+        netloc = f"{netloc}:18080"
+
     path = parsed.path.rstrip("/")
-    return f"{scheme}://{parsed.netloc}{path}"
+    return f"{scheme}://{netloc}{path}"
 
 
 def derive_ws_url(

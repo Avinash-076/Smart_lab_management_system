@@ -25,7 +25,6 @@ import IssueManagement from "../features/issues/pages/IssueManagement";
 import MaintenanceRecords from "../features/maintenance/pages/MaintenanceRecords";
 import Reports from "../features/reports/pages/Reports";
 import Settings from "../features/settings/pages/Settings";
-import UserRoleManagement from "../features/users/pages/UserRoleManagement";
 import AuditLogs from "../features/audit/pages/AuditLogs";
 
 const navItems = [
@@ -38,7 +37,6 @@ const navItems = [
   ["reports", "Reports", "reports"],
   ["audit", "Audit Logs", "audit"],
   ["settings", "Settings", "settings"],
-  ["users", "User & Role Management", "users"],
 ];
 
 function parsePath(pathname) {
@@ -71,7 +69,6 @@ function parsePath(pathname) {
     "reports",
     "audit",
     "settings",
-    "users",
   ];
 
   const section = clean.replace(/^\//, "");
@@ -277,9 +274,6 @@ function App() {
 
       case "settings":
         return <Settings />;
-
-      case "users":
-        return <UserRoleManagement />;
 
       default:
         return <Dashboard />;

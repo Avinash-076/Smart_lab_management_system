@@ -31,7 +31,7 @@ describe("Shared Authenticated Layout Components", () => {
     expect(html).toContain("Reports");
     expect(html).toContain("Audit Logs");
     expect(html).toContain("Settings");
-    expect(html).toContain("User &amp; Role Management");
+    expect(html).not.toContain("User &amp; Role Management");
 
     // Active state
     expect(html).toContain("active");

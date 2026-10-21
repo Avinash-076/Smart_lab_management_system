@@ -21,12 +21,14 @@ Name: "{autodesktop}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.
 Name: "{group}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.exe"; WorkingDir: "{app}"
 
 [Run]
-; Open port 8000 in Windows Firewall so lab PCs can connect
-Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""SLMS Host Service"" dir=in action=allow protocol=TCP localport=8000"; Flags: runhidden
+; Open port 18080 in Windows Firewall so lab PCs can connect
+Filename: "netsh.exe"; Parameters: "advfirewall firewall add rule name=""SLMS Host Service"" dir=in action=allow protocol=TCP localport=18080"; Flags: runhidden
 ; Provision Administrator credentials entered during setup
 Filename: "{app}\service\SLMS_Host_Service.exe"; Parameters: "init-admin ""{code:GetAdminUsername}"" ""{code:GetAdminPassword}"""; Flags: runhidden
 ; Register the Windows Service
 Filename: "{app}\service\SLMS_Host_Service.exe"; Parameters: "--startup auto install"; Flags: runhidden
+; Configure Automatic Service Recovery on Failure (restart after 5s)
+Filename: "{sys}\sc.exe"; Parameters: "failure SLMSHostService reset= 86400 actions= restart/5000/restart/5000/restart/5000"; Flags: runhidden
 ; Start the Windows Service immediately
 Filename: "net.exe"; Parameters: "start SLMSHostService"; Flags: runhidden
 ; Optionally launch the Dashboard

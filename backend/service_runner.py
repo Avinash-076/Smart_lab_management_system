@@ -5,14 +5,10 @@ Runs the FastAPI application under Windows Service Control Manager.
 import sys
 import os
 
-# Prevent NoneType AttributeError when running in Windows GUI/Service mode
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
-
 import multiprocessing
 import threading
+import logging
+from logging.handlers import RotatingFileHandler
 import uvicorn
 import win32serviceutil
 import win32service
@@ -25,8 +21,46 @@ import servicemanager
 # Configure persistent database directory in %ProgramData%\SLMS_Host before importing FastAPI app
 program_data = os.environ.get("ProgramData", r"C:\ProgramData")
 data_dir = os.path.join(program_data, "SLMS_Host")
+logs_dir = os.path.join(data_dir, "logs")
 os.makedirs(data_dir, exist_ok=True)
+os.makedirs(logs_dir, exist_ok=True)
 os.environ["SLMS_DATA_DIR"] = data_dir
+
+log_file = os.path.join(logs_dir, "service.log")
+
+# Configure rotating file logging (10MB max, 5 backups)
+file_handler = RotatingFileHandler(
+    log_file,
+    maxBytes=10 * 1024 * 1024,
+    backupCount=5,
+    encoding="utf-8",
+)
+file_handler.setFormatter(
+    logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+)
+
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)
+root_logger.addHandler(file_handler)
+
+# Redirect stdout/stderr to rotating log file in Windows Service / Session 0 mode
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+
+    def write(self, message):
+        msg = message.strip()
+        if msg:
+            self.logger.log(self.level, msg)
+
+    def flush(self):
+        pass
+
+if sys.stdout is None or hasattr(sys, "frozen"):
+    sys.stdout = StreamToLogger(logging.getLogger("STDOUT"), logging.INFO)
+if sys.stderr is None or hasattr(sys, "frozen"):
+    sys.stderr = StreamToLogger(logging.getLogger("STDERR"), logging.ERROR)
 
 db_path = os.path.join(data_dir, "slms.db").replace(os.sep, "/")
 if not os.environ.get("DATABASE_URL"):
@@ -34,6 +68,7 @@ if not os.environ.get("DATABASE_URL"):
 
 if not os.environ.get("JWT_SECRET_KEY"):
     os.environ["JWT_SECRET_KEY"] = "slms-secure-lab-secret-key-2026"
+
 
 import passlib.handlers.bcrypt
 from app.main import app 
@@ -68,12 +103,13 @@ class SLMSHostService(win32serviceutil.ServiceFramework):
         os.makedirs(data_dir, exist_ok=True)
         os.environ["SLMS_DATA_DIR"] = data_dir
 
-        # Run uvicorn server bound to all network interfaces on port 8000
+        # Run uvicorn server bound to all network interfaces on port 18080 (non-colliding)
         # log_config=None is required because Windows Service has no console stdout
+        service_port = int(os.environ.get("PORT", "18080"))
         config = uvicorn.Config(
             app=app,
             host="0.0.0.0",
-            port=8000,
+            port=service_port,
             log_config=None,
             access_log=False
         )

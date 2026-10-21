@@ -9,6 +9,7 @@ import {
   clearReadNotifications,
 } from "../../services/notificationService";
 import { createDashboardWebSocket } from "../../services/websocketManager";
+import { initNotificationPermissions, sendNativeNotification } from "../../services/nativeNotification";
 import "./Header.css";
 
 function formatRelativeTime(dateStr) {
@@ -199,6 +200,11 @@ function Header({
     };
   }, []);
 
+  // Initialize native OS notification permissions
+  useEffect(() => {
+    initNotificationPermissions();
+  }, []);
+
   // Real-time notification updates via WebSocket
   useEffect(() => {
     let wsClient = null;
@@ -206,8 +212,10 @@ function Header({
       wsClient = createDashboardWebSocket({
         onMessage: (msg) => {
           if (!msg) return;
-          if (msg.type === "notification" && msg.data) {
-            const newNotif = msg.data;
+          if (msg.type === "notification") {
+            const newNotif = msg.data || msg.notification || msg;
+            if (!newNotif || !newNotif.id) return;
+
             setNotifications((prev) => {
               if (prev.some((n) => n.id === newNotif.id)) return prev;
               return [newNotif, ...prev];
@@ -220,6 +228,16 @@ function Header({
               warning: prev.warning + (newNotif.severity === "warning" ? 1 : 0),
               info: prev.info + (newNotif.severity === "info" ? 1 : 0),
             }));
+
+            // Dispatch native OS notification (Windows Toast / Action Center)
+            sendNativeNotification({
+              title: newNotif.severity === "critical"
+                ? `🚨 Critical: ${newNotif.category ? newNotif.category.toUpperCase() : "Workstation Alert"}`
+                : `⚠️ Alert: ${newNotif.category ? newNotif.category.toUpperCase() : "Workstation Alert"}`,
+              body: newNotif.message || "A lab workstation metric exceeded normal thresholds.",
+              severity: newNotif.severity || "info",
+              computer: newNotif.computer_hostname || "",
+            });
           }
         },
       });

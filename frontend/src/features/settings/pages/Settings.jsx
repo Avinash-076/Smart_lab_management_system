@@ -9,6 +9,7 @@ import LaboratoryPanel from "../components/LaboratoryPanel/LaboratoryPanel";
 import MonitoringPanel from "../components/MonitoringPanel/MonitoringPanel";
 import NotificationsPanel from "../components/NotificationsPanel/NotificationsPanel";
 import AgentPanel from "../components/AgentPanel/AgentPanel";
+import SecurityPanel from "../components/SecurityPanel/SecurityPanel";
 import ResetConfirmModal from "../components/ResetConfirmModal/ResetConfirmModal";
 
 import "./Settings.css";
@@ -138,6 +139,11 @@ function Settings() {
               onChange={handleFieldChange}
               disabled={!canManageSettings || saving || resetting}
             />
+          )}
+
+          {/* Panel 5: Account Security & Password */}
+          {(activeTab === "all" || activeTab === "security") && (
+            <SecurityPanel />
           )}
         </div>
       )}

@@ -21,12 +21,15 @@ engine = create_engine(
 
 
 @event.listens_for(engine, "connect")
-def enable_sqlite_foreign_keys(dbapi_connection, connection_record):
+def configure_sqlite_pragmas(dbapi_connection, connection_record):
     if settings.database_url.startswith("sqlite"):
         cursor = dbapi_connection.cursor()
 
         try:
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA synchronous=NORMAL")
         finally:
             cursor.close()
 
