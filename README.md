@@ -1,434 +1,215 @@
 # Smart Lab Management System (SLMS)
 
-A robust, enterprise-grade laboratory workstation management and monitoring system. SLMS combines a high-performance Python Windows Client Agent running as a background Windows Service, a FastAPI backend with real-time WebSocket telemetry and command orchestration, a React administration dashboard, and an Inno Setup automated installer.
+[![Python Version](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Tauri](https://img.shields.io/badge/Tauri-v2-FFC131.svg)](https://tauri.app/)
+[![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)](https://www.microsoft.com/windows)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+A robust, enterprise-grade laboratory orchestration, hardware monitoring, and remote workstation administration platform designed specifically for institutional and academic computer labs. 
+
+SLMS combines a high-performance **Python Windows Service** running in Session 0, an ultra-lightweight **Tauri v2 Native Desktop Dashboard** with Windows System Tray integration and Action Center Toast notifications, and an automated **Inno Setup** deployment pipeline.
 
 ---
 
-## Table of Contents
-1. [Project Overview](#project-overview)
-2. [Repository Structure](#repository-structure)
-3. [Prerequisites](#prerequisites)
-4. [Backend Setup & Execution](#backend-setup--execution)
-5. [Frontend Setup & Execution](#frontend-setup--execution)
-6. [Client Agent Setup & CLI Reference](#client-agent-setup--cli-reference)
-7. [Workstation Enrollment](#workstation-enrollment)
-8. [Transport Security & Development Modes](#transport-security--development-modes)
-9. [Windows Service Architecture](#windows-service-architecture)
-10. [Installer Build & Packaging](#installer-build--packaging)
-11. [Installation & Lifecycle Flow](#installation--lifecycle-flow)
-12. [Telemetry & Outbox Architecture](#telemetry--outbox-architecture)
-13. [Testing Strategy](#testing-strategy)
-14. [Troubleshooting & Diagnostics](#troubleshooting--diagnostics)
-15. [Security Invariants](#security-invariants)
+## 📚 Documentation Index
+- 🏗️ **[System Architecture Guide](docs/SYSTEM_ARCHITECTURE.md)**: Deep technical dive into Session 0 vs Session 1, SQLite WAL concurrency, DPAPI machine cryptography, and Tauri vs Electron trade-offs.
+- 🚀 **[Administrator & Deployment Guide](docs/ADMIN_DEPLOYMENT_GUIDE.md)**: Step-by-step manual for lab technicians: host installation, silent unattended deployment across 50+ PCs, firewall rules, and alert management.
 
 ---
 
-## 1. Project Overview
+## Key Highlights
 
-SLMS provides centralized oversight, real-time telemetry, and remote management for computer lab environments:
-
-- **Client Agent (`client_agent/`)**: A native Windows service running in Session 0 (`NT SERVICE\SLMSService`). Non-blockingly gathers CPU, RAM, disk, network, process lists, installed software inventories, and application usage sessions. Features a crash-resilient local SQLite outbox for offline buffering, automatic token renewal, and duplex WebSocket command dispatch.
-- **Backend API (`backend/`)**: FastAPI application powered by SQLAlchemy and Alembic. Manages computer registration, enrollment token issuance, historical telemetry persistence, real-time WebSocket connections, and remote command queuing.
-- **Frontend Dashboard (`frontend/`)**: Modern React + Vite application providing live computer monitoring, dynamic charts, software inventories, issue triage, and administrative command controls.
-- **Windows Installer (`installer/`)**: Standalone Inno Setup 6 x64 installer that compiles a unified PyInstaller executable, executes headless enrollment, establishes DPAPI machine-scope credentials, registers the Windows Service, and configures secure NTFS ACLs.
+- **Dedicated Port `18080`**: The host backend binds strictly to port `18080` (with firewall rules preconfigured). It will never conflict with student coding projects (such as FastAPI, Django, or Node.js running on port `8000`, `3000`, or `5000`).
+- **Zero-Friction Client Enrollment**: Client installers and CLI automatically default to port `18080` (e.g. typing `192.168.1.100` seamlessly connects to `http://192.168.1.100:18080`).
+- **Tauri v2 Desktop Shell (~20–40 MB RAM)**: Unlike Electron apps which consume 200–350 MB of memory, SLMS uses the OS-native Microsoft Edge WebView2 control and native Rust engine.
+- **Close-to-Tray & System Tray Controls**: Closing the dashboard window (`X`) minimizes it directly to the Windows System Tray near the clock.
+- **Native Windows Toast Notifications**: Real-time alerts (RAM > 90%, CPU spikes, sudden disconnections) trigger standard Windows Action Center toast banners with sound, even when the dashboard is minimized.
+- **Durable Offline Telemetry Outbox**: Client workstations buffer telemetry in a local crash-resilient SQLite outbox during network disconnects and auto-flush chronologically upon reconnect.
+- **Cryptographic DPAPI Credentials**: Machine-scoped Windows DPAPI (`CRYPTPROTECT_LOCAL_MACHINE`) locks workstation tokens to local hardware security descriptors.
 
 ---
 
-## 2. Repository Structure
+## System Overview & Architecture
+
+```
++========================================================================================+
+|                        SLMS HOST COMPUTER (Teacher / Admin PC)                         |
++========================================================================================+
+|  [Session 1 (Interactive Desktop)]                                                     |
+|    SLMS Host Dashboard (Tauri v2 Native Desktop App - ~25 MB RAM)                      |
+|    - System Tray Integration (Close-to-Tray)                                           |
+|    - Windows Action Center Toast Notification Provider                                 |
+|    - Real-time React 19 + Vite Live Laboratory Matrix Grid                             |
+|          | Localhost WebSocket (ws://127.0.0.1:18080/ws/dashboard)                     |
+|  [Session 0 (Background Service - LocalSystem)]                                        |
+|    SLMS Host Service (FastAPI + Uvicorn + SQLite WAL - Dedicated Port 18080)           |
+|    - High-Speed Metric Ingestion & Alert Threshold Evaluator                           |
+|    - Automatic SCM Recovery (Restarts within 5s on failure)                             |
++===========================================▲============================================+
+                                            |
+                                            | Local Network (Port 18080 - HTTP / WSS)
+                                            |
++===========================================▼============================================+
+|                       STUDENT WORKSTATIONS (1 to 100+ Lab PCs)                         |
++========================================================================================+
+|  [Session 1+ (Student Desktop)]                                                        |
+|    SLMS Notifier (SLMS_Notifier.exe) - Displays announcements & exam timers            |
+|  [Session 0 (Windows Service - NT SERVICE\SLMSService)]                                |
+|    SLMS Client Agent (SLMS_Client_Agent.exe)                                           |
+|    - Non-blocking CPU, RAM, Disk, Process, and Software Inventory Probing              |
+|    - Durable SQLite Outbox (Zero data loss during network interruptions)               |
+|    - DPAPI Local Machine Encrypted Credential Vault (%ProgramData%\SLMS\config)        |
++========================================================================================+
+```
+
+---
+
+## Repository Structure
 
 ```
 Smart_lab_management_system/
-├── backend/                             # FastAPI Backend Service
-│   ├── alembic/                         # Database migrations
-│   ├── app/
-│   │   ├── auth/                        # JWT authentication & password hashing
-│   │   ├── models/                      # SQLAlchemy database models
-│   │   ├── routes/                      # REST & WebSocket API endpoints
-│   │   ├── schemas/                     # Pydantic request/response schemas
-│   │   ├── services/                    # Business logic & database operations
-│   │   ├── websocket/                   # WebSocket connection & timeout managers
-│   │   └── main.py                      # FastAPI application entry point
-│   ├── tests/                           # Backend pytest test suite
-│   └── pyproject.toml                   # Backend Python dependencies
+├── backend/                             # FastAPI Backend Service (Port 18080)
+│   ├── app/                             # REST routes, SQLAlchemy models, alert engine
+│   ├── service_runner.py                # Windows Service Control Manager wrapper
+│   └── pyproject.toml                   # Python dependencies managed via uv
 │
 ├── client_agent/                        # Windows Client Agent & Service
-│   ├── core/
-│   │   ├── credentials.py               # DPAPI machine-scope & Keyring credential stores
-│   │   ├── collector.py                 # Telemetry collection coordinator & caches
-│   │   ├── logger.py                    # Structured logging with secret masking
-│   │   ├── managers.py                  # Runtime managers (Token, Outbox, WS, Collector)
-│   │   ├── outbox/                      # Durable SQLite outbox & delivery worker
-│   │   ├── runtime.py                   # Modular AgentRuntime lifecycle coordinator
-│   │   ├── scheduler.py                 # Drift-free recurring task scheduler
-│   │   ├── security.py                  # TLS verification, URL validation & security policies
-│   │   └── single_instance.py           # Global mutex preventing duplicate instances
-│   ├── modules/                         # System collectors (hardware, software, processes, usage)
-│   ├── server/                          # REST sender, auth, enrollment & WebSocket client
-│   ├── service/
-│   │   ├── lifecycle.py                 # Windows Service state machine
-│   │   └── service.py                   # Win32 ServiceControlManager implementation & CLI
-│   ├── tests/                           # Client Agent pytest test suite
-│   ├── main.py                          # Client Agent CLI entry point
-│   ├── config.py                        # Agent configuration & polling intervals
-│   ├── paths.py                         # System path resolution (%PROGRAMDATA%\SLMS)
-│   ├── SLMS_Client_Agent.spec           # Canonical PyInstaller build specification
-│   └── pyproject.toml                   # Client Agent Python dependencies
+│   ├── core/                            # DPAPI credentials, SQLite outbox, security policies
+│   ├── modules/                         # Hardware, process, software collectors
+│   ├── notifier/                        # Session 1 desktop companion (SLMS_Notifier)
+│   ├── SLMS_Client_Agent.spec           # PyInstaller build specification
+│   └── pyproject.toml                   # Client Python dependencies
 │
-├── frontend/                            # React + Vite Dashboard
-│   ├── src/                             # React components, pages, hooks, and services
+├── frontend/                            # Administration Dashboard
+│   ├── src/                             # React 19 components, hooks, and pages
+│   ├── src-tauri/                       # Tauri v2 native shell, system tray, notifications
 │   └── package.json                     # Frontend dependencies
 │
-├── installer/                           # Windows Installer Packaging
-│   ├── SLMS_Client_Agent_Setup.iss      # Inno Setup 6 compiler script
-│   └── output/                          # Output directory for compiled Setup.exe
+├── installer/                           # Windows Inno Setup Deployment Packaging
+│   ├── SLMS_Host_Setup.iss              # Host Service + Dashboard Installer Script
+│   ├── SLMS_Client_Agent_Setup.iss      # Client Agent + Notifier Installer Script
+│   └── output/                          # Compiled setup executables
 │
-├── docs/                                # Architecture & Phase Documentation
-│   └── phases/                          # Implementation specifications and validation reports
-├── testing_scripts/                     # Load testing and client simulation scripts
-├── pytest.ini                           # Root pytest configuration
-└── README.md                            # Comprehensive system documentation
+├── docs/                                # Architecture & Technical Documentation
+│   ├── SYSTEM_ARCHITECTURE.md           # Deep dive technical architecture
+│   └── ADMIN_DEPLOYMENT_GUIDE.md        # Lab technician deployment manual
+└── README.md                            # Main project overview
 ```
 
 ---
 
-## 3. Prerequisites
+## Quickstart & Development Setup
 
-### Windows Development Machine
+### Prerequisites
 - **Operating System**: Windows 10 or Windows 11 (64-bit).
 - **Python**: Python 3.13+ (64-bit).
 - **Package Manager**: [uv](https://github.com/astral-sh/uv) (v0.5+ recommended).
-- **Node.js**: Node.js 18+ and npm (for frontend development).
-- **Build Tools**:
-  - [Inno Setup 6](https://jrsoftware.org/isdl.php) (ISCC.exe) for compiling the installer.
-  - Windows SDK / Visual C++ runtime (standard for pywin32).
+- **Node.js**: Node.js 18+ and npm.
+- **Rust**: Rust toolchain (for Tauri desktop app compilation).
+- **Inno Setup 6**: For compiling `.exe` installers.
 
 ---
 
-## 4. Backend Setup & Execution
-
-### 1. Synchronize Dependencies
+### 1. Backend Setup & Local Run
 ```powershell
 cd backend
 uv sync
-```
 
-### 2. Configure Database & Migrations
-The backend defaults to SQLite (`sqlite:///./slms.db`) for local development or PostgreSQL when configured via environment variables.
-
-Run database migrations to prepare all tables and constraints:
-```powershell
+# Run database migrations
 uv run alembic upgrade head
-```
 
-### 3. Start Backend API Server
-Launch FastAPI via Uvicorn:
-```powershell
-uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+# Start FastAPI server on dedicated port 18080
+uv run uvicorn app.main:app --host 0.0.0.0 --port 18080 --reload
 ```
-The interactive Swagger API documentation will be available at `http://localhost:8000/docs`.
+Interactive Swagger API documentation: `http://localhost:18080/docs`
 
 ---
 
-## 5. Frontend Setup & Execution
-
+### 2. Frontend & Tauri Desktop Setup
 ```powershell
 cd frontend
 npm install
+
+# Run web preview in browser (Vite dev server)
 npm run dev
+
+# Run native desktop shell with System Tray & Notifications (Tauri)
+npx tauri dev
 ```
-The administration dashboard will launch at `http://localhost:5173`.
 
 ---
 
-## 6. Client Agent Setup & CLI Reference
-
-### 1. Synchronize Dependencies
+### 3. Client Agent Setup & CLI Commands
 ```powershell
 cd client_agent
 uv sync
-```
 
-### 2. CLI Command Reference
-The client agent entry point (`main.py` or compiled `SLMS_Client_Agent.exe`) supports administrative commands:
-
-```powershell
-# Display help and available commands
-uv run python main.py --help
-
-# Run interactively in console mode (foreground)
+# Run interactively in console mode
 uv run python main.py
 
-# Headless / Automated Workstation Enrollment
-uv run python main.py enroll --url "https://slms.lab.edu:8000" --key "ENROLL_KEY_HERE"
+# Headless enrollment (auto-resolves to port 18080)
+uv run python main.py enroll --url "192.168.1.100" --key "YOUR_ENROLLMENT_KEY"
 
-# Install Windows Service under NT SERVICE\SLMSService (Administrator required)
+# Service installation & management (Elevated Administrator)
 uv run python main.py install
-
-# Configure mandatory NTFS permissions for service account
-uv run python main.py configure-acl
-
-# Verify credential decryption and service account access
-uv run python main.py verify-credentials
-
-# Start, query, and stop Windows Service
 uv run python main.py start
 uv run python main.py status
 uv run python main.py stop
-
-# Interactive Service Debugger (simulates Session 0 in console)
-uv run python main.py debug
-
-# Uninstall Windows Service
-uv run python main.py uninstall
 ```
 
 ---
 
-## 7. Workstation Enrollment
+## Installer Packaging
 
-Workstation enrollment binds a computer to the SLMS backend and establishes cryptographic identity.
+SLMS produces two standalone, production-ready Windows installers:
 
-### Headless Enrollment Methods
-The `enroll` command securely accepts enrollment keys without command-line parameter leakage:
+### 1. Host Installer (`SLMS_Host_Setup.exe`)
+Packages:
+- Python Windows Service compiled distribution.
+- Tauri native desktop dashboard (`SLMS_Host_Dashboard.exe`).
+- Windows Firewall rule (Inbound TCP `18080`).
+- Master Administrator account initial configuration.
+- SCM Automatic Recovery configuration.
 
-1. **Direct Parameter**:
-   ```powershell
-   SLMS_Client_Agent.exe enroll --url "https://slms.lab.edu:8000" --key "KEY"
-   ```
-2. **Standard Input (Masked / Pipe-safe)**:
-   ```powershell
-   "KEY" | SLMS_Client_Agent.exe enroll --url "https://slms.lab.edu:8000" --stdin-key
-   ```
-3. **Protected Key File**:
-   ```powershell
-   SLMS_Client_Agent.exe enroll --url "https://slms.lab.edu:8000" --key-file "C:\Temp\enroll.key"
-   ```
-4. **Force Re-enrollment**:
-   Add `--force` to overwrite existing enrolled credentials.
-
-### Credential Persistence
-Credentials (`agent_id`, `client_secret`, `computer_id`) and `server_url` are encrypted via Windows DPAPI Machine Scope (`CRYPTPROTECT_LOCAL_MACHINE`) with custom entropy and saved to:
-- `C:\ProgramData\SLMS\config\service_credentials.enc`
-- `C:\ProgramData\SLMS\config\server_config.json`
-
----
-
-## 8. Transport Security & Development Modes
-
-### Production Mode (Default)
-- **Strict HTTPS/WSS**: Plaintext HTTP and WS URLs are rejected with `InsecureHttpProhibitedError`.
-- **Strict TLS Verification**: All HTTP requests and WebSocket connections verify certificates against the Windows System Trust Store or enterprise CA bundle (`SLMS_CA_BUNDLE`). `verify=False` is prohibited.
-- **Enrolled URL Authority**: The enrolled server URL stored in credentials cannot be overridden by ambient environment variables.
-
-### Local Development & Lab Testing
-To permit plaintext HTTP communication for local development:
+To compile:
 ```powershell
-# Set environment variables for interactive testing
-$env:SLMS_DEV_MODE="1"
-$env:SLMS_ALLOW_INSECURE_HTTP="1"
+& "C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\SLMS_Host_Setup.iss
 ```
-*Note: For the Windows Service running in Session 0, the installer automatically configures machine-level environment variables when an HTTP URL is supplied during setup.*
 
----
+### 2. Client Agent Installer (`SLMS_Client_Agent_Setup.exe`)
+Packages:
+- Unified `SLMS_Client_Agent.exe` binary.
+- Interactive Session 1 Companion `SLMS_Notifier.exe`.
+- Auto-port defaulting to `:18080`.
+- Headless DPAPI machine-scoped credential provisioning.
 
-## 9. Windows Service Architecture
-
-The SLMS Client Agent runs as a native Windows service named **`SLMSService`** under the dedicated virtual service account **`NT SERVICE\SLMSService`**.
-
-### Service Management Commands
+To compile:
 ```powershell
-# Check Service State
-sc.exe query SLMSService
-Get-Service SLMSService
-
-# Start / Stop / Restart Service
-sc.exe start SLMSService
-sc.exe stop SLMSService
-Restart-Service SLMSService
-```
-
-### Crash Recovery Policy
-Configured automatically via `sc.exe failure`:
-- **Reset Period**: 86400 seconds (24 hours).
-- **1st Failure**: Restart after 5,000 ms (5s).
-- **2nd Failure**: Restart after 10,000 ms (10s).
-- **Subsequent Failures**: Restart after 60,000 ms (60s).
-
----
-
-## 10. Installer Build & Packaging
-
-### 1. Build PyInstaller Executable
-```powershell
-cd client_agent
-uv run pyinstaller --clean --noconfirm SLMS_Client_Agent.spec
-```
-Artifact generated: `client_agent/dist/SLMS_Client_Agent.exe`.
-
-### 2. Compile Inno Setup Installer
-Compile using the Inno Setup 6 compiler (`ISCC.exe`):
-```powershell
-& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SLMS_Client_Agent_Setup.iss
-```
-Artifact generated: `installer/output/SLMS_Client_Agent_Setup.exe`.
-
----
-
-## 11. Installation & Lifecycle Flow
-
-```
-User specifies Server URL & Key
-               │
-               ▼
-   Validate Server URL (HTTPS/HTTP)
-               │
-               ▼
-   Configure Environment Variables
-               │
-               ▼
-   Copy Executable to Program Files
-               │
-               ▼
-   Execute Headless Enrollment (--key-file)
-               │
-               ▼
-   Persist DPAPI Encrypted Credentials
-               │
-               ▼
-   Create Windows Service (SLMSService)
-               │
-               ▼
-   Apply Mandatory NTFS ACLs to ProgramData
-               │
-               ▼
-   Pre-Flight Verify Credential Decryption
-               │
-               ▼
-   Start Service & Poll RUNNING State
-```
-
-### Supported Lifecycle Modes
-- **Fresh Installation**: Prompts for Server URL and Enrollment Key, completes registration, configures ACLs, and starts `SLMSService`.
-- **Upgrade**: Preserves `service_credentials.enc`, outbox records, and configuration in `%PROGRAMDATA%\SLMS`. Updates binary and restarts service.
-- **Repair**: Re-registers service with SCM, verifies credential readability, reapplies ACLs, and restarts service.
-- **Rollback**: On any setup failure, stops service, restores backup executable or cleans up partial state, and displays failure diagnosis.
-- **Uninstall**: Stops and removes `SLMSService`, cleans binary directory, and removes installer-owned configuration.
-
----
-
-## 12. Telemetry & Outbox Architecture
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                    SLMSService (Session 0)                 │
-│                                                            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │                    AgentRuntime                      │  │
-│  │                                                      │  │
-│  │  ┌───────────────┐        ┌───────────────────────┐  │  │
-│  │  │   Scheduler   │───────▶│   CollectorManager    │  │  │
-│  │  │ (20s/120s/15m)│        │(Hardware/Process/SW)  │  │  │
-│  │  └───────────────┘        └───────────┬───────────┘  │  │
-│  │                                       │              │  │
-│  │                                       ▼              │  │
-│  │                           ┌───────────────────────┐  │  │
-│  │                           │     UploadManager     │  │  │
-│  │                           │   (Payload & Keys)    │  │  │
-│  │                           └───────────┬───────────┘  │  │
-│  │                                       │              │  │
-│  │                                       ▼              │  │
-│  │                           ┌───────────────────────┐  │  │
-│  │                           │     DurableOutbox     │  │  │
-│  │                           │  (SQLite: outbox.db)  │  │  │
-│  │                           └───────────┬───────────┘  │  │
-│  │                                       │              │  │
-│  │                                       ▼              │  │
-│  │                           ┌───────────────────────┐  │  │
-│  │                           │ OutboxDeliveryWorker  │  │  │
-│  │                           └───────────┬───────────┘  │  │
-│  │                                       │ (Bearer JWT) │  │
-│  └───────────────────────────────────────┼──────────────┘  │
-└──────────────────────────────────────────┼─────────────────┘
-                                           │
-                        HTTPS POST / WSS   ▼
-               ┌───────────────────────────────────────┐
-               │             SLMS Backend              │
-               │  - /api/metrics                       │
-               │  - /api/processes                     │
-               │  - /api/software                      │
-               │  - /api/usage                         │
-               │  - /api/issues/agent                  │
-               │  - /ws/client/{computer_id}           │
-               └───────────────────────────────────────┘
-```
-
-### Telemetry Cadence
-- **System Metrics (Fast Telemetry)**: Every 20 seconds (`cpu_usage`, `ram_usage`, `disk_usage`, network byte counters).
-- **Process Inventory**: Every 120 seconds (bounded list of active processes).
-- **Software Inventory**: Every 15 minutes (differential fingerprint scan).
-- **JWT Token Refresh**: Every 12 minutes (preemptive renewal before 15-minute expiration).
-
----
-
-## 13. Testing Strategy
-
-The repository includes a comprehensive test suite across unit, integration, platform, and load dimensions.
-
-### Run All Tests
-```powershell
-# Client Agent Test Suite (400+ tests)
-cd client_agent
-uv run pytest -q
-
-# Backend Test Suite (135+ tests)
-cd ../backend
-uv run pytest -q
-```
-
-### Git Diff & Integrity Check
-```powershell
-git diff --check
+& "C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\SLMS_Client_Agent_Setup.iss
 ```
 
 ---
 
-## 14. Troubleshooting & Diagnostics
+## Testing Strategy
 
-### 1. Service Fails to Reach `RUNNING`
-Check Windows Service Control Manager status:
-```powershell
-sc.exe query SLMSService
-```
-Inspect service agent logs:
-```powershell
-Get-Content C:\ProgramData\SLMS\logs\agent.log -Tail 50
-```
+All subcomponents include comprehensive automated test suites:
 
-### 2. Verify Credential File Accessibility
-Run the diagnostic credential verifier:
 ```powershell
-cd "C:\Program Files\SLMS"
-.\SLMS_Client_Agent.exe verify-credentials
-```
+# 1. Run Client Agent Test Suite (22 security + outbox + service tests)
+uv run --directory client_agent pytest
 
-### 3. Repair Data Folder ACLs
-If permissions are corrupted, reapply the mandatory security ACLs:
-```powershell
-.\SLMS_Client_Agent.exe configure-acl
-```
+# 2. Run Backend Test Suite
+uv run --directory backend pytest
 
-### 4. Inspect SQLite Outbox Status
-Examine pending or dead-letter outbox records:
-```powershell
-sqlite3 C:\ProgramData\SLMS\cache\outbox.db "SELECT id, event_type, status, attempt_count FROM outbox_records;"
+# 3. Run Frontend Vitest Suite (271 tests across 22 test suites)
+cd frontend
+npm test
 ```
 
 ---
 
-## 15. Security Invariants
+## License
 
-1. **No Plaintext Secrets**: Enrollment keys and client secrets are never logged or stored unencrypted.
-2. **Machine-Scope DPAPI**: All service credentials use `CRYPTPROTECT_LOCAL_MACHINE` with dedicated application entropy.
-3. **Restricted NTFS ACLs**: `C:\ProgramData\SLMS\config` is restricted exclusively to `Builtin\Administrators`, `NT AUTHORITY\SYSTEM`, and `NT SERVICE\SLMSService`.
-4. **Strict Transport Security**: Production traffic enforces HTTPS/WSS with strict TLS validation and prohibits token parameters in WebSocket query strings.
-5. **Single Instance Guarantee**: Windows named mutex prevents concurrent agent execution on the same workstation.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
