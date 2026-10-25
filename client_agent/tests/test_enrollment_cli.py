@@ -108,7 +108,7 @@ class TestHeadlessEnrollmentCLI:
 
         class MockSession:
             def post(self, url, json, timeout):
-                assert url == "https://slms.lab.edu/api/agent/register"
+                assert url == "https://slms.lab.edu:18080/api/agent/register"
                 assert json["enrollment_key"] == "SLMS-VALID-KEY-999"
                 return MockResponse()
 

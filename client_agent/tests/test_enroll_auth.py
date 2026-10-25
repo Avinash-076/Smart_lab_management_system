@@ -103,7 +103,7 @@ def test_enrollment_persists_credentials_and_server_url(monkeypatch):
 
     class MockSession:
         def post(self, url, json, timeout):
-            assert url == "https://slms.lab.edu/api/agent/register"
+            assert url == "https://slms.lab.edu:18080/api/agent/register"
             assert json["enrollment_key"] == "KEY-123"
             assert json["device"]["hostname"] == "PC-TEST"
             return MockResponse()
@@ -114,7 +114,7 @@ def test_enrollment_persists_credentials_and_server_url(monkeypatch):
 
     assert result == {"agent_id": "agent-abc", "computer_id": 101}
     assert is_enrolled() is True
-    assert store.get_server_url() == "https://slms.lab.edu"
+    assert store.get_server_url() == "https://slms.lab.edu:18080"
     assert store.get_credential("agent_id") == "agent-abc"
     assert store.get_credential("computer_id") == "101"
 
@@ -141,7 +141,7 @@ def test_auth_get_access_token(monkeypatch):
 
     class MockSession:
         def post(self, url, json, timeout):
-            assert url == "https://slms.lab.edu/api/agent/auth"
+            assert url == "https://slms.lab.edu:18080/api/agent/auth"
             assert json["agent_id"] == "agent-abc"
             assert json["client_secret"] == "secret-xyz"
             return MockResponse()
