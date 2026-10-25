@@ -7,31 +7,19 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-blue.svg)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-A robust, enterprise-grade laboratory orchestration, hardware monitoring, and remote workstation administration platform designed specifically for institutional and academic computer labs. 
+An enterprise-grade laboratory orchestration, real-time hardware telemetry monitoring, remote administration, and notification platform engineered for academic and institutional computer labs.
 
-SLMS combines a high-performance **Python Windows Service** running in Session 0, an ultra-lightweight **Tauri v2 Native Desktop Dashboard** with Windows System Tray integration and Action Center Toast notifications, and an automated **Inno Setup** deployment pipeline.
+SLMS combines a high-speed **FastAPI Windows Service** running on dedicated port `18080`, an ultra-lightweight **Tauri v2 Native Desktop Dashboard** (~25–40 MB RAM) with System Tray minimization and Windows Action Center toast notifications, and a low-overhead **Python Client Agent** with DPAPI machine cryptography and crash-resilient SQLite telemetry buffering.
 
 ---
 
 ## 📚 Documentation Index
 - 🏗️ **[System Architecture Guide](docs/SYSTEM_ARCHITECTURE.md)**: Deep technical dive into Session 0 vs Session 1, SQLite WAL concurrency, DPAPI machine cryptography, and Tauri vs Electron trade-offs.
-- 🚀 **[Administrator & Deployment Guide](docs/ADMIN_DEPLOYMENT_GUIDE.md)**: Step-by-step manual for lab technicians: host installation, silent unattended deployment across 50+ PCs, firewall rules, and alert management.
+- 🚀 **[Administrator & Deployment Guide](docs/ADMIN_DEPLOYMENT_GUIDE.md)**: Manual for lab technicians: host installation, unattended deployment across 50+ PCs, firewall rules, and alert management.
 
 ---
 
-## Key Highlights
-
-- **Dedicated Port `18080`**: The host backend binds strictly to port `18080` (with firewall rules preconfigured). It will never conflict with student coding projects (such as FastAPI, Django, or Node.js running on port `8000`, `3000`, or `5000`).
-- **Zero-Friction Client Enrollment**: Client installers and CLI automatically default to port `18080` (e.g. typing `192.168.1.100` seamlessly connects to `http://192.168.1.100:18080`).
-- **Tauri v2 Desktop Shell (~20–40 MB RAM)**: Unlike Electron apps which consume 200–350 MB of memory, SLMS uses the OS-native Microsoft Edge WebView2 control and native Rust engine.
-- **Close-to-Tray & System Tray Controls**: Closing the dashboard window (`X`) minimizes it directly to the Windows System Tray near the clock.
-- **Native Windows Toast Notifications**: Real-time alerts (RAM > 90%, CPU spikes, sudden disconnections) trigger standard Windows Action Center toast banners with sound, even when the dashboard is minimized.
-- **Durable Offline Telemetry Outbox**: Client workstations buffer telemetry in a local crash-resilient SQLite outbox during network disconnects and auto-flush chronologically upon reconnect.
-- **Cryptographic DPAPI Credentials**: Machine-scoped Windows DPAPI (`CRYPTPROTECT_LOCAL_MACHINE`) locks workstation tokens to local hardware security descriptors.
-
----
-
-## System Overview & Architecture
+## ⚙️ System Architecture
 
 ```
 +========================================================================================+
@@ -39,7 +27,7 @@ SLMS combines a high-performance **Python Windows Service** running in Session 0
 +========================================================================================+
 |  [Session 1 (Interactive Desktop)]                                                     |
 |    SLMS Host Dashboard (Tauri v2 Native Desktop App - ~25 MB RAM)                      |
-|    - System Tray Integration (Close-to-Tray)                                           |
+|    - System Tray Integration (Close-to-Tray near clock)                                |
 |    - Windows Action Center Toast Notification Provider                                 |
 |    - Real-time React 19 + Vite Live Laboratory Matrix Grid                             |
 |          | Localhost WebSocket (ws://127.0.0.1:18080/ws/dashboard)                     |
@@ -66,150 +54,256 @@ SLMS combines a high-performance **Python Windows Service** running in Session 0
 
 ---
 
-## Repository Structure
+## 📋 Prerequisites
 
-```
-Smart_lab_management_system/
-├── backend/                             # FastAPI Backend Service (Port 18080)
-│   ├── app/                             # REST routes, SQLAlchemy models, alert engine
-│   ├── service_runner.py                # Windows Service Control Manager wrapper
-│   └── pyproject.toml                   # Python dependencies managed via uv
-│
-├── client_agent/                        # Windows Client Agent & Service
-│   ├── core/                            # DPAPI credentials, SQLite outbox, security policies
-│   ├── modules/                         # Hardware, process, software collectors
-│   ├── notifier/                        # Session 1 desktop companion (SLMS_Notifier)
-│   ├── SLMS_Client_Agent.spec           # PyInstaller build specification
-│   └── pyproject.toml                   # Client Python dependencies
-│
-├── frontend/                            # Administration Dashboard
-│   ├── src/                             # React 19 components, hooks, and pages
-│   ├── src-tauri/                       # Tauri v2 native shell, system tray, notifications
-│   └── package.json                     # Frontend dependencies
-│
-├── installer/                           # Windows Inno Setup Deployment Packaging
-│   ├── SLMS_Host_Setup.iss              # Host Service + Dashboard Installer Script
-│   ├── SLMS_Client_Agent_Setup.iss      # Client Agent + Notifier Installer Script
-│   └── output/                          # Compiled setup executables
-│
-├── docs/                                # Architecture & Technical Documentation
-│   ├── SYSTEM_ARCHITECTURE.md           # Deep dive technical architecture
-│   └── ADMIN_DEPLOYMENT_GUIDE.md        # Lab technician deployment manual
-└── README.md                            # Main project overview
-```
+Before running the project, ensure you have the following installed on your system:
+
+| Tool | Version | Purpose | Installation / Link |
+| :--- | :--- | :--- | :--- |
+| **Python** | 3.13+ (64-bit) | Host backend service & client agent | [python.org](https://www.python.org/downloads/) |
+| **uv** *(Recommended)* | Latest | Fast Python package manager | Run `powershell -c "irm https://astral.sh/uv/install.ps1 \| iex"` |
+| **Node.js** | 18+ LTS | Frontend React development | [nodejs.org](https://nodejs.org/) |
+| **Rust Toolchain** *(Optional)* | 1.77+ | For running the Tauri desktop app | [rustup.rs](https://rustup.rs/) |
+| **C++ Build Tools** | VS 2022 Build Tools | For native C extensions & Rust compilation | [visualstudio.microsoft.com](https://visualstudio.microsoft.com/visual-cpp-build-tools/) |
+
+> **Note**: While the client agent service and Tauri toast integrations are designed for Windows 10/11 (x64), the **backend** and **frontend (web mode)** can be run on macOS or Linux for development and testing.
 
 ---
 
-## Quickstart & Development Setup
+## 🚀 Quickstart: Running the Project Locally
 
-### Prerequisites
-- **Operating System**: Windows 10 or Windows 11 (64-bit).
-- **Python**: Python 3.13+ (64-bit).
-- **Package Manager**: [uv](https://github.com/astral-sh/uv) (v0.5+ recommended).
-- **Node.js**: Node.js 18+ and npm.
-- **Rust**: Rust toolchain (for Tauri desktop app compilation).
-- **Inno Setup 6**: For compiling `.exe` installers.
+Follow these steps to run the complete system locally for development or demonstration:
+
+### Step 1: Start the Backend Service
+
+1. **Open a terminal** and navigate to the backend directory:
+   ```powershell
+   cd backend
+   ```
+
+2. **Install dependencies**:
+   ```powershell
+   uv sync
+   ```
+   *(Or using standard pip: `python -m venv .venv; .venv\Scripts\activate; pip install -e .`)*
+
+3. **Run database migrations**:
+   ```powershell
+   uv run alembic upgrade head
+   ```
+
+4. **Initialize the Master Administrator account**:
+   ```powershell
+   uv run python service_runner.py init-admin admin Admin@123
+   ```
+   *Creates the primary administrator account (`username: admin`, `password: Admin@123`) and seeds default system roles and settings.*
+
+5. **Start the FastAPI backend server**:
+   ```powershell
+   uv run uvicorn app.main:app --host 0.0.0.0 --port 18080 --reload
+   ```
+
+6. **Verify Backend Status**:
+   - Backend API: `http://localhost:18080/api`
+   - Interactive Swagger API Docs: `http://localhost:18080/docs`
 
 ---
 
-### 1. Backend Setup & Local Run
-```powershell
-cd backend
-uv sync
+### Step 2: Start the Frontend Dashboard
 
-# Run database migrations
-uv run alembic upgrade head
+Open a **second terminal** and navigate to the frontend directory:
 
-# Start FastAPI server on dedicated port 18080
-uv run uvicorn app.main:app --host 0.0.0.0 --port 18080 --reload
-```
-Interactive Swagger API documentation: `http://localhost:18080/docs`
-
----
-
-### 2. Frontend & Tauri Desktop Setup
 ```powershell
 cd frontend
 npm install
+```
 
-# Run web preview in browser (Vite dev server)
+You can run the dashboard in **either of two modes**:
+
+#### Mode A: Web Browser Mode (Fast UI Development)
+Runs the React 19 app inside your web browser via Vite:
+```powershell
 npm run dev
+```
+- Open `http://localhost:5173` in your browser.
+- Log in with the administrator credentials:
+  - **Username**: `admin`
+  - **Password**: `Admin@123`
 
-# Run native desktop shell with System Tray & Notifications (Tauri)
+#### Mode B: Tauri v2 Native Desktop Shell (Production Experience)
+Runs the native Windows desktop app with close-to-tray system tray controls and Windows Action Center native toast notifications:
+```powershell
 npx tauri dev
 ```
+*(Requires the Rust toolchain installed).*
 
 ---
 
-### 3. Client Agent Setup & CLI Commands
+### Step 3: Run the Client Agent (Workstation Telemetry)
+
+To simulate or connect a student workstation to the dashboard:
+
+1. **Open a third terminal** and navigate to the `client_agent` directory:
+   ```powershell
+   cd client_agent
+   uv sync
+   ```
+
+2. **Generate an Enrollment Key**:
+   - In your browser/Tauri dashboard, go to **Settings** → **Enrollment Keys**.
+   - Click **Generate Key** and copy the generated token (e.g. `ENROLL-XXXXXX`).
+
+3. **Enroll the Agent**:
+   ```powershell
+   uv run python main.py enroll --url "127.0.0.1" --key "YOUR_ENROLLMENT_KEY"
+   ```
+   *Note: Port `18080` is automatically appended by default, so providing `127.0.0.1` or LAN IP `192.168.1.X` connects directly.*
+
+4. **Run the Client Agent in Console Mode**:
+   ```powershell
+   uv run python main.py
+   ```
+   The client agent will immediately register hardware specifications (CPU, RAM, Disks, GPU, Active Processes) and begin streaming real-time telemetry every 5 seconds to the Host Dashboard.
+
+5. **(Optional) Run the Student Desktop Notifier**:
+   In another window, start the companion GUI that displays administrative broadcasts and exam timers on the desktop:
+   ```powershell
+   uv run python notifier_main.py
+   ```
+
+---
+
+## 🛠️ Windows Service Deployment (Production)
+
+In institutional computer laboratories, the backend and client agent are deployed as unattended Windows Services running under `LocalSystem` / `Session 0`:
+
+### Host Windows Service
+Run from an elevated (Administrator) command prompt:
+```powershell
+cd backend
+
+# Install the Windows Service
+uv run python service_runner.py install
+
+# Start the Windows Service
+uv run python service_runner.py start
+
+# Stop or remove service
+uv run python service_runner.py stop
+uv run python service_runner.py remove
+```
+
+### Client Agent Windows Service
+Run from an elevated (Administrator) command prompt on student machines:
 ```powershell
 cd client_agent
-uv sync
 
-# Run interactively in console mode
-uv run python main.py
-
-# Headless enrollment (auto-resolves to port 18080)
-uv run python main.py enroll --url "192.168.1.100" --key "YOUR_ENROLLMENT_KEY"
-
-# Service installation & management (Elevated Administrator)
+# Install and start background monitoring service
 uv run python main.py install
 uv run python main.py start
+
+# Check service status
 uv run python main.py status
+
+# Stop and uninstall service
 uv run python main.py stop
+uv run python main.py uninstall
 ```
 
 ---
 
-## Installer Packaging
+## 🧪 Running Automated Tests
 
-SLMS produces two standalone, production-ready Windows installers:
-
-### 1. Host Installer (`SLMS_Host_Setup.exe`)
-Packages:
-- Python Windows Service compiled distribution.
-- Tauri native desktop dashboard (`SLMS_Host_Dashboard.exe`).
-- Windows Firewall rule (Inbound TCP `18080`).
-- Master Administrator account initial configuration.
-- SCM Automatic Recovery configuration.
-
-To compile:
-```powershell
-& "C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\SLMS_Host_Setup.iss
-```
-
-### 2. Client Agent Installer (`SLMS_Client_Agent_Setup.exe`)
-Packages:
-- Unified `SLMS_Client_Agent.exe` binary.
-- Interactive Session 1 Companion `SLMS_Notifier.exe`.
-- Auto-port defaulting to `:18080`.
-- Headless DPAPI machine-scoped credential provisioning.
-
-To compile:
-```powershell
-& "C:\Users\<user>\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer\SLMS_Client_Agent_Setup.iss
-```
-
----
-
-## Testing Strategy
-
-All subcomponents include comprehensive automated test suites:
+All system modules include unit and integration test suites:
 
 ```powershell
-# 1. Run Client Agent Test Suite (22 security + outbox + service tests)
-uv run --directory client_agent pytest
-
-# 2. Run Backend Test Suite
+# 1. Run Backend API & Database Tests (FastAPI + SQLAlchemy)
 uv run --directory backend pytest
 
-# 3. Run Frontend Vitest Suite (271 tests across 22 test suites)
+# 2. Run Client Agent Tests (DPAPI, Outbox buffer, Collectors)
+uv run --directory client_agent pytest
+
+# 3. Run Frontend Vitest Suite (React 19 Components & Services)
 cd frontend
 npm test
 ```
 
 ---
 
-## License
+## 📦 Building Standalone Installers
+
+SLMS compiles into two production Inno Setup Windows installers located in `installer/`:
+
+### 1. Host Installer (`SLMS_Host_Setup.exe`)
+Builds the complete host package:
+- Compiles `service_runner.py` into a standalone service binary via PyInstaller.
+- Compiles the Tauri v2 desktop application (`SLMS_Host_Dashboard.exe`).
+- Automatically configures Windows Firewall rule for inbound TCP `18080`.
+- Sets up SCM automatic restart failure recovery.
+
+Compile using Inno Setup 6:
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SLMS_Host_Setup.iss
+```
+
+### 2. Client Agent Installer (`SLMS_Client_Agent_Setup.exe`)
+Builds the silent/GUI student workstation installer:
+- Packages `SLMS_Client_Agent.exe` and `SLMS_Notifier.exe`.
+- Supports silent command-line deployment across 50+ PCs:
+  ```powershell
+  SLMS_Client_Agent_Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /HOST_IP="192.168.1.100" /ENROLL_KEY="YOUR_KEY"
+  ```
+
+Compile using Inno Setup 6:
+```powershell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\SLMS_Client_Agent_Setup.iss
+```
+
+---
+
+## 🔧 Environment Configuration Reference
+
+### Backend (`backend/.env`)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DATABASE_URL` | `sqlite:///slms.db` | SQLite database connection string with WAL mode |
+| `JWT_SECRET_KEY` | `slms-secure-lab-secret-key-2026` | Cryptographic secret for signing tokens |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `15` | Admin session access token expiration |
+| `REFRESH_TOKEN_EXPIRE_HOURS` | `8` | Refresh token lifetime |
+| `AGENT_TOKEN_EXPIRE_MINUTES` | `15` | Client agent authentication token lifetime |
+
+### Frontend (`frontend/.env`)
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `VITE_API_BASE_URL` | `http://127.0.0.1:18080/api` | Host REST API base endpoint |
+| `VITE_WS_BASE_URL` | `ws://127.0.0.1:18080/ws/dashboard` | Real-time WebSocket event connection |
+
+---
+
+## ❓ Troubleshooting
+
+- **Port 18080 is already in use**:
+  Ensure no previous uvicorn or SLMS service is running:
+  ```powershell
+  netstat -ano | findstr :18080
+  Stop-Process -Id <PID> -Force
+  ```
+- **Login fails with 401 Unauthorized**:
+  Ensure you initialized the admin account using:
+  ```powershell
+  cd backend
+  uv run python service_runner.py init-admin admin Admin@123
+  ```
+- **Tauri build errors regarding WebView2 or Rust**:
+  Verify Rust is installed with `rustc --version` and `cargo --version`. Ensure the "Desktop development with C++" workload is installed in Visual Studio Build Tools.
+- **Client Agent fails to enroll**:
+  Verify the Host Backend is running and reachable on port `18080`:
+  ```powershell
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 18080
+  ```
+
+---
+
+## 📄 License
 
 This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

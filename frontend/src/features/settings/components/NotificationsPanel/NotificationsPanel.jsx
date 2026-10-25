@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Icon from "../../../../components/ui/Icon";
 import { SETTINGS_CATALOG } from "../../utils/settingUtils";
+import { initNotificationPermissions, sendNativeNotification } from "../../../../services/nativeNotification";
 import "./NotificationsPanel.css";
 
 function ToggleSwitch({ id, checked, onChange, disabled, label }) {
@@ -20,6 +22,7 @@ function ToggleSwitch({ id, checked, onChange, disabled, label }) {
 }
 
 function NotificationsPanel({ formData, onChange, disabled }) {
+  const [testSent, setTestSent] = useState(false);
   const diskMeta = SETTINGS_CATALOG.disk_alerts;
   const offMeta = SETTINGS_CATALOG.offline_alerts;
   const issueMeta = SETTINGS_CATALOG.issue_alerts;
@@ -99,6 +102,49 @@ function NotificationsPanel({ formData, onChange, disabled }) {
               disabled={disabled}
               label={swMeta.label}
             />
+          </div>
+
+          {/* Test Windows Toast Notification */}
+          <div className="settings-toggle-row" style={{ marginTop: "1rem", paddingTop: "1.25rem", borderTop: "1px solid rgba(255, 255, 255, 0.08)" }}>
+            <div className="settings-toggle-info">
+              <span className="settings-toggle-title">Windows Action Center Toast Testing</span>
+              <p className="settings-toggle-desc">
+                Trigger a sample high-priority alert to test native Windows 10/11 notifications.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn--secondary"
+              id="btn-test-windows-notification"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                padding: "0.5rem 1rem",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                borderRadius: "6px",
+                cursor: "pointer",
+                background: testSent ? "#10b981" : "var(--primary-color, #3b82f6)",
+                color: "#fff",
+                border: "none",
+                transition: "all 0.2s ease"
+              }}
+              onClick={async () => {
+                await initNotificationPermissions();
+                await sendNativeNotification({
+                  title: "🚨 SLMS Critical Alert - LAB-PC-04",
+                  body: "Workstation LAB-PC-04 has reached 94% RAM usage (15.1 GB / 16 GB).",
+                  severity: "critical",
+                  computer: "LAB-PC-04",
+                });
+                setTestSent(true);
+                setTimeout(() => setTestSent(false), 4000);
+              }}
+            >
+              <Icon type="notification" size={16} />
+              {testSent ? "Toast Dispatched!" : "Send Test Toast"}
+            </button>
           </div>
         </div>
       </div>

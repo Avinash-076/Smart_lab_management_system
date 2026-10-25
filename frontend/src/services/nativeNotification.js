@@ -89,7 +89,18 @@ export async function sendNativeNotification({ title, body, severity = "info", c
     const fullTitle = title || (computer ? `${prefix} - ${computer}` : prefix);
     const fullBody = computer && !body.includes(computer) ? `[${computer}] ${body}` : body;
 
-    // 1. Desktop Shell (Tauri -> Windows Toast)
+    // 1. Desktop Shell (Tauri -> direct native WinRT toast via Rust command)
+    if (window.__TAURI_INTERNALS__ || window.__TAURI__) {
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("send_native_toast", { title: fullTitle, body: fullBody });
+        return true;
+      } catch (invokeErr) {
+        console.warn("Rust send_native_toast invocation failed, falling back:", invokeErr);
+      }
+    }
+
+    // 2. Tauri Plugin Fallback
     if (tauri) {
       if (!permissionGranted) {
         await initNotificationPermissions();

@@ -17,8 +17,8 @@ Source: "..\backend\dist\SLMS_Host_Service\*"; DestDir: "{app}\service"; Flags: 
 Source: "..\frontend\src-tauri\target\release\app.exe"; DestDir: "{app}"; DestName: "SLMS_Host_Dashboard.exe"; Flags: ignoreversion
 
 [Icons]
-Name: "{autodesktop}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.exe"; WorkingDir: "{app}"
-Name: "{group}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.exe"; WorkingDir: "{app}"; AppUserModelID: "com.slms.dashboard"
+Name: "{group}\SLMS Host Dashboard"; Filename: "{app}\SLMS_Host_Dashboard.exe"; WorkingDir: "{app}"; AppUserModelID: "com.slms.dashboard"
 
 [Run]
 ; Open port 18080 in Windows Firewall so lab PCs can connect

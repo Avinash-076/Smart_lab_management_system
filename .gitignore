@@ -1,42 +1,87 @@
-# Node.js dependencies
-node_modules/
 
-# Python caches and compiled files
+# ==============================================================================
+# Environment Variables & Secrets
+# ==============================================================================
+.env
+.env.*
+!.env.example
+*.local
+service_credentials.enc
+service_credentials.enc.tmp
+agent_credential.json
+
+# ==============================================================================
+# Python & Virtual Environments
+# ==============================================================================
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
 *.pyd
-.pytest_cache/
-.ruff_cache/
 
-# Virtual environment directories
+# Virtual Environments
 .venv/
 venv/
-.env
+ENV/
+env/
 
-# VSCode settings
-.vscode/
+# Python Testing & Tooling Caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
 
-# macOS and Windows system files
-.DS_Store
-Thumbs.db
+# ==============================================================================
+# Node.js & Frontend (Vite / React)
+# ==============================================================================
+node_modules/
+dist/
+dist-ssr/
+.vite/
 
-# SQLite database files
+# NPM / Yarn / PNPM debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==============================================================================
+# Rust & Tauri
+# ==============================================================================
+target/
+**/target/
+frontend/src-tauri/target/
+frontend/src-tauri/gen/schemas/
+*.pdb
+
+# ==============================================================================
+# Databases & Storage Files
+# ==============================================================================
+*.sqlite
 *.sqlite3
 *.db
 *.db-wal
 *.db-shm
 slms.db
-/outbox/
-!client_agent/core/outbox/
+test_slms.db
 
-# Log files
+# ==============================================================================
+# Logs & Runtime Diagnostics
+# ==============================================================================
+logs/
 *.log
 *.log.*
-logs/
 client_agent/logs/
 
-# Generated runtime data and state files (Phase 9 I-07)
+# ==============================================================================
+# Client Agent Runtime State & Generated Data
+# ==============================================================================
 output/
 client_agent/output/
 client_agent/cache/
@@ -47,21 +92,54 @@ usage_state.json
 issue_state.json
 client_data.json
 server_config.json
-service_credentials.enc
-service_credentials.enc.tmp
-agent_credential.json
 *.tmp
 
-# Build and packaging directories
+# Outbox queue (preserve code directory client_agent/core/outbox/)
+/outbox/
+!client_agent/core/outbox/
+
+# ==============================================================================
+# Build & Distribution Artifacts
+# ==============================================================================
 build/
-dist/
 wheels/
-*.egg-info
+*.egg-info/
+*.egg
+installer/output/
+installer/Output/
+*.exe
+*.msi
 
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
+# ==============================================================================
+# Operating System & IDE Files
+# ==============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# npm debug logs
-npm-debug.log
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# JetBrains / IntelliJ / PyCharm
+.idea/
+
+# Visual Studio / Windows
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.bak
+
+# Microsoft Office documents & temporary lock files
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pptx
+*.ppt
+~$*.doc*
+~$*.xls*
+~$*.ppt*
+
